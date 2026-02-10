@@ -111,7 +111,7 @@ msprof ask "What is the weather today?"
 msprof config --show
 
 # 设置 LLM 提供商
-msprof config --llm-provider openai --llm-api-key "your-key" --llm-model "gpt-4o-mini"
+msprof config --llm-provider openai --llm-base-url "http://example.com/v1" --llm-api-key "your-key" --llm-model "your-model"
 ```
 
 ### MCP 服务器管理

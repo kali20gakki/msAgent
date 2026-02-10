@@ -64,7 +64,7 @@ class MessageWidget(Container):
 
     .actions {
         width: auto;
-        display: none;  /* Hidden by default, could toggle on click/hover if supported */
+        display: none;
     }
     
     MessageWidget:hover .actions {
@@ -93,14 +93,18 @@ class MessageWidget(Container):
         color: $text;
     }
     
-    #render {
+    /* 可选择的文本区域 - 默认显示 */
+    .selectable-text {
         height: auto;
+        border: none;
+        background: transparent;
+        padding: 0;
+        color: $text;
     }
     
-    .raw-editor {
-        height: auto;
-        max-height: 20;
+    .selectable-text:focus {
         border: solid $accent;
+        background: $surface;
     }
     
     .hidden {
@@ -134,42 +138,41 @@ class MessageWidget(Container):
         yield Label(icon, classes=f"gutter {gutter_class}")
         
         with Container(classes="content-container"):
-            # Header with hidden actions
+            # Header with actions
             with Horizontal(classes="header-row"):
-                # yield Label(self.role.title(), classes="role-label")
-                yield Static(" ", classes="role-label") # Spacer mostly, keeping it minimal
+                yield Static(" ", classes="role-label")
                 with Horizontal(classes="actions"):
                     yield Button("Copy", id="copy-btn", classes="action-btn")
-                    yield Button("Raw", id="raw-btn", classes="action-btn")
             
-            # Content
-            yield Static(RichMarkdown(self.content), id="render", classes="content-area")
-            yield TextArea(self.content, id="raw", read_only=True, classes="raw-editor hidden")
+            # 默认使用可选择的 TextArea 显示内容
+            yield TextArea(
+                self.content, 
+                id="content-text", 
+                read_only=True, 
+                classes="selectable-text",
+                show_line_numbers=False
+            )
 
     def update_content(self, content: str) -> None:
         """Update the message content."""
         self.content = content
-        self.query_one("#render", Static).update(RichMarkdown(content))
-        self.query_one("#raw", TextArea).text = content
+        self.query_one("#content-text", TextArea).text = content
+    
+    def update_content_fast(self, content: str) -> None:
+        """快速更新内容（流式输出时使用）"""
+        self.content = content
+        self.query_one("#content-text", TextArea).text = content
+    
+    def finalize_content(self) -> None:
+        """完成内容更新"""
+        # TextArea 已经包含最终内容，无需额外操作
+        pass
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button presses."""
         if event.button.id == "copy-btn":
             self.app.copy_to_clipboard(self.content)
             self.app.notify("Copied to clipboard", severity="information")
-        elif event.button.id == "raw-btn":
-            render_widget = self.query_one("#render", Static)
-            raw_widget = self.query_one("#raw", TextArea)
-            btn = event.button
-            
-            if "hidden" in raw_widget.classes:
-                raw_widget.remove_class("hidden")
-                render_widget.add_class("hidden")
-                btn.label = "View"
-            else:
-                raw_widget.add_class("hidden")
-                render_widget.remove_class("hidden")
-                btn.label = "Raw"
 
 
 class ChatWelcomeBanner(Static):
@@ -384,10 +387,13 @@ class ChatScreen(Screen):
         self.query_one("#message-input", Input).focus()
 
     async def on_input_submitted(self, event: Input.Submitted) -> None:
+        """处理输入提交事件"""
         if event.input.id == "message-input":
-            await self.send_message()
+            # 不使用 await，让 UI 立即响应
+            self.send_message()
             
-    async def send_message(self) -> None:
+    def send_message(self) -> None:
+        """发送消息（同步启动，异步执行）"""
         app: MSProfApp = self.app
         if app.is_processing:
             return
@@ -407,55 +413,98 @@ class ChatScreen(Screen):
             input_widget.value = ""
             return
         
+        # 立即清空输入框
         input_widget.value = ""
-        chat_area = self.query_one("#chat-area", ChatArea)
-        await chat_area.add_message("user", message)
-        chat_area.scroll_end(animate=False)
         
-        if not app.agent.is_initialized:
-             await chat_area.add_message("system", app.agent.error_message or "Agent not initialized")
-             return
-
+        # 标记正在处理
         app.is_processing = True
+        
+        # 使用 run_worker 在后台执行，UI 立即更新
+        self.run_worker(self._process_message(message), exclusive=True)
+    
+    async def _animate_loading(self, widget: MessageWidget, stop_event: asyncio.Event) -> None:
+        """动态加载动画"""
+        loading_frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+        frame_idx = 0
+        
+        while not stop_event.is_set():
+            widget.update_content(f"{loading_frames[frame_idx]} Thinking...")
+            frame_idx = (frame_idx + 1) % len(loading_frames)
+            await asyncio.sleep(0.1)  # 100ms 更新一次
+    
+    async def _process_message(self, message: str) -> None:
+        """后台处理消息的 worker"""
+        app: MSProfApp = self.app
+        chat_area = self.query_one("#chat-area", ChatArea)
+        
         try:
-            # Add a placeholder for the assistant's response
-            current_message_widget = await chat_area.add_message("assistant", "⠋ Thinking...")
+            # 1. 立即显示用户输入
+            await chat_area.add_message("user", message)
             chat_area.scroll_end(animate=False)
             
-            response_text = ""
-            buffer = ""
-            update_interval = 0.05
-            last_update = 0
-            import time
-
-            async for chunk in app.agent.chat_stream(message):
-                # If this is the start of the response, clear the "Thinking..." text
-                if not response_text:
-                    response_text = chunk
-                    buffer = "" # Reset buffer
-                    current_message_widget.update_content(response_text)
-                    last_update = time.time()
-                    continue
-                
-                buffer += chunk
-                response_text += chunk
-                
-                # Throttle updates
-                current_time = time.time()
-                if current_time - last_update > update_interval:
-                    current_message_widget.update_content(response_text)
-                    buffer = ""
-                    last_update = current_time
-                    await asyncio.sleep(0)
+            if not app.agent.is_initialized:
+                await chat_area.add_message("system", app.agent.error_message or "Agent not initialized")
+                return
             
-            # Final update
-            if buffer:
-                 current_message_widget.update_content(response_text)
+            # 2. 创建加载消息并启动动画
+            loading_widget = await chat_area.add_message("assistant", "⠋ Thinking...")
+            chat_area.scroll_end(animate=False)
+            
+            # 启动加载动画
+            stop_animation = asyncio.Event()
+            animation_task = asyncio.create_task(self._animate_loading(loading_widget, stop_animation))
+            
+            # 3. 流式接收并实时更新
+            response_text = ""
+            first_chunk_received = False
+            chunk_count = 0
+            
+            try:
+                async for chunk in app.agent.chat_stream(message):
+                    chunk_count += 1
+                    
+                    if not first_chunk_received:
+                        # 停止加载动画
+                        stop_animation.set()
+                        await animation_task
+                        
+                        # 收到第一个 chunk，开始显示内容
+                        first_chunk_received = True
+                        response_text = chunk
+                        loading_widget.update_content_fast(response_text)  # 使用快速更新
+                    else:
+                        # 追加内容并立即更新
+                        response_text += chunk
+                        loading_widget.update_content_fast(response_text)  # 使用快速更新
+                    
+                    # 滚动到底部（不触发全局刷新）
+                    chat_area.scroll_end(animate=False)
+                    
+                    # 让出控制权
+                    await asyncio.sleep(0)
+                
+                # 流式输出完成后，渲染最终的 Markdown
+                if first_chunk_received:
+                    loading_widget.finalize_content()
+                
+            except Exception as stream_error:
+                # 确保停止动画
+                stop_animation.set()
+                if not animation_task.done():
+                    await animation_task
+                raise stream_error
+            
+            # 如果没有收到任何内容
+            if not first_chunk_received:
+                stop_animation.set()
+                await animation_task
+                loading_widget.update_content("_No response received_")
                  
         except Exception as e:
-            await chat_area.add_message("system", f"Error: {e}")
+            await chat_area.add_message("system", f"❌ Error: {str(e)}")
         finally:
             app.is_processing = False
+            chat_area.scroll_end(animate=False)
 
     def action_clear(self) -> None:
         self.app.agent.clear_history()
