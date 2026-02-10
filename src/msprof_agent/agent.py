@@ -1,7 +1,6 @@
 """Core agent logic for MSProf Agent."""
 
 import json
-import logging
 from collections.abc import AsyncGenerator
 from typing import Any
 
@@ -12,7 +11,7 @@ from .llm import Message, create_llm_client
 from .mcp_client import mcp_manager
 
 console = Console()
-logger = logging.getLogger(__name__)
+
 
 
 class Agent:
@@ -44,7 +43,7 @@ class Agent:
                     "   • Config file: ~/.config/msprof-agent/config.json\n"
                     "   • Use: msprof config --help"
                 )
-                logger.warning("LLM not configured")
+
                 return False
             
             # Initialize LLM client
@@ -60,7 +59,7 @@ class Agent:
             
         except Exception as e:
             self._error_message = f"❌ Failed to initialize agent: {e}"
-            logger.error(f"Failed to initialize agent: {e}")
+
             return False
     
     def get_system_prompt(self) -> str:
@@ -138,7 +137,7 @@ Be concise, helpful, and friendly in your responses."""
                 return response
                 
         except Exception as e:
-            logger.error(f"Error in chat: {e}")
+
             return f"❌ Error: {e}"
     
     async def chat_stream(self, user_input: str) -> AsyncGenerator[str, None]:
@@ -206,7 +205,7 @@ Be concise, helpful, and friendly in your responses."""
                 self.messages.append(Message("assistant", full_response))
                 
         except Exception as e:
-            logger.error(f"Error in chat stream: {e}")
+
             yield f"❌ Error: {e}"
     
     def clear_history(self) -> None:

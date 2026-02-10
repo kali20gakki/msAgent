@@ -228,7 +228,7 @@ class CopyableTextArea(TextArea):
             self.app.notify("No text selected", severity="warning")
 
 
-class ChatWelcomeBanner(Static):
+class ChatWelcomeBanner(Vertical):
     """Small welcome banner in chat."""
     
     DEFAULT_CSS = """
@@ -237,19 +237,31 @@ class ChatWelcomeBanner(Static):
         padding: 1 2;
         margin: 1 0 2 0;
         background: $surface;
-        color: $text;
         height: auto;
         width: 100%;
     }
+    
+    .welcome-message {
+        color: $text;
+        text-style: bold;
+        margin-bottom: 1;
+    }
+    
+    .mcp-status {
+        color: $success;
+        padding-top: 1;
+        border-top: solid #d8dee9;
+    }
     """
     
-    def render(self) -> str:
+    def compose(self) -> ComposeResult:
+        yield Label("✱ msAgent initialized. How can I help you?", classes="welcome-message")
+        
         from .mcp_client import mcp_manager
         servers = mcp_manager.get_connected_servers()
         if servers:
             server_str = ", ".join(servers)
-            return f"✱ msAgent initialized.\n🔌 Connected MCP Servers: {server_str}\nHow can I help you?"
-        return "✱ msAgent initialized. How can I help you?"
+            yield Label(f"🔌 Connected MCP Servers: {server_str}", classes="mcp-status")
 
 class CustomFooter(Static):
     """Custom footer with shortcuts."""

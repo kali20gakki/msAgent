@@ -2,7 +2,6 @@
 
 import asyncio
 import json
-import logging
 from contextlib import AsyncExitStack
 from typing import Any
 
@@ -10,7 +9,7 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from .config import MCPConfig
 
-logger = logging.getLogger(__name__)
+
 
 
 class MCPClient:
@@ -54,11 +53,9 @@ class MCPClient:
             # Fetch available tools
             await self._fetch_tools()
             
-            logger.info(f"Connected to MCP server: {self.config.name}")
             return True
             
         except Exception as e:
-            logger.error(f"Failed to connect to MCP server {self.config.name}: {e}")
             return False
     
     async def _fetch_tools(self) -> None:
@@ -78,9 +75,8 @@ class MCPClient:
                         "parameters": tool.inputSchema,
                     }
                 })
-            logger.info(f"Loaded {len(self._tools)} tools from {self.config.name}")
         except Exception as e:
-            logger.error(f"Failed to fetch tools from {self.config.name}: {e}")
+            pass
     
     def get_tools(self) -> list[dict]:
         """Get available tools from this MCP server."""
@@ -105,7 +101,6 @@ class MCPClient:
             return "\n".join(contents) if contents else "Tool executed successfully"
             
         except Exception as e:
-            logger.error(f"Failed to call tool {tool_name}: {e}")
             return f"Error calling tool {tool_name}: {e}"
     
     async def disconnect(self) -> None:
@@ -114,7 +109,6 @@ class MCPClient:
             await self.exit_stack.aclose()
             self._connected = False
             self.session = None
-            logger.info(f"Disconnected from MCP server: {self.config.name}")
 
 
 class MCPManager:
