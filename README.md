@@ -1,118 +1,73 @@
-# 🚀 MSProf Agent
+# 🚀 msAgent
 
-一个功能强大的 AI Agent CLI 客户端，支持多种 LLM 提供商和 MCP (Model Context Protocol) 协议。
+**msAgent** 是一个强大的命令行智能助手，专为开发者和运维人员设计。它不仅具备与大语言模型（LLM）对话的能力，还能通过 Model Context Protocol (MCP) 扩展各种本地工具，例如文件操作、代码分析、系统监控等。
 
-## ✨ 特性
+<p align="center">
+  <img src="docs/img/msagent.png" alt="msAgent">
+</p>
 
-- 💬 **多轮对话** - 支持交互式聊天和单轮问答
-- 🔌 **MCP 协议支持** - 通过 stdio 方式集成 MCP 服务器
-- 🌊 **流式输出** - 实时显示 AI 响应
-- 🎨 **精美 TUI** - 基于 Textual 的终端用户界面
-- ⚙️ **灵活配置** - 支持配置文件和环境变量
-- 🤖 **多模型支持** - OpenAI、Anthropic Claude、Google Gemini、自定义 API
+## ✨ 核心特性
 
-## 📦 安装
+- **多模态交互**：支持基于 Textual 的现代化 TUI 界面，同时也提供简洁的命令行交互模式。
+- **MCP 扩展支持**：原生支持 Model Context Protocol (MCP)，可以无缝集成任何符合 MCP 标准的工具（如 Fetch, Filesystem 等）。
+- **多 LLM 支持**：灵活切换 OpenAI, Anthropic, Google Gemini 等多种大模型后端。
+- **智能上下文管理**：自动根据任务需求调用相应的工具，无需手动介入。
+- **流式响应**：实时的打字机效果，让对话更加自然流畅。
 
-### 使用 uv 安装
+## 📦 快速开始
+
+### 安装
+
+使用 `uv` 进行安装（推荐）：
 
 ```bash
-# 克隆项目
-git clone <repository-url>
-cd msprof-agent
+# Clone the repository
+git clone https://github.com/weizhang/msagent.git
+cd msagent
 
-# 使用 uv 安装依赖
+# Install dependencies and the tool
+uv python install 3.12
 uv sync
-
-# 安装到当前环境
-uv pip install -e .
 ```
 
-### 使用 pip 安装
+### 启动对话
+
+#### TUI 模式（推荐）
+
+启动现代化的终端用户界面：
 
 ```bash
-pip install -e .
+uv run msagent chat --tui
 ```
 
-## 🔧 配置
+#### 命令行模式
 
-### 环境变量配置
+启动简单的命令行对话：
+
+```bash
+uv run msagent chat
+```
+
+## ⚙️ 配置指南
+
+msAgent 需要配置 LLM 后端才能工作。首次运行会自动创建配置文件。
+
+### 查看当前配置
+
+```bash
+uv run msagent config --show
+```
+
+### 设置 LLM 提供商
 
 ```bash
 # OpenAI
-export OPENAI_API_KEY="your-openai-api-key"
-export OPENAI_MODEL="gpt-4o-mini"  # 可选
+uv run msagent config --llm-provider openai --llm-api-key "your-key" --llm-model "gpt-4"
 
-# Anthropic Claude
-export ANTHROPIC_API_KEY="your-anthropic-api-key"
-export ANTHROPIC_MODEL="claude-3-5-sonnet-20241022"  # 可选
+# Anthropic
+uv run msagent config --llm-provider anthropic --llm-api-key "your-key" --llm-model "claude-3-opus-20240229"
 
 # Google Gemini
-export GEMINI_API_KEY="your-gemini-api-key"
-export GEMINI_MODEL="gemini-pro"  # 可选
-
-# 自定义 API
-export CUSTOM_API_KEY="your-api-key"
-export CUSTOM_BASE_URL="https://api.example.com/v1"
-export CUSTOM_MODEL="your-model"
-```
-
-### 配置文件
-
-配置文件位于 `~/.config/msprof-agent/config.json`：
-
-```json
-{
-  "llm": {
-    "provider": "openai",
-    "api_key": "your-api-key",
-    "base_url": "",
-    "model": "gpt-4o-mini",
-    "temperature": 0.7,
-    "max_tokens": 4096
-  },
-  "mcp_servers": [
-    {
-      "name": "filesystem",
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/files"],
-      "env": {},
-      "enabled": true
-    }
-  ],
-  "theme": "dark"
-}
-```
-
-## 🚀 使用
-
-### 启动交互式聊天
-
-```bash
-# 命令行交互模式
-msprof chat
-
-# TUI 界面模式
-msprof chat --tui
-
-# 发送单条消息
-msprof chat "Hello, how are you?"
-```
-
-### 快速提问
-
-```bash
-msprof ask "What is the weather today?"
-```
-
-### 查看配置
-
-```bash
-# 显示当前配置
-msprof config --show
-
-# 设置 LLM 提供商
-msprof config --llm-provider openai --llm-base-url "http://example.com/v1" --llm-api-key "your-key" --llm-model "your-model"
-```
 
 ### MCP 服务器管理
 

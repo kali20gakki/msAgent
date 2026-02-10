@@ -14,10 +14,11 @@ from rich.text import Text
 from .agent import Agent
 from .config import LLMConfig, MCPConfig, config_manager
 from .tui import run_tui
+from .version import __version__
 
 app = typer.Typer(
-    name="msprof",
-    help="🚀 MSProf Agent - AI Assistant with MCP Support",
+    name="msagent",
+    help="🚀 msAgent - AI Assistant with MCP Support",
     no_args_is_help=True,
 )
 console = Console()
@@ -26,7 +27,7 @@ console = Console()
 def version_callback(value: bool) -> None:
     """Show version information."""
     if value:
-        console.print("[bold cyan]🚀 MSProf Agent[/bold cyan] v0.1.0")
+        console.print(f"[bold cyan]🚀 msAgent[/bold cyan] v{__version__}")
         raise typer.Exit()
 
 
@@ -36,7 +37,7 @@ def main(
         None, "--version", "-v", callback=version_callback, is_eager=True
     ),
 ) -> None:
-    """MSProf Agent - AI Assistant with MCP Support."""
+    """msAgent - AI Assistant with MCP Support."""
     pass
 
 
@@ -46,7 +47,7 @@ def chat_command(
     stream: bool = typer.Option(True, "--stream/--no-stream", help="Stream output"),
     tui: bool = typer.Option(False, "--tui", "-t", help="Launch TUI interface"),
 ) -> None:
-    """💬 Start a chat session with MSProf Agent."""
+    """💬 Start a chat session with msAgent."""
     if tui:
         run_tui()
         return
@@ -67,7 +68,7 @@ def chat_command(
             if message:
                 # Single message mode
                 console.print(f"[bold cyan]👤 You:[/bold cyan] {message}\n")
-                console.print("[bold green]🤖 MSProf:[/bold green] ", end="")
+                console.print("[bold green]🤖 msAgent:[/bold green] ", end="")
                 
                 if stream:
                     async for chunk in agent.chat_stream(message):
@@ -79,7 +80,7 @@ def chat_command(
             else:
                 # Interactive mode
                 console.print(Panel(
-                    "[bold green]🤖 MSProf Agent[/bold green] - Interactive Mode\n"
+                    "[bold green]🤖 msAgent[/bold green] - Interactive Mode\n"
                     "Type your message and press Enter. Use [bold]/help[/bold] for commands.",
                     border_style="green"
                 ))
@@ -112,7 +113,7 @@ def chat_command(
                             console.print("[dim]Chat history cleared.[/dim]")
                             continue
                         
-                        console.print("[bold green]🤖 MSProf:[/bold green] ", end="")
+                        console.print("[bold green]🤖 msAgent:[/bold green] ", end="")
                         
                         if stream:
                             async for chunk in agent.chat_stream(user_input):
@@ -141,8 +142,9 @@ def config_command(
     llm_base_url: Optional[str] = typer.Option(None, "--llm-base-url", help="Custom base URL"),
     llm_model: Optional[str] = typer.Option(None, "--llm-model", "-m", help="Model name"),
 ) -> None:
-    """⚙️ Configure MSProf Agent settings."""
+    """⚙️ Configure msAgent settings."""
     if show:
+        # ... (omitted similar logic)
         config = config_manager.get_config()
         
         table = Table(title="⚙️ Current Configuration")
@@ -204,7 +206,7 @@ def mcp_command(
         
         if not config.mcp_servers:
             console.print("[yellow]⚠ No MCP servers configured.[/yellow]")
-            console.print("Use [cyan]msprof mcp add --name <name> --command <cmd>[/cyan] to add one.")
+            console.print("Use [cyan]msagent mcp add --name <name> --command <cmd>[/cyan] to add one.")
             return
         
         table = Table(title="🔌 MCP Servers")
@@ -223,7 +225,7 @@ def mcp_command(
     elif action == "add":
         if not name or not command:
             console.print("[red]❌ Error: --name and --command are required[/red]")
-            console.print("Usage: msprof mcp add --name <name> --command <cmd> [--args <args>]")
+            console.print("Usage: msagent mcp add --name <name> --command <cmd> [--args <args>]")
             raise typer.Exit(1)
         
         args_list = args.split(",") if args else []
@@ -259,6 +261,7 @@ def ask_command(
     stream: bool = typer.Option(True, "--stream/--no-stream", help="Stream output"),
 ) -> None:
     """❓ Ask a single question and get an answer."""
+    # ... (logic same as before, no text change needed inside async function except variable names which are internal)
     async def do_ask():
         agent = Agent()
         initialized = await agent.initialize()
@@ -287,9 +290,9 @@ def ask_command(
 
 @app.command(name="info")
 def info_command() -> None:
-    """ℹ️ Show information about MSProf Agent."""
+    """ℹ️ Show information about msAgent."""
     info_text = """
-[bold cyan]🚀 MSProf Agent[/bold cyan] - AI Assistant with MCP Support
+[bold cyan]🚀 msAgent[/bold cyan] - AI Assistant with MCP Support
 
 [bold]Features:[/bold]
   • 💬 Interactive chat with AI models
@@ -315,11 +318,11 @@ def info_command() -> None:
 
 [bold]Quick Start:[/bold]
   1. Set your API key: export OPENAI_API_KEY="your-key"
-  2. Start chatting: msprof chat
-  3. Or use TUI: msprof chat --tui
+  2. Start chatting: msagent chat
+  3. Or use TUI: msagent chat --tui
 
 [bold]Documentation:[/bold]
-  Use [cyan]msprof --help[/cyan] for command reference
+  Use [cyan]msagent --help[/cyan] for command reference
     """
     
     console.print(Panel(info_text, border_style="cyan"))

@@ -841,8 +841,7 @@ wheels = [
 ]
 
 [[package]]
-name = "msprof-agent"
-version = "0.1.0"
+name = "msagent"
 source = { editable = "." }
 dependencies = [
     { name = "anthropic" },

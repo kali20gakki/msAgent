@@ -217,8 +217,7 @@ class ChatWelcomeBanner(Static):
     """
     
     def render(self) -> str:
-        return "✱ MSProf Agent initialized. How can I help you?"
-
+        return "✱ msAgent initialized. How can I help you?"
 
 class CustomFooter(Static):
     """Custom footer with shortcuts."""
@@ -308,7 +307,6 @@ class InputArea(Container):
             yield Label(">", classes="prompt-label")
             yield Input(placeholder='Type your message...', id="message-input")
 
-
 class WelcomeScreen(Screen):
     """Full screen welcome page."""
     
@@ -357,23 +355,16 @@ class WelcomeScreen(Screen):
     
     def compose(self) -> ComposeResult:
         ascii_text = r"""
-███╗   ███╗███████╗██████╗ ██████╗  ██████╗ ███████╗
-████╗ ████║██╔════╝██╔══██╗██╔══██╗██╔═══██╗██╔════╝
-██╔████╔██║███████╗██████╔╝██████╔╝██║   ██║█████╗  
-██║╚██╔╝██║╚════██║██╔═══╝ ██╔══██╗██║   ██║██╔══╝  
-██║ ╚═╝ ██║███████║██║     ██║  ██║╚██████╔╝██║     
-╚═╝     ╚═╝╚══════╝╚═╝     ╚═╝  ╚═╝ ╚═════╝ ╚═╝     
-                                                    
- █████╗  ██████╗ ███████╗███╗   ██╗████████╗        
-██╔══██╗██╔════╝ ██╔════╝████╗  ██║╚══██╔══╝        
-███████║██║  ███╗█████╗  ██╔██╗ ██║   ██║           
-██╔══██║██║   ██║██╔══╝  ██║╚██╗██║   ██║           
-██║  ██║╚██████╔╝███████╗██║ ╚████║   ██║           
-╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝  ╚═══╝   ╚═╝           
+███╗   ███╗███████╗ █████╗  ██████╗ ███████╗███╗   ██╗████████╗
+████╗ ████║██╔════╝██╔══██╗██╔════╝ ██╔════╝████╗  ██║╚══██╔══╝
+██╔████╔██║███████╗███████║██║  ███╗█████╗  ██╔██╗ ██║   ██║   
+██║╚██╔╝██║╚════██║██╔══██║██║   ██║██╔══╝  ██║╚██╗██║   ██║   
+██║ ╚═╝ ██║███████║██║  ██║╚██████╔╝███████╗██║ ╚████║   ██║   
+╚═╝     ╚═╝╚══════╝╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝  ╚═══╝   ╚═╝   
 """
         
         with Vertical(classes="welcome-container"):
-            yield Label("✱ Welcome to msprof agent", classes="welcome-box")
+            yield Label("✱ Welcome to msAgent", classes="welcome-box")
             yield Static(ascii_text, classes="ascii-art")
             
             t = Text.from_markup("Press [bold white]Enter[/bold white] to continue")
