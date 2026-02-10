@@ -8,11 +8,8 @@ from typing import Any
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
-from rich.console import Console
-
 from .config import MCPConfig
 
-console = Console()
 logger = logging.getLogger(__name__)
 
 
@@ -57,12 +54,11 @@ class MCPClient:
             # Fetch available tools
             await self._fetch_tools()
             
-            console.print(f"[green]✓[/green] Connected to MCP server: {self.config.name}")
+            logger.info(f"Connected to MCP server: {self.config.name}")
             return True
             
         except Exception as e:
             logger.error(f"Failed to connect to MCP server {self.config.name}: {e}")
-            console.print(f"[yellow]⚠[/yellow] Failed to connect to MCP server {self.config.name}: {e}")
             return False
     
     async def _fetch_tools(self) -> None:
@@ -118,7 +114,7 @@ class MCPClient:
             await self.exit_stack.aclose()
             self._connected = False
             self.session = None
-            console.print(f"[dim]Disconnected from MCP server: {self.config.name}[/dim]")
+            logger.info(f"Disconnected from MCP server: {self.config.name}")
 
 
 class MCPManager:

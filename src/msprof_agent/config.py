@@ -80,6 +80,19 @@ class ConfigManager:
         """Load configuration from file or create default."""
         if self._config is not None:
             return self._config
+            
+        # Check for local config.json first
+        local_config = Path.cwd() / "config.json"
+        if local_config.exists():
+            try:
+                with open(local_config, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                self._config = AppConfig(**data)
+                # Ensure global config dir exists anyway for saving global preferences if needed
+                self._ensure_config_dir()
+                return self._config
+            except Exception:
+                pass
         
         self._ensure_config_dir()
         

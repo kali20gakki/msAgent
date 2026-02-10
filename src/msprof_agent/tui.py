@@ -244,6 +244,11 @@ class ChatWelcomeBanner(Static):
     """
     
     def render(self) -> str:
+        from .mcp_client import mcp_manager
+        servers = mcp_manager.get_connected_servers()
+        if servers:
+            server_str = ", ".join(servers)
+            return f"✱ msAgent initialized.\n🔌 Connected MCP Servers: {server_str}\nHow can I help you?"
         return "✱ msAgent initialized. How can I help you?"
 
 class CustomFooter(Static):
@@ -415,20 +420,26 @@ class WelcomeScreen(Screen):
             
     async def on_mount(self) -> None:
         """Start initialization when screen mounts."""
-        self.run_worker(self._initialize_agent(), exclusive=True)
+        self.run_worker(self._monitor_agent_init(), exclusive=True)
         
-    async def _initialize_agent(self) -> None:
-        """Initialize the agent in background."""
+    async def _monitor_agent_init(self) -> None:
+        """Monitor agent initialization status."""
         try:
-            # Initialize agent
-            await self.app.agent.initialize()
+            # Wait for agent to be initialized by the App worker
+            while not self.app.agent.is_initialized and not self.app.agent.error_message:
+                await asyncio.sleep(0.1)
             
-            # Update UI
-            self.query_one("#loading").add_class("hidden")
-            self.query_one("#status-text").add_class("hidden")
-            self.query_one("#continue-text").remove_class("hidden")
-            
-            self.is_ready = True
+            if self.app.agent.error_message:
+                # Show error
+                self.query_one("#loading").add_class("hidden")
+                self.query_one("#status-text").update(f"❌ Error: {self.app.agent.error_message}")
+            else:
+                # Update UI
+                self.query_one("#loading").add_class("hidden")
+                self.query_one("#status-text").add_class("hidden")
+                self.query_one("#continue-text").remove_class("hidden")
+                
+                self.is_ready = True
             
         except Exception as e:
             # Show error
@@ -641,9 +652,26 @@ class MSProfApp(App):
         super().__init__(**kwargs)
         
     async def on_mount(self) -> None:
-        # Initialize agent is now handled in WelcomeScreen
+        # Start the agent lifecycle worker immediately
+        self.run_worker(self._connection_worker(), name="agent_lifecycle")
+        
         # Push welcome screen
         self.push_screen(WelcomeScreen())
+
+    async def _connection_worker(self) -> None:
+        """Manages the agent connection lifecycle."""
+        try:
+            # Connect
+            await self.agent.initialize()
+            
+            # Wait until cancelled (app shutdown)
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            pass
+        finally:
+            # Disconnect in the same task
+            if self.agent.is_initialized:
+                await self.agent.shutdown()
 
 
 def run_tui() -> None:
