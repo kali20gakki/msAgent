@@ -8,7 +8,10 @@ from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator
 from typing import Any
 
-import httpx
+from openai import AsyncOpenAI
+from anthropic import AsyncAnthropic
+from google import genai
+from google.genai import types as genai_types
 from rich.console import Console
 
 from .config import LLMConfig
@@ -78,32 +81,17 @@ class OpenAIClient(LLMClient):
         self._log_path = Path(
             os.getenv("MSAGENT_LLM_LOG_PATH", str(Path.home() / ".config" / "msagent" / "llm_errors.log"))
         )
-        self.client = httpx.AsyncClient(
+        self.client = AsyncOpenAI(
+            api_key=config.api_key,
             base_url=self.base_url,
-            headers={"Authorization": f"Bearer {config.api_key}"},
-            timeout=httpx.Timeout(
-                connect=10.0,
-                read=self._request_timeout_s,
-                write=30.0,
-                pool=30.0,
-            ),
+            timeout=self._request_timeout_s,
         )
 
     def _debug(self, message: str) -> None:
         if self._debug_enabled:
             console.print(f"[dim]LLM DEBUG:[/dim] {message}")
 
-
-    async def _read_response_body(self, response: httpx.Response) -> str:
-        try:
-            await response.aread()
-            return response.text
-        except Exception as e:
-            return f"<unreadable: {e}>"
-
-    def _log_http_error(self, err: httpx.HTTPStatusError, payload: dict[str, Any], body: str) -> None:
-        request = err.request
-        response = err.response
+    def _log_http_error(self, err: Exception, payload: dict[str, Any], body: str) -> None:
         safe_payload = {
             "model": payload.get("model"),
             "temperature": payload.get("temperature"),
@@ -115,8 +103,8 @@ class OpenAIClient(LLMClient):
         }
         log_entry = {
             "ts": datetime.utcnow().isoformat() + "Z",
-            "status": response.status_code,
-            "url": str(request.url),
+            "status": getattr(err, "status_code", None),
+            "url": self.base_url,
             "payload": safe_payload,
             "response": body[:5000],
         }
@@ -128,13 +116,11 @@ class OpenAIClient(LLMClient):
             console.print(f"[yellow]LLM log write failed:[/yellow] {log_err}")
         console.print(
             "[red]LLM request failed[/red] "
-            f"status={response.status_code} url={request.url} "
+            f"status={getattr(err, 'status_code', None)} url={self.base_url} "
             f"payload={safe_payload} response={body}"
         )
 
-    def _format_http_error(self, err: httpx.HTTPStatusError, payload: dict[str, Any], body: str) -> str:
-        request = err.request
-        response = err.response
+    def _format_http_error(self, err: Exception, payload: dict[str, Any], body: str) -> str:
         safe_payload = {
             "model": payload.get("model"),
             "temperature": payload.get("temperature"),
@@ -145,7 +131,7 @@ class OpenAIClient(LLMClient):
             "messages_count": len(payload.get("messages", [])),
         }
         return (
-            f"LLM request failed: status={response.status_code} url={request.url} "
+            f"LLM request failed: status={getattr(err, 'status_code', None)} url={self.base_url} "
             f"payload={safe_payload} response={body}"
         )
     
@@ -166,29 +152,20 @@ class OpenAIClient(LLMClient):
             f"messages={len(payload['messages'])} tools={bool(tools)}"
         )
         console.print(f"[dim]⏳ Waiting for LLM response (timeout {self._request_timeout_s:.0f}s)...[/dim]")
-        response = await self.client.post(
-            "/chat/completions",
-            json=payload,
-            timeout=self._request_timeout_s,
-        )
-        if response.status_code >= 400:
-            body = await self._read_response_body(response)
-            err = httpx.HTTPStatusError(
-                "Error response",
-                request=response.request,
-                response=response,
-            )
+        try:
+            response = await self.client.chat.completions.create(**payload)
+        except Exception as err:
+            body = str(err)
             self._log_http_error(err, payload, body)
             raise RuntimeError(self._format_http_error(err, payload, body)) from err
-        data = response.json()
-        self.last_usage = data.get("usage")
-        
-        if "choices" in data and len(data["choices"]) > 0:
-            message = data["choices"][0].get("message", {})
+
+        self.last_usage = getattr(response, "usage", None)
+        if response.choices:
+            message = response.choices[0].message
             console.print("[dim]✅ LLM response received[/dim]")
-            content = message.get("content", "")
+            content = getattr(message, "content", "") or ""
             if not content:
-                content = message.get("reasoning_content", "")
+                content = getattr(message, "reasoning_content", "") or ""
             return content
         console.print("[dim]✅ LLM response received (empty)[/dim]")
         return ""
@@ -204,7 +181,6 @@ class OpenAIClient(LLMClient):
             "messages": request_messages,
             "temperature": self.config.temperature,
             "max_tokens": self.config.max_tokens,
-            "stream": True,
         }
         if tools:
             payload["tools"] = tools
@@ -214,45 +190,33 @@ class OpenAIClient(LLMClient):
             f"messages={len(payload['messages'])} tools={bool(tools)}"
         )
         console.print(f"[dim]⏳ Waiting for LLM stream (timeout {self._request_timeout_s:.0f}s)...[/dim]")
-        async with self.client.stream(
-            "POST",
-            "/chat/completions",
-            json=payload,
-            timeout=self._request_timeout_s,
-        ) as response:
-            if response.status_code >= 400:
-                body = await self._read_response_body(response)
-                err = httpx.HTTPStatusError(
-                    "Error response",
-                    request=response.request,
-                    response=response,
-                )
-                self._log_http_error(err, payload, body)
-                raise RuntimeError(self._format_http_error(err, payload, body)) from err
-            first_chunk = True
-            async for line in response.aiter_lines():
-                if line.startswith("data: "):
-                    data = line[6:]
-                    if data == "[DONE]":
-                        console.print("[dim]✅ LLM stream finished[/dim]")
-                        break
-                    try:
-                        import json
-                        chunk = json.loads(data)
-                        if "choices" in chunk and len(chunk["choices"]) > 0:
-                            delta = chunk["choices"][0].get("delta", {})
-                            content = delta.get("content", "")
-                            if not content:
-                                content = delta.get("reasoning_content", "")
-                            if "usage" in chunk and isinstance(chunk["usage"], dict):
-                                self.last_usage = chunk["usage"]
-                            if content:
-                                if first_chunk:
-                                    console.print("[dim]✅ LLM stream started[/dim]")
-                                    first_chunk = False
-                                yield content
-                    except json.JSONDecodeError:
-                        continue
+        try:
+            stream = await self.client.chat.completions.create(
+                **payload,
+                stream=True,
+                stream_options={"include_usage": True},
+            )
+        except Exception as err:
+            body = str(err)
+            self._log_http_error(err, payload, body)
+            raise RuntimeError(self._format_http_error(err, payload, body)) from err
+
+        first_chunk = True
+        async for chunk in stream:
+            if hasattr(chunk, "usage") and chunk.usage:
+                self.last_usage = chunk.usage
+            if not chunk.choices:
+                continue
+            delta = chunk.choices[0].delta
+            content = getattr(delta, "content", "") or ""
+            if not content:
+                content = getattr(delta, "reasoning_content", "") or ""
+            if content:
+                if first_chunk:
+                    console.print("[dim]✅ LLM stream started[/dim]")
+                    first_chunk = False
+                yield content
+        console.print("[dim]✅ LLM stream finished[/dim]")
     
     async def chat_with_tools(
         self, messages: list[Message], tools: list[dict]
@@ -272,26 +236,18 @@ class OpenAIClient(LLMClient):
             f"messages={len(payload['messages'])} tools={bool(tools)}"
         )
         console.print(f"[dim]⏳ Waiting for LLM tool decision (timeout {self._request_timeout_s:.0f}s)...[/dim]")
-        response = await self.client.post(
-            "/chat/completions",
-            json=payload,
-            timeout=self._request_timeout_s,
-        )
-        if response.status_code >= 400:
-            body = await self._read_response_body(response)
-            err = httpx.HTTPStatusError(
-                "Error response",
-                request=response.request,
-                response=response,
-            )
+        try:
+            response = await self.client.chat.completions.create(**payload)
+        except Exception as err:
+            body = str(err)
             self._log_http_error(err, payload, body)
             raise RuntimeError(self._format_http_error(err, payload, body)) from err
-        data = response.json()
-        self.last_usage = data.get("usage")
-        
-        if "choices" in data and len(data["choices"]) > 0:
+
+        self.last_usage = getattr(response, "usage", None)
+        if response.choices:
             console.print("[dim]✅ LLM tool decision received[/dim]")
-            return data["choices"][0].get("message", {})
+            message = response.choices[0].message
+            return message.model_dump()
         console.print("[dim]✅ LLM tool decision received (empty)[/dim]")
         return {}
 
@@ -315,14 +271,9 @@ class AnthropicClient(LLMClient):
     def __init__(self, config: LLMConfig):
         super().__init__(config)
         self.base_url = config.base_url or "https://api.anthropic.com"
-        self.client = httpx.AsyncClient(
+        self.client = AsyncAnthropic(
+            api_key=config.api_key,
             base_url=self.base_url,
-            headers={
-                "x-api-key": config.api_key,
-                "anthropic-version": "2023-06-01",
-                "Content-Type": "application/json",
-            },
-            timeout=60.0,
         )
     
     def _convert_messages(self, messages: list[Message]) -> tuple[str, list[dict]]:
@@ -355,14 +306,14 @@ class AnthropicClient(LLMClient):
             payload["system"] = system
         if tools:
             payload["tools"] = tools
-        
-        response = await self.client.post("/v1/messages", json=payload)
-        response.raise_for_status()
-        data = response.json()
-        
-        content = data.get("content", [])
-        if content and len(content) > 0:
-            return content[0].get("text", "")
+
+        response = await self.client.messages.create(**payload)
+        self.last_usage = getattr(response, "usage", None)
+        content = getattr(response, "content", [])
+        if content:
+            for block in content:
+                if getattr(block, "type", None) == "text":
+                    return getattr(block, "text", "")
         return ""
     
     async def chat_stream(
@@ -383,21 +334,10 @@ class AnthropicClient(LLMClient):
         if tools:
             payload["tools"] = tools
         
-        async with self.client.stream("POST", "/v1/messages", json=payload) as response:
-            response.raise_for_status()
-            async for line in response.aiter_lines():
-                if line.startswith("data: "):
-                    data = line[6:]
-                    try:
-                        import json
-                        event = json.loads(data)
-                        if event.get("type") == "content_block_delta":
-                            delta = event.get("delta", {})
-                            text = delta.get("text", "")
-                            if text:
-                                yield text
-                    except json.JSONDecodeError:
-                        continue
+        async with self.client.messages.stream(**payload) as stream:
+            async for text in stream.text_stream:
+                if text:
+                    yield text
     
     async def chat_with_tools(
         self, messages: list[Message], tools: list[dict]
@@ -415,32 +355,30 @@ class AnthropicClient(LLMClient):
         if system:
             payload["system"] = system
         
-        response = await self.client.post("/v1/messages", json=payload)
-        response.raise_for_status()
-        data = response.json()
-        
-        content = data.get("content", [])
+        response = await self.client.messages.create(**payload)
+        self.last_usage = getattr(response, "usage", None)
+        content = getattr(response, "content", [])
         if content:
             # Check for tool use
             for block in content:
-                if block.get("type") == "tool_use":
+                if getattr(block, "type", None) == "tool_use":
                     return {
                         "role": "assistant",
                         "content": None,
                         "tool_calls": [{
-                            "id": block.get("id", ""),
+                            "id": getattr(block, "id", ""),
                             "type": "function",
                             "function": {
-                                "name": block.get("name", ""),
-                                "arguments": json.dumps(block.get("input", {})),
+                                "name": getattr(block, "name", ""),
+                                "arguments": json.dumps(getattr(block, "input", {})),
                             }
                         }]
                     }
             # Regular text response
-            if content[0].get("type") == "text":
+            if getattr(content[0], "type", None) == "text":
                 return {
                     "role": "assistant",
-                    "content": content[0].get("text", ""),
+                    "content": getattr(content[0], "text", ""),
                 }
         return {"role": "assistant", "content": ""}
 
@@ -451,11 +389,10 @@ class GeminiClient(LLMClient):
     def __init__(self, config: LLMConfig):
         super().__init__(config)
         self.api_key = config.api_key
-        self.base_url = config.base_url or "https://generativelanguage.googleapis.com/v1beta"
-        self.client = httpx.AsyncClient(
-            base_url=self.base_url,
-            timeout=60.0,
-        )
+        self.base_url = config.base_url or "https://generativelanguage.googleapis.com"
+        http_options = genai_types.HttpOptions(base_url=self.base_url)
+        self.client = genai.Client(api_key=self.api_key, http_options=http_options)
+        self.aclient = self.client.aio
     
     def _convert_messages(self, messages: list[Message]) -> list[dict]:
         """Convert messages to Gemini format."""
@@ -479,44 +416,42 @@ class GeminiClient(LLMClient):
                 })
         return gemini_messages
     
-    def _convert_tools(self, tools: list[dict]) -> list[dict]:
+    def _convert_tools(self, tools: list[dict]) -> list[genai_types.Tool]:
         """Convert tools to Gemini format."""
-        gemini_tools = []
+        function_declarations = []
         for tool in tools:
             if tool.get("type") == "function":
                 func = tool.get("function", {})
-                gemini_tools.append({
-                    "name": func.get("name", ""),
-                    "description": func.get("description", ""),
-                    "parameters": func.get("parameters", {}),
-                })
-        return [{"function_declarations": gemini_tools}]
+                function_declarations.append(
+                    genai_types.FunctionDeclaration(
+                        name=func.get("name", ""),
+                        description=func.get("description", ""),
+                        parameters=func.get("parameters", {}),
+                    )
+                )
+        return [genai_types.Tool(function_declarations=function_declarations)]
     
     async def chat(self, messages: list[Message], tools: list[dict] | None = None) -> str:
         """Send a chat request."""
         gemini_messages = self._convert_messages(messages)
         
-        payload: dict[str, Any] = {
+        config: dict[str, Any] = {
+            "temperature": self.config.temperature,
+            "max_output_tokens": self.config.max_tokens,
+        }
+        request: dict[str, Any] = {
+            "model": self.config.model,
             "contents": gemini_messages,
-            "generationConfig": {
-                "temperature": self.config.temperature,
-                "maxOutputTokens": self.config.max_tokens,
-            },
+            "config": config,
         }
         if tools:
-            payload["tools"] = self._convert_tools(tools)
+            request["tools"] = self._convert_tools(tools)
         
-        url = f"/models/{self.config.model}:generateContent?key={self.api_key}"
-        response = await self.client.post(url, json=payload)
-        response.raise_for_status()
-        data = response.json()
-        
-        candidates = data.get("candidates", [])
-        if candidates and len(candidates) > 0:
-            content = candidates[0].get("content", {})
-            parts = content.get("parts", [])
-            if parts and len(parts) > 0:
-                return parts[0].get("text", "")
+        response = await self.aclient.models.generate_content(**request)
+        self.last_usage = getattr(response, "usage", None)
+        text = getattr(response, "text", "")
+        if text:
+            return text
         return ""
     
     async def chat_stream(
@@ -525,34 +460,22 @@ class GeminiClient(LLMClient):
         """Stream chat response."""
         gemini_messages = self._convert_messages(messages)
         
-        payload: dict[str, Any] = {
+        config: dict[str, Any] = {
+            "temperature": self.config.temperature,
+            "max_output_tokens": self.config.max_tokens,
+        }
+        request: dict[str, Any] = {
+            "model": self.config.model,
             "contents": gemini_messages,
-            "generationConfig": {
-                "temperature": self.config.temperature,
-                "maxOutputTokens": self.config.max_tokens,
-            },
+            "config": config,
         }
         if tools:
-            payload["tools"] = self._convert_tools(tools)
+            request["tools"] = self._convert_tools(tools)
         
-        url = f"/models/{self.config.model}:streamGenerateContent?key={self.api_key}"
-        async with self.client.stream("POST", url, json=payload) as response:
-            response.raise_for_status()
-            async for line in response.aiter_lines():
-                if line.strip():
-                    try:
-                        import json
-                        chunk = json.loads(line)
-                        candidates = chunk.get("candidates", [])
-                        if candidates and len(candidates) > 0:
-                            content = candidates[0].get("content", {})
-                            parts = content.get("parts", [])
-                            if parts and len(parts) > 0:
-                                text = parts[0].get("text", "")
-                                if text:
-                                    yield text
-                    except json.JSONDecodeError:
-                        continue
+        async for chunk in self.aclient.models.generate_content_stream(**request):
+            text = getattr(chunk, "text", "")
+            if text:
+                yield text
     
     async def chat_with_tools(
         self, messages: list[Message], tools: list[dict]
@@ -560,46 +483,34 @@ class GeminiClient(LLMClient):
         """Send a chat request with tool support."""
         gemini_messages = self._convert_messages(messages)
         
-        payload = {
+        config: dict[str, Any] = {
+            "temperature": self.config.temperature,
+            "max_output_tokens": self.config.max_tokens,
+        }
+        request = {
+            "model": self.config.model,
             "contents": gemini_messages,
-            "generationConfig": {
-                "temperature": self.config.temperature,
-                "maxOutputTokens": self.config.max_tokens,
-            },
+            "config": config,
             "tools": self._convert_tools(tools),
         }
         
-        url = f"/models/{self.config.model}:generateContent?key={self.api_key}"
-        response = await self.client.post(url, json=payload)
-        response.raise_for_status()
-        data = response.json()
-        
-        candidates = data.get("candidates", [])
-        if candidates and len(candidates) > 0:
-            content = candidates[0].get("content", {})
-            parts = content.get("parts", [])
-            if parts and len(parts) > 0:
-                part = parts[0]
-                # Check for function call
-                if "functionCall" in part:
-                    func_call = part["functionCall"]
-                    return {
-                        "role": "assistant",
-                        "content": None,
-                        "tool_calls": [{
-                            "id": func_call.get("name", ""),
-                            "type": "function",
-                            "function": {
-                                "name": func_call.get("name", ""),
-                                "arguments": json.dumps(func_call.get("args", {})),
-                            }
-                        }]
-                    }
-                # Regular text response
-                return {
-                    "role": "assistant",
-                    "content": part.get("text", ""),
-                }
+        response = await self.aclient.models.generate_content(**request)
+        self.last_usage = getattr(response, "usage", None)
+        if hasattr(response, "function_calls") and response.function_calls:
+            calls = []
+            for idx, call in enumerate(response.function_calls):
+                calls.append({
+                    "id": f"gemini_call_{idx}",
+                    "type": "function",
+                    "function": {
+                        "name": getattr(call, "name", ""),
+                        "arguments": json.dumps(getattr(call, "args", {})),
+                    },
+                })
+            return {"role": "assistant", "content": None, "tool_calls": calls}
+        text = getattr(response, "text", "")
+        if text:
+            return {"role": "assistant", "content": text}
         return {"role": "assistant", "content": ""}
 
 

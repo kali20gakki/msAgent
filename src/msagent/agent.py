@@ -140,6 +140,7 @@ Be concise, helpful, and friendly in your responses."""
                             arguments = {}
                         
                         console.print(f"[dim]🔧 Calling tool: {tool_name}[/dim]")
+                        console.print(f"[dim]🔎 Tool args: {json.dumps(arguments, ensure_ascii=False)}[/dim]")
                         t_tool = time.monotonic()
                         result = await mcp_manager.call_tool(tool_name, arguments)
                         t_tool_dt = time.monotonic() - t_tool
@@ -171,7 +172,9 @@ Be concise, helpful, and friendly in your responses."""
                         if final_response is None:
                             return f"❌ Error: LLM stream timed out after {timeout_s:.0f}s"
                         if not final_response:
-                            return self._format_empty_response_error(all_messages, empty_reason)
+                            final_response = await self._retry_non_stream_response(all_messages, timeout_s)
+                            if not final_response:
+                                return self._format_empty_response_error(all_messages, empty_reason)
                     else:
                         try:
                             final_response = await asyncio.wait_for(
@@ -210,7 +213,9 @@ Be concise, helpful, and friendly in your responses."""
                     if response is None:
                         return f"❌ Error: LLM stream timed out after {timeout_s:.0f}s"
                     if not response:
-                        return self._format_empty_response_error(all_messages, empty_reason)
+                        response = await self._retry_non_stream_response(all_messages, timeout_s)
+                        if not response:
+                            return self._format_empty_response_error(all_messages, empty_reason)
                 else:
                     try:
                         response = await asyncio.wait_for(
@@ -295,6 +300,7 @@ Be concise, helpful, and friendly in your responses."""
                             arguments = {}
                         
                         yield f"🔧 Calling tool: {tool_name}...\n\n"
+                        yield f"🔎 Tool args: {json.dumps(arguments, ensure_ascii=False)}\n\n"
                         t_tool = time.monotonic()
                         result = await mcp_manager.call_tool(tool_name, arguments)
                         t_tool_dt = time.monotonic() - t_tool
@@ -328,8 +334,13 @@ Be concise, helpful, and friendly in your responses."""
                         full_response += chunk
                         yield chunk
                     if not full_response:
-                        yield self._format_empty_response_error(all_messages)
-                        return
+                        retry = await self._retry_non_stream_response(all_messages, timeout_s)
+                        if retry:
+                            yield retry
+                            full_response = retry
+                        else:
+                            yield self._format_empty_response_error(all_messages)
+                            return
                     dt2 = time.monotonic() - t1
                     _add_usage()
                     yield f"\n\n⏲️ LLM response took {dt2:.2f}s\n"
@@ -360,8 +371,13 @@ Be concise, helpful, and friendly in your responses."""
                     full_response += chunk
                     yield chunk
                 if not full_response:
-                    yield self._format_empty_response_error(all_messages)
-                    return
+                    retry = await self._retry_non_stream_response(all_messages, timeout_s)
+                    if retry:
+                        yield retry
+                        full_response = retry
+                    else:
+                        yield self._format_empty_response_error(all_messages)
+                        return
                 dt = time.monotonic() - t0
                 _add_usage()
                 yield f"\n\n⏲️ LLM response took {dt:.2f}s\n"
@@ -400,6 +416,13 @@ Be concise, helpful, and friendly in your responses."""
         if not got_chunk:
             return "", "no_chunks"
         return full_response, ""
+
+    async def _retry_non_stream_response(self, messages: list[Message], timeout_s: float) -> str | None:
+        """Fallback to non-streaming call when streaming yields no content."""
+        try:
+            return await asyncio.wait_for(self.llm_client.chat(messages), timeout=timeout_s)
+        except asyncio.TimeoutError:
+            return None
 
     def _format_empty_response_error(self, messages: list[Message], reason: str = "") -> str:
         last_msgs = [m.to_dict() for m in messages[-3:]]
