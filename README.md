@@ -115,23 +115,6 @@ msagent mcp add --name sqlite --command npx --args "-y,@modelcontextprotocol/ser
 msagent mcp add --name myserver --command python --args "/path/to/server.py"
 ```
 
-## 📁 项目结构
-
-```
-msagent/
-├── pyproject.toml          # 项目配置和依赖
-├── README.md               # 项目文档
-├── src/
-│   └── msagent/
-│       ├── __init__.py     # 包初始化
-│       ├── cli.py          # CLI 命令接口
-│       ├── tui.py          # TUI 界面
-│       ├── agent.py        # Agent 核心逻辑
-│       ├── llm.py          # LLM 客户端
-│       ├── mcp_client.py   # MCP 客户端
-│       └── config.py       # 配置管理
-```
-
 ## 🛠️ 开发
 
 ### 安装开发依赖
@@ -169,9 +152,6 @@ uv run ruff check .
 ## 🔗 相关链接
 
 - [MCP Protocol](https://modelcontextprotocol.io/)
-- [OpenAI API](https://platform.openai.com/docs)
-- [Anthropic API](https://docs.anthropic.com/)
-- [Gemini API](https://ai.google.dev/)
 - [Textual](https://textual.textualize.io/)
 - [Typer](https://typer.tiangolo.com/)
 
