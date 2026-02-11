@@ -18,15 +18,14 @@
 
 ### 安装
 
-使用 `uv` 进行安装（推荐）：
+使用 `uv` 进行安装（推荐，支持 Python >= 3.11）：
 
 ```bash
 # Clone the repository
 git clone https://github.com/kali20gakki/msAgent.git
 cd msagent
 
-# Install dependencies and the tool
-uv python install 3.12
+# Install dependencies
 uv sync
 ```
 
