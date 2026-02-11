@@ -22,7 +22,7 @@
 
 ```bash
 # Clone the repository
-git clone https://github.com/weizhang/msagent.git
+git clone https://github.com/kali20gakki/msAgent.git
 cd msagent
 
 # Install dependencies and the tool
