@@ -167,9 +167,11 @@ Be concise, helpful, and friendly in your responses."""
                     force_stream = self._should_force_stream()
                     t1 = time.monotonic()
                     if force_stream:
-                        final_response = await self._collect_stream_response(all_messages, timeout_s)
+                        final_response, empty_reason = await self._collect_stream_response(all_messages, timeout_s)
                         if final_response is None:
                             return f"❌ Error: LLM stream timed out after {timeout_s:.0f}s"
+                        if not final_response:
+                            return self._format_empty_response_error(all_messages, empty_reason)
                     else:
                         try:
                             final_response = await asyncio.wait_for(
@@ -204,9 +206,11 @@ Be concise, helpful, and friendly in your responses."""
                 force_stream = self._should_force_stream()
                 t0 = time.monotonic()
                 if force_stream:
-                    response = await self._collect_stream_response(all_messages, timeout_s)
+                    response, empty_reason = await self._collect_stream_response(all_messages, timeout_s)
                     if response is None:
                         return f"❌ Error: LLM stream timed out after {timeout_s:.0f}s"
+                    if not response:
+                        return self._format_empty_response_error(all_messages, empty_reason)
                 else:
                     try:
                         response = await asyncio.wait_for(
@@ -324,7 +328,7 @@ Be concise, helpful, and friendly in your responses."""
                         full_response += chunk
                         yield chunk
                     if not full_response:
-                        yield "❌ Error: LLM returned empty response"
+                        yield self._format_empty_response_error(all_messages)
                         return
                     dt2 = time.monotonic() - t1
                     _add_usage()
@@ -356,7 +360,7 @@ Be concise, helpful, and friendly in your responses."""
                     full_response += chunk
                     yield chunk
                 if not full_response:
-                    yield "❌ Error: LLM returned empty response"
+                    yield self._format_empty_response_error(all_messages)
                     return
                 dt = time.monotonic() - t0
                 _add_usage()
@@ -385,17 +389,26 @@ Be concise, helpful, and friendly in your responses."""
         model = (self.config.llm.model or "").lower()
         return "deepseek" in base_url or "deepseek-reasoner" in model
 
-    async def _collect_stream_response(self, messages: list[Message], timeout_s: float) -> str | None:
+    async def _collect_stream_response(self, messages: list[Message], timeout_s: float) -> tuple[str | None, str]:
         full_response = ""
         got_chunk = False
         async for chunk in self._yield_stream_response(messages, timeout_s):
             if chunk is None:
-                return None
+                return None, "timeout"
             got_chunk = True
             full_response += chunk
         if not got_chunk:
-            return None
-        return full_response
+            return "", "no_chunks"
+        return full_response, ""
+
+    def _format_empty_response_error(self, messages: list[Message], reason: str = "") -> str:
+        last_msgs = [m.to_dict() for m in messages[-3:]]
+        reason_text = f" reason={reason}" if reason else ""
+        return (
+            "❌ Error: LLM returned empty response."
+            f"{reason_text}\n"
+            f"Last messages: {json.dumps(last_msgs, ensure_ascii=False)}"
+        )
 
     async def _yield_stream_response(self, messages: list[Message], timeout_s: float):
         stream = self.llm_client.chat_stream(messages)
