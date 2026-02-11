@@ -1,6 +1,8 @@
 """MCP client for msagent."""
 
 import asyncio
+import os
+import time
 import json
 from contextlib import AsyncExitStack
 from typing import Any
@@ -88,7 +90,15 @@ class MCPClient:
             return "Error: Not connected to MCP server"
         
         try:
-            result = await self.session.call_tool(tool_name, arguments=arguments)
+            timeout_s = float(os.getenv("MSAGENT_TOOL_TIMEOUT", "300"))
+            start = time.monotonic()
+            result = await asyncio.wait_for(
+                self.session.call_tool(tool_name, arguments=arguments),
+                timeout=timeout_s,
+            )
+            elapsed = time.monotonic() - start
+            if elapsed >= 1.0:
+                print(f"[mcp] tool {self.name}__{tool_name} completed in {elapsed:.2f}s")
             
             # Extract text content from result
             contents = []
@@ -100,6 +110,8 @@ class MCPClient:
             
             return "\n".join(contents) if contents else "Tool executed successfully"
             
+        except asyncio.TimeoutError:
+            return f"Error calling tool {tool_name}: timed out after {timeout_s:.0f}s"
         except Exception as e:
             return f"Error calling tool {tool_name}: {e}"
     

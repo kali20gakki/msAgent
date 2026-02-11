@@ -1,6 +1,9 @@
 """Core agent logic for msagent."""
 
+import asyncio
 import json
+import os
+import time
 from collections.abc import AsyncGenerator
 from typing import Any
 
@@ -70,6 +73,7 @@ class Agent:
 
 When you need to use a tool, respond with a tool call in the appropriate format.
 When you receive tool results, incorporate them into your response naturally.
+Do NOT output DSML or any tool-call markup in the message content. If you need a tool, use the tool_calls field only.
 
 Available MCP servers: """ + (", ".join(mcp_servers) if mcp_servers else "None") + """
 
@@ -91,21 +95,44 @@ Be concise, helpful, and friendly in your responses."""
         # Get available tools
         tools = mcp_manager.get_all_tools()
         
+        total_usage: dict[str, int] = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+        def _add_usage() -> None:
+            usage = getattr(self.llm_client, "last_usage", None)
+            if isinstance(usage, dict):
+                for key in ("prompt_tokens", "completion_tokens", "total_tokens"):
+                    val = usage.get(key)
+                    if isinstance(val, int):
+                        total_usage[key] += val
+
         try:
             if tools:
                 # Use tool-enabled chat
-                response = await self.llm_client.chat_with_tools(all_messages, tools)
+                console.print("[dim]⏳ Waiting for LLM tool decision...[/dim]")
+                timeout_s = float(os.getenv("MSAGENT_LLM_TIMEOUT", "120"))
+                t0 = time.monotonic()
+                try:
+                    response = await asyncio.wait_for(
+                        self.llm_client.chat_with_tools(all_messages, tools),
+                        timeout=timeout_s,
+                    )
+                except asyncio.TimeoutError:
+                    return f"❌ Error: LLM tool decision timed out after {timeout_s:.0f}s"
+                dt = time.monotonic() - t0
+                _add_usage()
+                console.print(f"[dim]⏲️ Tool decision took {dt:.2f}s[/dim]")
                 
                 # Check if tool calls are needed
-                if "tool_calls" in response and response["tool_calls"]:
+                tool_calls = response.get("tool_calls") if isinstance(response, dict) else None
+                if tool_calls:
                     # Add assistant message with tool calls
                     self.messages.append(Message(
                         "assistant",
-                        response.get("content") or f"Using tool: {response['tool_calls'][0]['function']['name']}"
+                        response.get("content") or "",
+                        tool_calls=tool_calls,
                     ))
                     
                     # Execute tool calls
-                    for tool_call in response["tool_calls"]:
+                    for tool_call in tool_calls:
                         tool_name = tool_call["function"]["name"]
                         try:
                             arguments = json.loads(tool_call["function"]["arguments"])
@@ -113,27 +140,90 @@ Be concise, helpful, and friendly in your responses."""
                             arguments = {}
                         
                         console.print(f"[dim]🔧 Calling tool: {tool_name}[/dim]")
+                        t_tool = time.monotonic()
                         result = await mcp_manager.call_tool(tool_name, arguments)
+                        t_tool_dt = time.monotonic() - t_tool
+                        console.print(f"[dim]✅ Tool finished: {tool_name}[/dim]")
+                        console.print(f"[dim]⏲️ Tool {tool_name} took {t_tool_dt:.2f}s[/dim]")
                         
-                        # Add tool result to messages
+                        # Add tool result to messages (truncate if too large)
+                        max_chars = int(os.getenv("MSAGENT_TOOL_RESULT_MAX_CHARS", "12000"))
+                        result_text = str(result)
+                        if len(result_text) > max_chars:
+                            result_text = (
+                                result_text[:max_chars]
+                                + f"\n\n...[truncated {len(str(result)) - max_chars} chars]"
+                            )
                         self.messages.append(Message(
                             "tool",
-                            f"Tool '{tool_name}' result: {result}"
+                            result_text,
+                            tool_call_id=tool_call.get("id")
                         ))
                     
                     # Get final response after tool execution
                     all_messages = [Message("system", self.get_system_prompt())] + self.messages
-                    final_response = await self.llm_client.chat(all_messages)
+                    console.print("[dim]⏳ Waiting for LLM response...[/dim]")
+                    timeout_s = float(os.getenv("MSAGENT_LLM_TIMEOUT", "120"))
+                    force_stream = self._should_force_stream()
+                    t1 = time.monotonic()
+                    if force_stream:
+                        final_response = await self._collect_stream_response(all_messages, timeout_s)
+                        if final_response is None:
+                            return f"❌ Error: LLM stream timed out after {timeout_s:.0f}s"
+                    else:
+                        try:
+                            final_response = await asyncio.wait_for(
+                                self.llm_client.chat(all_messages),
+                                timeout=timeout_s,
+                            )
+                        except asyncio.TimeoutError:
+                            return f"❌ Error: LLM response timed out after {timeout_s:.0f}s"
+                    dt2 = time.monotonic() - t1
+                    _add_usage()
+                    console.print(f"[dim]⏲️ LLM response took {dt2:.2f}s[/dim]")
                     self.messages.append(Message("assistant", final_response))
+                    if total_usage["total_tokens"] > 0:
+                        console.print(
+                            f"[dim]🧮 Tokens used: prompt={total_usage['prompt_tokens']} "
+                            f"completion={total_usage['completion_tokens']} total={total_usage['total_tokens']}[/dim]"
+                        )
                     return final_response
                 else:
                     content = response.get("content", "")
                     self.messages.append(Message("assistant", content))
+                    if total_usage["total_tokens"] > 0:
+                        console.print(
+                            f"[dim]🧮 Tokens used: prompt={total_usage['prompt_tokens']} "
+                            f"completion={total_usage['completion_tokens']} total={total_usage['total_tokens']}[/dim]"
+                        )
                     return content
             else:
                 # Simple chat without tools
-                response = await self.llm_client.chat(all_messages)
+                console.print("[dim]⏳ Waiting for LLM response...[/dim]")
+                timeout_s = float(os.getenv("MSAGENT_LLM_TIMEOUT", "120"))
+                force_stream = self._should_force_stream()
+                t0 = time.monotonic()
+                if force_stream:
+                    response = await self._collect_stream_response(all_messages, timeout_s)
+                    if response is None:
+                        return f"❌ Error: LLM stream timed out after {timeout_s:.0f}s"
+                else:
+                    try:
+                        response = await asyncio.wait_for(
+                            self.llm_client.chat(all_messages),
+                            timeout=timeout_s,
+                        )
+                    except asyncio.TimeoutError:
+                        return f"❌ Error: LLM response timed out after {timeout_s:.0f}s"
+                dt = time.monotonic() - t0
+                _add_usage()
+                console.print(f"[dim]⏲️ LLM response took {dt:.2f}s[/dim]")
                 self.messages.append(Message("assistant", response))
+                if total_usage["total_tokens"] > 0:
+                    console.print(
+                        f"[dim]🧮 Tokens used: prompt={total_usage['prompt_tokens']} "
+                        f"completion={total_usage['completion_tokens']} total={total_usage['total_tokens']}[/dim]"
+                    )
                 return response
                 
         except Exception as e:
@@ -155,21 +245,45 @@ Be concise, helpful, and friendly in your responses."""
         # Get available tools
         tools = mcp_manager.get_all_tools()
         
+        total_usage: dict[str, int] = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+        def _add_usage() -> None:
+            usage = getattr(self.llm_client, "last_usage", None)
+            if isinstance(usage, dict):
+                for key in ("prompt_tokens", "completion_tokens", "total_tokens"):
+                    val = usage.get(key)
+                    if isinstance(val, int):
+                        total_usage[key] += val
+
         try:
             if tools:
                 # Check if we need to use tools (non-streaming for tool detection)
-                response = await self.llm_client.chat_with_tools(all_messages, tools)
+                console.print("[dim]⏳ Waiting for LLM tool decision...[/dim]")
+                timeout_s = float(os.getenv("MSAGENT_LLM_TIMEOUT", "120"))
+                t0 = time.monotonic()
+                try:
+                    response = await asyncio.wait_for(
+                        self.llm_client.chat_with_tools(all_messages, tools),
+                        timeout=timeout_s,
+                    )
+                except asyncio.TimeoutError:
+                    yield f"❌ Error: LLM tool decision timed out after {timeout_s:.0f}s"
+                    return
+                dt = time.monotonic() - t0
+                _add_usage()
+                yield f"⏲️ Tool decision took {dt:.2f}s\n\n"
                 
                 # Check if tool calls are needed
-                if "tool_calls" in response and response["tool_calls"]:
+                tool_calls = response.get("tool_calls") if isinstance(response, dict) else None
+                if tool_calls:
                     # Add assistant message with tool calls
                     self.messages.append(Message(
                         "assistant",
-                        response.get("content") or f"Using tool: {response['tool_calls'][0]['function']['name']}"
+                        response.get("content") or "",
+                        tool_calls=tool_calls,
                     ))
                     
                     # Execute tool calls
-                    for tool_call in response["tool_calls"]:
+                    for tool_call in tool_calls:
                         tool_name = tool_call["function"]["name"]
                         try:
                             arguments = json.loads(tool_call["function"]["arguments"])
@@ -177,31 +291,81 @@ Be concise, helpful, and friendly in your responses."""
                             arguments = {}
                         
                         yield f"🔧 Calling tool: {tool_name}...\n\n"
+                        t_tool = time.monotonic()
                         result = await mcp_manager.call_tool(tool_name, arguments)
+                        t_tool_dt = time.monotonic() - t_tool
+                        yield f"✅ Tool finished: {tool_name}\n\n"
+                        yield f"⏲️ Tool {tool_name} took {t_tool_dt:.2f}s\n\n"
                         
-                        # Add tool result to messages
+                        # Add tool result to messages (truncate if too large)
+                        max_chars = int(os.getenv("MSAGENT_TOOL_RESULT_MAX_CHARS", "12000"))
+                        result_text = str(result)
+                        if len(result_text) > max_chars:
+                            result_text = (
+                                result_text[:max_chars]
+                                + f"\n\n...[truncated {len(str(result)) - max_chars} chars]"
+                            )
                         self.messages.append(Message(
                             "tool",
-                            f"Tool '{tool_name}' result: {result}"
+                            result_text,
+                            tool_call_id=tool_call.get("id")
                         ))
                     
                     # Stream final response after tool execution
                     all_messages = [Message("system", self.get_system_prompt())] + self.messages
+                    console.print("[dim]⏳ Waiting for LLM response...[/dim]")
+                    timeout_s = float(os.getenv("MSAGENT_LLM_TIMEOUT", "120"))
+                    t1 = time.monotonic()
                     full_response = ""
-                    async for chunk in self.llm_client.chat_stream(all_messages):
+                    async for chunk in self._yield_stream_response(all_messages, timeout_s):
+                        if chunk is None:
+                            yield f"❌ Error: LLM stream timed out after {timeout_s:.0f}s"
+                            return
                         full_response += chunk
                         yield chunk
+                    if not full_response:
+                        yield "❌ Error: LLM returned empty response"
+                        return
+                    dt2 = time.monotonic() - t1
+                    _add_usage()
+                    yield f"\n\n⏲️ LLM response took {dt2:.2f}s\n"
+                    if total_usage["total_tokens"] > 0:
+                        yield (
+                            f"🧮 Tokens used: prompt={total_usage['prompt_tokens']} "
+                            f"completion={total_usage['completion_tokens']} total={total_usage['total_tokens']}\n"
+                        )
                     self.messages.append(Message("assistant", full_response))
                 else:
                     content = response.get("content", "")
                     self.messages.append(Message("assistant", content))
+                    if total_usage["total_tokens"] > 0:
+                        yield (
+                            f"\n\n🧮 Tokens used: prompt={total_usage['prompt_tokens']} "
+                            f"completion={total_usage['completion_tokens']} total={total_usage['total_tokens']}\n"
+                        )
                     yield content
             else:
                 # Stream without tools
                 full_response = ""
-                async for chunk in self.llm_client.chat_stream(all_messages):
+                timeout_s = float(os.getenv("MSAGENT_LLM_TIMEOUT", "120"))
+                t0 = time.monotonic()
+                async for chunk in self._yield_stream_response(all_messages, timeout_s):
+                    if chunk is None:
+                        yield f"❌ Error: LLM stream timed out after {timeout_s:.0f}s"
+                        return
                     full_response += chunk
                     yield chunk
+                if not full_response:
+                    yield "❌ Error: LLM returned empty response"
+                    return
+                dt = time.monotonic() - t0
+                _add_usage()
+                yield f"\n\n⏲️ LLM response took {dt:.2f}s\n"
+                if total_usage["total_tokens"] > 0:
+                    yield (
+                        f"🧮 Tokens used: prompt={total_usage['prompt_tokens']} "
+                        f"completion={total_usage['completion_tokens']} total={total_usage['total_tokens']}\n"
+                    )
                 self.messages.append(Message("assistant", full_response))
                 
         except Exception as e:
@@ -211,6 +375,51 @@ Be concise, helpful, and friendly in your responses."""
     def clear_history(self) -> None:
         """Clear conversation history."""
         self.messages.clear()
+
+
+    def _should_force_stream(self) -> bool:
+        force_env = os.getenv("MSAGENT_FORCE_STREAM", "1").lower() in {"1", "true", "yes"}
+        if force_env:
+            return True
+        base_url = (self.config.llm.base_url or "").lower()
+        model = (self.config.llm.model or "").lower()
+        return "deepseek" in base_url or "deepseek-reasoner" in model
+
+    async def _collect_stream_response(self, messages: list[Message], timeout_s: float) -> str | None:
+        full_response = ""
+        got_chunk = False
+        async for chunk in self._yield_stream_response(messages, timeout_s):
+            if chunk is None:
+                return None
+            got_chunk = True
+            full_response += chunk
+        if not got_chunk:
+            return None
+        return full_response
+
+    async def _yield_stream_response(self, messages: list[Message], timeout_s: float):
+        stream = self.llm_client.chat_stream(messages)
+        start = time.monotonic()
+        while True:
+            if time.monotonic() - start > timeout_s:
+                try:
+                    await stream.aclose()
+                except Exception:
+                    pass
+                yield None
+                return
+            try:
+                chunk = await asyncio.wait_for(stream.__anext__(), timeout=timeout_s)
+            except StopAsyncIteration:
+                break
+            except asyncio.TimeoutError:
+                try:
+                    await stream.aclose()
+                except Exception:
+                    pass
+                yield None
+                return
+            yield chunk
     
     def get_history(self) -> list[Message]:
         """Get conversation history."""

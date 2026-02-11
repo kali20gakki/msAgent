@@ -1,6 +1,11 @@
 """TUI interface for msagent using Textual."""
 
 import asyncio
+import json
+import os
+import time
+from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 from rich.markdown import Markdown as RichMarkdown
@@ -277,8 +282,19 @@ class CustomFooter(Static):
     }
     """
     
+    def __init__(self, **kwargs: Any):
+        super().__init__(**kwargs)
+        self._base = "! for bash mode • / for commands • ⌥+Select to copy • ⏎ for newline"
+        self._status = ""
+
+    def set_status(self, status: str) -> None:
+        self._status = status
+        self.refresh()
+
     def render(self) -> str:
-        return "! for bash mode • / for commands • ⌥+Select to copy • ⏎ for newline"
+        if self._status:
+            return f"{self._base} • {self._status}"
+        return self._base
 
 
 class ChatArea(VerticalScroll):
@@ -494,6 +510,8 @@ class ChatScreen(Screen):
 
         # Focus input
         self.query_one("#message-input", Input).focus()
+        if self.app.tui_heartbeat_enabled:
+            self.set_interval(1.0, self._heartbeat_tick)
 
     async def on_input_submitted(self, event: Input.Submitted) -> None:
         """处理输入提交事件"""
@@ -527,9 +545,10 @@ class ChatScreen(Screen):
         
         # 标记正在处理
         app.is_processing = True
+        app.processing_started_at = time.monotonic()
         
         # 使用 run_worker 在后台执行，UI 立即更新
-        self.run_worker(self._process_message(message), exclusive=True)
+        self._current_worker = self.run_worker(self._process_message(message), exclusive=True)
     
     async def _animate_loading(self, widget: MessageWidget, stop_event: asyncio.Event) -> None:
         """动态加载动画"""
@@ -570,6 +589,7 @@ class ChatScreen(Screen):
             
             try:
                 async for chunk in app.agent.chat_stream(message):
+                    app.last_chunk_at = time.monotonic()
                     chunk_count += 1
                     
                     if not first_chunk_received:
@@ -613,7 +633,30 @@ class ChatScreen(Screen):
             await chat_area.add_message("system", f"❌ Error: {str(e)}")
         finally:
             app.is_processing = False
+            app.processing_started_at = None
             chat_area.scroll_end(animate=False)
+
+    def _heartbeat_tick(self) -> None:
+        app: MSAgentApp = self.app
+        app.last_ui_tick = time.monotonic()
+        last_chunk_age = None
+        if app.last_chunk_at is not None:
+            last_chunk_age = time.monotonic() - app.last_chunk_at
+        status = f"UI tick {datetime.utcnow().strftime('%H:%M:%S')}Z • processing={app.is_processing}"
+        if app.processing_started_at is not None:
+            status += f" • processing_for={time.monotonic() - app.processing_started_at:.1f}s"
+        worker_state = ""
+        try:
+            if hasattr(self, "_current_worker") and self._current_worker is not None:
+                worker_state = getattr(self._current_worker, "state", "")
+        except Exception:
+            worker_state = ""
+        if worker_state:
+            status += f" • worker={worker_state}"
+        if last_chunk_age is not None:
+            status += f" • last_chunk={last_chunk_age:.1f}s"
+        self.query_one(CustomFooter).set_status(status)
+        app.log_tui_heartbeat(status, last_chunk_age)
 
     def action_clear(self) -> None:
         self.app.agent.clear_history()
@@ -661,6 +704,13 @@ class MSAgentApp(App):
     def __init__(self, **kwargs: Any):
         self.agent = Agent()
         self.is_processing = False
+        self.tui_heartbeat_enabled = os.getenv("MSAGENT_TUI_HEARTBEAT", "1").lower() in {"1", "true", "yes"}
+        self.tui_heartbeat_path = Path(
+            os.getenv("MSAGENT_TUI_HEARTBEAT_PATH", str(Path.home() / ".config" / "msagent" / "tui_heartbeat.log"))
+        )
+        self.last_chunk_at: float | None = None
+        self.last_ui_tick: float | None = None
+        self.processing_started_at: float | None = None
         super().__init__(**kwargs)
         
     async def on_mount(self) -> None:
@@ -684,6 +734,22 @@ class MSAgentApp(App):
             # Disconnect in the same task
             if self.agent.is_initialized:
                 await self.agent.shutdown()
+
+    def log_tui_heartbeat(self, status: str, last_chunk_age: float | None) -> None:
+        if not self.tui_heartbeat_enabled:
+            return
+        entry = {
+            "ts": datetime.utcnow().isoformat() + "Z",
+            "status": status,
+            "processing": self.is_processing,
+            "last_chunk_age": last_chunk_age,
+        }
+        try:
+            self.tui_heartbeat_path.parent.mkdir(parents=True, exist_ok=True)
+            with self.tui_heartbeat_path.open("a", encoding="utf-8") as f:
+                f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+        except Exception:
+            pass
 
 
 def run_tui() -> None:
