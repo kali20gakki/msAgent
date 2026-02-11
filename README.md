@@ -67,7 +67,12 @@ uv run msagent config --llm-provider openai --llm-api-key "your-key" --llm-model
 # Anthropic
 uv run msagent config --llm-provider anthropic --llm-api-key "your-key" --llm-model "claude-3-opus-20240229"
 
-# Google Gemini
+# Gemini
+uv run msagent config --llm-provider gemini --llm-api-key "your-key" --llm-model "gemini-2.0-flash"
+
+# Custom OpenAI-compatible API (self-hosted gateway / proxy / compatible vendor)
+uv run msagent config --llm-provider openai --llm-api-key "your-key" --llm-base-url "http://127.0.0.1:8045/v1" --llm-model "your-model-name"
+```
 
 ### MCP 服务器管理
 
