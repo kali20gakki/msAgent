@@ -329,39 +329,41 @@ class InputArea(Container):
     
     DEFAULT_CSS = """
     InputArea {
-        height: auto;
+        height: 3;
         min-height: 3;
-        margin: 1 0;
-        border: solid #d8dee9;
-        background: #2e3440;
-        padding: 0;
+        max-height: 3;
+        margin: 0 0 1 0;
+        border: none;
+        background: #1f232b;
+        padding: 0 1;
     }
     
     InputArea:focus-within {
-        border: solid #88c0d0;
+        background: #242a33;
     }
     
     .input-row {
         align-vertical: middle;
-        height: auto;
+        height: 1fr;
         margin: 0;
     }
     
     .prompt-label {
-        width: 3;
-        padding-left: 1;
-        color: #88c0d0;
-        text-style: bold;
+        width: 2;
+        height: 1fr;
+        padding-left: 0;
+        color: #81a1c1;
+        text-style: none;
         content-align: center middle;
     }
     
     Input {
         width: 1fr;
-        background: #2e3440;
+        background: transparent;
         border: none;
         color: #eceff4;
-        padding: 0 1;
-        height: 1;
+        padding: 0;
+        height: 1fr;
     }
     
     Input:focus {
@@ -371,8 +373,11 @@ class InputArea(Container):
     
     def compose(self) -> ComposeResult:
         with Horizontal(classes="input-row"):
-            yield Label("❯", classes="prompt-label")
-            yield Input(placeholder='Type your message...', id="message-input")
+            yield Label(">", classes="prompt-label")
+            yield Input(
+                placeholder="Type your message...  (@file, ↑/↓ select, Enter/Tab complete)",
+                id="message-input",
+            )
 
 class WelcomeScreen(Screen):
     """Full screen welcome page."""
@@ -493,11 +498,18 @@ class ChatScreen(Screen):
         Binding("ctrl+c", "quit", "Quit", show=False),
         Binding("ctrl+l", "clear", "Clear Chat", show=False),
     ]
+
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self._at_matches: list[str] = []
+        self._at_target_range: tuple[int, int] | None = None
+        self._at_selected_index = 0
     
     def compose(self) -> ComposeResult:
         with Container(id="main-container"):
             with ChatArea(id="chat-area"):
                 pass
+            yield VerticalScroll(id="at-suggestions", classes="hidden")
             yield InputArea()
         yield CustomFooter()
 
@@ -520,12 +532,50 @@ class ChatScreen(Screen):
         self._update_footer_model()
         self._update_footer_context()
         self._update_footer_tokens()
+        self._render_at_suggestions([])
+
+    def on_input_changed(self, event: Input.Changed) -> None:
+        """Update @-path suggestions as user types."""
+        if event.input.id != "message-input":
+            return
+        self._refresh_at_candidates(event.input)
 
     async def on_input_submitted(self, event: Input.Submitted) -> None:
         """处理输入提交事件"""
-        if event.input.id == "message-input":
-            # 不使用 await，让 UI 立即响应
-            self.send_message()
+        if event.input.id != "message-input":
+            return
+        if self._try_apply_selected_completion(event.input):
+            return
+        # 不使用 await，让 UI 立即响应
+        self.send_message()
+
+    def on_key(self, event: events.Key) -> None:
+        input_widget = self.query_one("#message-input", Input)
+        if self.focused is not input_widget:
+            return
+        if not self._at_matches or not self._at_target_range:
+            return
+
+        if event.key == "up":
+            self._at_selected_index = (self._at_selected_index - 1) % len(self._at_matches)
+            self._render_at_suggestions(self._at_matches)
+            event.stop()
+            event.prevent_default()
+            return
+
+        if event.key == "down":
+            self._at_selected_index = (self._at_selected_index + 1) % len(self._at_matches)
+            self._render_at_suggestions(self._at_matches)
+            event.stop()
+            event.prevent_default()
+            return
+
+        if event.key != "tab":
+            return
+
+        self._try_apply_selected_completion(input_widget)
+        event.stop()
+        event.prevent_default()
             
     def send_message(self) -> None:
         """发送消息（同步启动，异步执行）"""
@@ -694,6 +744,75 @@ class ChatScreen(Screen):
         chat_area.mount(ChatWelcomeBanner())
         chat_area.run_worker(self._add_system_message(chat_area, "Chat history cleared."))
 
+    def _refresh_at_candidates(self, input_widget: Input) -> None:
+        cursor = getattr(input_widget, "cursor_position", len(input_widget.value))
+        token = self._extract_active_at_token(input_widget.value, cursor)
+        if token is None:
+            self._at_matches = []
+            self._at_target_range = None
+            self._at_selected_index = 0
+            self._render_at_suggestions([])
+            return
+
+        query, start, end = token
+        self._at_matches = self.app.agent.find_local_files(query, limit=30)
+        self._at_target_range = (start, end)
+        self._at_selected_index = 0
+        self._render_at_suggestions(self._at_matches)
+
+    def _extract_active_at_token(
+        self, value: str, cursor: int
+    ) -> tuple[str, int, int] | None:
+        if cursor < 0 or cursor > len(value):
+            return None
+        at_pos = value.rfind("@", 0, cursor)
+        if at_pos < 0:
+            return None
+        if at_pos > 0 and not value[at_pos - 1].isspace():
+            return None
+        token = value[at_pos + 1 : cursor]
+        if not token:
+            return ("", at_pos, cursor)
+        if any(ch.isspace() for ch in token):
+            return None
+        return (token, at_pos, cursor)
+
+    def _render_at_suggestions(self, items: list[str]) -> None:
+        container = self.query_one("#at-suggestions", VerticalScroll)
+        container.remove_children()
+        if not items:
+            container.add_class("hidden")
+            return
+        container.remove_class("hidden")
+        for idx, path in enumerate(items):
+            cls = "suggestion-item selected" if idx == self._at_selected_index else "suggestion-item"
+            container.mount(Label(path, classes=cls))
+        selected_nodes = list(container.query(".suggestion-item.selected"))
+        if selected_nodes:
+            selected_nodes[0].scroll_visible(animate=False)
+
+    def _try_apply_selected_completion(self, input_widget: Input) -> bool:
+        if not self._at_matches or not self._at_target_range:
+            return False
+        cursor = getattr(input_widget, "cursor_position", len(input_widget.value))
+        if self._extract_active_at_token(input_widget.value, cursor) is None:
+            return False
+
+        start, end = self._at_target_range
+        replacement = f"@{self._at_matches[self._at_selected_index]}"
+        value = input_widget.value
+        updated = value[:start] + replacement + value[end:]
+        new_cursor = start + len(replacement)
+        if new_cursor == len(updated) or not updated[new_cursor].isspace():
+            updated = updated[:new_cursor] + " " + updated[new_cursor:]
+            new_cursor += 1
+
+        input_widget.value = updated
+        if hasattr(input_widget, "cursor_position"):
+            input_widget.cursor_position = new_cursor
+        self._refresh_at_candidates(input_widget)
+        return True
+
     async def _add_system_message(self, chat_area: ChatArea, message: str) -> None:
         await chat_area.add_message("system", message)
 
@@ -720,13 +839,38 @@ class MSAgentApp(App):
     #main-container {
         width: 100%;
         height: 1fr;
-        padding: 1 2;
+        padding: 1 2 2 2;
     }
     
     #chat-area {
         height: 1fr;
         margin-bottom: 1;
         background: $background;
+    }
+
+    #at-suggestions {
+        height: auto;
+        max-height: 8;
+        margin: 0 0 1 0;
+        padding: 0 1;
+        background: #1f232b;
+        border: round #3b4252;
+    }
+
+    #at-suggestions.hidden {
+        display: none;
+    }
+
+    .suggestion-item {
+        color: #81a1c1;
+        height: 1;
+        padding: 0 1;
+    }
+
+    .suggestion-item.selected {
+        background: #3b4252;
+        color: #eceff4;
+        text-style: bold;
     }
     """
     

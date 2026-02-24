@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from typing import Any
+from pathlib import Path
 
 import pytest
 
@@ -207,3 +208,41 @@ async def test_shutdown_disconnects_mcp_manager(monkeypatch: pytest.MonkeyPatch)
 
     assert fake_mcp.disconnect_called is True
     assert agent.is_initialized is False
+
+
+def test_find_local_files_supports_partial_queries(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "src").mkdir()
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "src" / "msagent").mkdir()
+    (tmp_path / "src" / "msagent" / "tui.py").write_text("print('tui')", encoding="utf-8")
+    (tmp_path / "src" / "msagent" / "agent.py").write_text("print('agent')", encoding="utf-8")
+    (tmp_path / "docs" / "guide.md").write_text("# guide", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+
+    agent = Agent(make_config())
+    candidates = agent.find_local_files("msa/tu", limit=5)
+
+    assert "src/msagent/tui.py" in candidates
+
+
+def test_inject_file_context_from_at_reference(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "src").mkdir()
+    target = tmp_path / "src" / "agent.py"
+    target.write_text("def main():\n    return 1\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+
+    agent = Agent(make_config())
+    enriched = agent._inject_file_context("请查看 @src/agent.py 并总结")
+
+    assert "[Attached file context]" in enriched
+    assert '<file path="src/agent.py">' in enriched
+
+
+def test_find_local_files_supports_absolute_path_query() -> None:
+    root = Path("/tmp")
+    candidates = Agent(make_config()).find_local_files("/tmp", limit=20)
+    assert any(path.startswith(root.as_posix()) for path in candidates)
