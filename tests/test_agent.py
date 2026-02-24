@@ -46,14 +46,10 @@ class FakeLLMClient:
 
     def __init__(self) -> None:
         self.chat_response = "assistant-response"
-        self.chat_with_tools_response: dict[str, Any] = {"content": "tool-plan"}
         self.stream_chunks = ["chunk-1", "chunk-2"]
 
     async def chat(self, messages: list[Any], tools: list[dict] | None = None) -> str:
         return self.chat_response
-
-    async def chat_with_tools(self, messages: list[Any], tools: list[dict]) -> dict[str, Any]:
-        return self.chat_with_tools_response
 
     async def chat_stream(self, messages: list[Any], tools: list[dict] | None = None):
         for chunk in self.stream_chunks:
@@ -145,24 +141,12 @@ async def test_chat_without_tools_uses_plain_chat(monkeypatch: pytest.MonkeyPatc
 
 
 @pytest.mark.asyncio
-async def test_chat_with_tools_executes_tool_and_final_response(
+async def test_chat_with_tools_passes_tools_through_client(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     fake_mcp = FakeMCPManager()
     fake_mcp.tools = [{"type": "function", "function": {"name": "calc__sum"}}]
-    fake_mcp.call_result = "42"
     fake_llm = FakeLLMClient()
-    fake_llm.chat_with_tools_response = {
-        "content": "I'll use a tool",
-        "tool_calls": [
-            {
-                "function": {
-                    "name": "calc__sum",
-                    "arguments": "{not-json}",
-                }
-            }
-        ],
-    }
     fake_llm.chat_response = "The answer is 42"
     monkeypatch.setattr(agent_module, "mcp_manager", fake_mcp)
 
@@ -173,29 +157,18 @@ async def test_chat_with_tools_executes_tool_and_final_response(
     result = await agent.chat("what is 40 + 2?")
 
     assert result == "The answer is 42"
-    assert fake_mcp.tool_calls == [("calc__sum", {})]
-    assert [message.role for message in agent.messages] == ["user", "assistant", "tool", "assistant"]
-    assert "Tool 'calc__sum' result: 42" in agent.messages[2].content
+    assert fake_mcp.tool_calls == []
+    assert [message.role for message in agent.messages] == ["user", "assistant"]
+    assert agent.messages[-1].content == "The answer is 42"
 
 
 @pytest.mark.asyncio
-async def test_chat_stream_with_tools_yields_tool_notice_and_chunks(
+async def test_chat_stream_with_tools_yields_chunks(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     fake_mcp = FakeMCPManager()
     fake_mcp.tools = [{"type": "function", "function": {"name": "calc__sum"}}]
-    fake_mcp.call_result = "10"
     fake_llm = FakeLLMClient()
-    fake_llm.chat_with_tools_response = {
-        "tool_calls": [
-            {
-                "function": {
-                    "name": "calc__sum",
-                    "arguments": '{"a": 1, "b": 9}',
-                }
-            }
-        ]
-    }
     fake_llm.stream_chunks = ["one ", "two"]
     monkeypatch.setattr(agent_module, "mcp_manager", fake_mcp)
 
@@ -205,8 +178,7 @@ async def test_chat_stream_with_tools_yields_tool_notice_and_chunks(
 
     chunks = [chunk async for chunk in agent.chat_stream("sum 1 and 9")]
 
-    assert "Calling tool: calc__sum" in chunks[0]
-    assert "".join(chunks[1:]) == "one two"
+    assert "".join(chunks[:2]) == "one two"
     assert agent.messages[-1].role == "assistant"
     assert agent.messages[-1].content == "one two"
 

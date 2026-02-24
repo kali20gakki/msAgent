@@ -1,232 +1,105 @@
-"""Tests for llm module."""
+"""Tests for llm module (deepagents)."""
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
 import pytest
 
+import msagent.llm as llm_module
 from msagent.config import LLMConfig
-from msagent.llm import (
-    AnthropicClient,
-    GeminiClient,
-    Message,
-    OpenAIClient,
-    create_llm_client,
-)
+from msagent.llm import DeepAgentsClient, Message, create_llm_client
 
 
-class FakeHTTPResponse:
-    """Fake HTTP response supporting both normal and streaming modes."""
+class FakeAgent:
+    def __init__(self, result: Any, events: list[dict[str, Any]] | None = None) -> None:
+        self.result = result
+        self.events = events or []
 
-    def __init__(self, payload: dict[str, Any] | None = None, lines: list[str] | None = None) -> None:
-        self.payload = payload or {}
-        self.lines = lines or []
+    async def ainvoke(self, _payload: dict[str, Any]) -> Any:
+        return self.result
 
-    def raise_for_status(self) -> None:
-        return None
-
-    def json(self) -> dict[str, Any]:
-        return self.payload
-
-    async def aiter_lines(self):
-        for line in self.lines:
-            yield line
-
-    async def __aenter__(self) -> "FakeHTTPResponse":
-        return self
-
-    async def __aexit__(self, exc_type, exc, tb) -> None:
-        return None
+    async def astream_events(self, _payload: dict[str, Any], version: str = "v2"):
+        assert version == "v2"
+        for event in self.events:
+            yield event
 
 
-class FakeAsyncHTTPClient:
-    """Fake async client capturing requests."""
-
-    def __init__(self, post_response: FakeHTTPResponse, stream_response: FakeHTTPResponse | None = None) -> None:
-        self.post_response = post_response
-        self.stream_response = stream_response or FakeHTTPResponse()
-        self.last_post: tuple[str, dict[str, Any]] | None = None
-        self.last_stream: tuple[str, str, dict[str, Any]] | None = None
-
-    async def post(self, url: str, json: dict[str, Any]) -> FakeHTTPResponse:
-        self.last_post = (url, json)
-        return self.post_response
-
-    def stream(self, method: str, url: str, json: dict[str, Any]) -> FakeHTTPResponse:
-        self.last_stream = (method, url, json)
-        return self.stream_response
+def _patch_model_build(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(DeepAgentsClient, "_build_model", lambda self, _cfg: object())
 
 
-@pytest.mark.asyncio
-async def test_openai_chat_parses_content_and_payload() -> None:
-    config = LLMConfig(provider="openai", api_key="key", model="gpt-test")
-    client = OpenAIClient(config)
-    await client.client.aclose()
-
-    fake_client = FakeAsyncHTTPClient(
-        post_response=FakeHTTPResponse(
-            {"choices": [{"message": {"content": "hello from openai"}}]}
-        )
-    )
-    client.client = fake_client
-
-    tools = [{"type": "function", "function": {"name": "calc"}}]
-    result = await client.chat([Message("user", "hi")], tools=tools)
-
-    assert result == "hello from openai"
-    assert fake_client.last_post is not None
-    assert fake_client.last_post[0] == "/chat/completions"
-    assert fake_client.last_post[1]["tools"] == tools
-    assert fake_client.last_post[1]["tool_choice"] == "auto"
+def test_message_to_dict() -> None:
+    assert Message("user", "hello").to_dict() == {"role": "user", "content": "hello"}
 
 
-@pytest.mark.asyncio
-async def test_openai_chat_stream_yields_incremental_chunks() -> None:
-    config = LLMConfig(provider="openai", api_key="key", model="gpt-test")
-    client = OpenAIClient(config)
-    await client.client.aclose()
+def test_create_llm_client_returns_deepagents_client(monkeypatch: pytest.MonkeyPatch) -> None:
+    _patch_model_build(monkeypatch)
 
-    lines = [
-        'data: {"choices":[{"delta":{"content":"hello "}}]}',
-        "data: not-json",
-        'data: {"choices":[{"delta":{"content":"world"}}]}',
-        "data: [DONE]",
-    ]
-    fake_client = FakeAsyncHTTPClient(
-        post_response=FakeHTTPResponse(),
-        stream_response=FakeHTTPResponse(lines=lines),
-    )
-    client.client = fake_client
-
-    chunks = [chunk async for chunk in client.chat_stream([Message("user", "hi")])]
-    assert "".join(chunks) == "hello world"
-
-
-@pytest.mark.asyncio
-async def test_anthropic_convert_messages_splits_system_and_conversation() -> None:
-    config = LLMConfig(provider="anthropic", api_key="key", model="claude-test")
-    client = AnthropicClient(config)
-
-    system, messages = client._convert_messages(
-        [Message("system", "rules"), Message("user", "hello"), Message("assistant", "hi")]
-    )
-    await client.client.aclose()
-
-    assert system == "rules"
-    assert messages == [
-        {"role": "user", "content": "hello"},
-        {"role": "assistant", "content": "hi"},
+    clients = [
+        create_llm_client(LLMConfig(provider="openai", api_key="k", model="m")),
+        create_llm_client(LLMConfig(provider="anthropic", api_key="k", model="m")),
+        create_llm_client(LLMConfig(provider="gemini", api_key="k", model="m")),
+        create_llm_client(LLMConfig(provider="custom", api_key="k", model="m")),
     ]
 
-
-@pytest.mark.asyncio
-async def test_anthropic_chat_with_tools_maps_tool_use_block() -> None:
-    config = LLMConfig(provider="anthropic", api_key="key", model="claude-test")
-    client = AnthropicClient(config)
-    await client.client.aclose()
-
-    fake_client = FakeAsyncHTTPClient(
-        post_response=FakeHTTPResponse(
-            {
-                "content": [
-                    {
-                        "type": "tool_use",
-                        "id": "tool-1",
-                        "name": "calculator",
-                        "input": {"a": 1, "b": 2},
-                    }
-                ]
-            }
-        )
-    )
-    client.client = fake_client
-
-    result = await client.chat_with_tools([Message("user", "sum")], tools=[{"name": "calculator"}])
-
-    assert result["tool_calls"][0]["function"]["name"] == "calculator"
-    assert json.loads(result["tool_calls"][0]["function"]["arguments"]) == {"a": 1, "b": 2}
+    assert all(isinstance(c, DeepAgentsClient) for c in clients)
 
 
-@pytest.mark.asyncio
-async def test_gemini_convert_tools_and_map_function_call() -> None:
-    config = LLMConfig(provider="gemini", api_key="key", model="gemini-test")
-    client = GeminiClient(config)
-    await client.client.aclose()
-
-    tools = [
-        {
-            "type": "function",
-            "function": {
-                "name": "search_docs",
-                "description": "Search docs",
-                "parameters": {"type": "object"},
-            },
-        }
-    ]
-    converted = client._convert_tools(tools)
-    assert converted == [
-        {
-            "function_declarations": [
-                {
-                    "name": "search_docs",
-                    "description": "Search docs",
-                    "parameters": {"type": "object"},
-                }
-            ]
-        }
-    ]
-
-    fake_client = FakeAsyncHTTPClient(
-        post_response=FakeHTTPResponse(
-            {
-                "candidates": [
-                    {
-                        "content": {
-                            "parts": [
-                                {
-                                    "functionCall": {
-                                        "name": "search_docs",
-                                        "args": {"query": "pytest"},
-                                    }
-                                }
-                            ]
-                        }
-                    }
-                ]
-            }
-        )
-    )
-    client.client = fake_client
-
-    result = await client.chat_with_tools([Message("user", "find pytest docs")], tools=tools)
-
-    assert result["tool_calls"][0]["function"]["name"] == "search_docs"
-    assert json.loads(result["tool_calls"][0]["function"]["arguments"]) == {"query": "pytest"}
-
-
-@pytest.mark.asyncio
-async def test_message_to_dict_and_factory() -> None:
-    message = Message("user", "hello")
-    assert message.to_dict() == {"role": "user", "content": "hello"}
-
-    created_clients = [
-        create_llm_client(LLMConfig(provider="openai", api_key="k")),
-        create_llm_client(LLMConfig(provider="anthropic", api_key="k")),
-        create_llm_client(LLMConfig(provider="gemini", api_key="k")),
-        create_llm_client(LLMConfig(provider="custom", api_key="k")),
-    ]
-
-    assert isinstance(created_clients[0], OpenAIClient)
-    assert isinstance(created_clients[1], AnthropicClient)
-    assert isinstance(created_clients[2], GeminiClient)
-    assert isinstance(created_clients[3], OpenAIClient)
-
-    for client in created_clients:
-        await client.client.aclose()
-
-    invalid = LLMConfig(provider="openai", api_key="k")
+def test_create_llm_client_unsupported_provider_raises() -> None:
+    invalid = LLMConfig(provider="openai", api_key="k", model="m")
     invalid.provider = "unsupported"  # type: ignore[assignment]
     with pytest.raises(ValueError, match="Unsupported provider"):
-        create_llm_client(invalid)
+        DeepAgentsClient(invalid)
+
+
+@pytest.mark.asyncio
+async def test_chat_extracts_final_assistant_text(monkeypatch: pytest.MonkeyPatch) -> None:
+    _patch_model_build(monkeypatch)
+    fake_agent = FakeAgent(
+        {
+            "messages": [
+                {"role": "user", "content": "hi"},
+                {"role": "assistant", "content": "hello from deepagents"},
+            ]
+        }
+    )
+    monkeypatch.setattr(llm_module, "create_deep_agent", lambda **_kwargs: fake_agent)
+
+    client = DeepAgentsClient(LLMConfig(provider="openai", api_key="k", model="m"))
+    text = await client.chat([Message("system", "rules"), Message("user", "hi")], tools=[])
+
+    assert text == "hello from deepagents"
+
+
+@pytest.mark.asyncio
+async def test_chat_stream_reads_chunk_events(monkeypatch: pytest.MonkeyPatch) -> None:
+    _patch_model_build(monkeypatch)
+    fake_agent = FakeAgent(
+        result={"messages": [{"role": "assistant", "content": "fallback"}]},
+        events=[
+            {"event": "on_chat_model_stream", "data": {"chunk": {"content": [{"text": "one "}]}}},
+            {"event": "on_chat_model_stream", "data": {"chunk": {"content": [{"text": "two"}]}}},
+        ],
+    )
+    monkeypatch.setattr(llm_module, "create_deep_agent", lambda **_kwargs: fake_agent)
+
+    client = DeepAgentsClient(LLMConfig(provider="openai", api_key="k", model="m"))
+    chunks = [c async for c in client.chat_stream([Message("user", "hi")], tools=[])]
+
+    assert "".join(chunks) == "one two"
+
+
+@pytest.mark.asyncio
+async def test_chat_stream_fallbacks_to_chat_when_no_events(monkeypatch: pytest.MonkeyPatch) -> None:
+    _patch_model_build(monkeypatch)
+    fake_agent = FakeAgent(
+        result={"messages": [{"role": "assistant", "content": "fallback-text"}]},
+        events=[],
+    )
+    monkeypatch.setattr(llm_module, "create_deep_agent", lambda **_kwargs: fake_agent)
+
+    client = DeepAgentsClient(LLMConfig(provider="openai", api_key="k", model="m"))
+    chunks = [c async for c in client.chat_stream([Message("user", "hi")], tools=[])]
+
+    assert "".join(chunks) == "fallback-text"
