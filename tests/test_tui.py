@@ -14,8 +14,8 @@ from msagent.tui import ChatWelcomeBanner, CustomFooter, MSAgentApp, run_tui
 def test_custom_footer_render_contains_shortcuts() -> None:
     footer = CustomFooter()
     rendered = footer.render()
-    assert "bash mode" in rendered
-    assert "Select to copy" in rendered
+    assert "/ for commands" in rendered
+    assert "tokens:" in rendered
 
 
 def test_chat_welcome_banner_compose_shows_server_status_when_connected(

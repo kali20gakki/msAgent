@@ -51,7 +51,9 @@ class DeepAgentsClient:
     async def chat(self, messages: list[Message], tools: list[dict] | None = None) -> str:
         system_prompt, input_messages = self._split_messages(messages)
         agent = self._get_agent(system_prompt, tools or [])
+        self.last_usage = None
         result = await agent.ainvoke({"messages": input_messages})
+        self.last_usage = self._extract_usage_from_result(result)
         content = self._extract_assistant_content(result)
         return content or ""
 
@@ -60,12 +62,16 @@ class DeepAgentsClient:
     ) -> AsyncGenerator[str, None]:
         system_prompt, input_messages = self._split_messages(messages)
         agent = self._get_agent(system_prompt, tools or [])
+        self.last_usage = None
         got_chunk = False
 
         async for event in agent.astream_events(
             {"messages": input_messages},
             version="v2",
         ):
+            usage = self._extract_usage_from_event(event)
+            if usage:
+                self.last_usage = usage
             if event.get("event") != "on_chat_model_stream":
                 continue
             data = event.get("data", {})
@@ -238,6 +244,106 @@ class DeepAgentsClient:
             return "".join(parts) if parts else None
 
         return None
+
+    def _extract_usage_from_result(self, result: Any) -> dict[str, int] | None:
+        if not isinstance(result, dict):
+            return None
+        messages = result.get("messages")
+        if not isinstance(messages, list):
+            return None
+
+        for msg in reversed(messages):
+            usage = self._extract_usage_from_message_like(msg)
+            if usage:
+                return usage
+        return None
+
+    def _extract_usage_from_event(self, event: dict[str, Any]) -> dict[str, int] | None:
+        if not isinstance(event, dict):
+            return None
+        data = event.get("data")
+        if not isinstance(data, dict):
+            return None
+        direct = self._extract_usage_from_obj(data)
+        if direct:
+            return direct
+        for key in ("output", "chunk", "input"):
+            usage = self._extract_usage_from_message_like(data.get(key))
+            if usage:
+                return usage
+        return None
+
+    def _extract_usage_from_message_like(self, msg: Any) -> dict[str, int] | None:
+        if msg is None:
+            return None
+
+        usage_metadata = getattr(msg, "usage_metadata", None)
+        if isinstance(msg, dict) and usage_metadata is None:
+            usage_metadata = msg.get("usage_metadata")
+        usage = self._normalize_usage_dict(usage_metadata)
+        if usage:
+            return usage
+
+        response_metadata = getattr(msg, "response_metadata", None)
+        if isinstance(msg, dict) and response_metadata is None:
+            response_metadata = msg.get("response_metadata")
+        if isinstance(response_metadata, dict):
+            usage = self._normalize_usage_dict(response_metadata.get("token_usage"))
+            if usage:
+                return usage
+        return None
+
+    def _normalize_usage_dict(self, raw: Any) -> dict[str, int] | None:
+        if not isinstance(raw, dict):
+            return None
+
+        prompt = raw.get("prompt_tokens")
+        if not isinstance(prompt, int):
+            prompt = raw.get("input_tokens")
+
+        completion = raw.get("completion_tokens")
+        if not isinstance(completion, int):
+            completion = raw.get("output_tokens")
+
+        total = raw.get("total_tokens")
+        if not isinstance(total, int):
+            if isinstance(prompt, int) and isinstance(completion, int):
+                total = prompt + completion
+
+        if not all(isinstance(v, int) for v in (prompt, completion, total)):
+            return None
+        return {
+            "prompt_tokens": int(prompt),
+            "completion_tokens": int(completion),
+            "total_tokens": int(total),
+        }
+
+    def _extract_usage_from_obj(self, obj: Any) -> dict[str, int] | None:
+        if obj is None:
+            return None
+        if isinstance(obj, dict):
+            usage = self._normalize_usage_dict(obj.get("token_usage"))
+            if usage:
+                return usage
+            usage = self._normalize_usage_dict(obj.get("usage_metadata"))
+            if usage:
+                return usage
+            for key in ("response_metadata", "llm_output", "output"):
+                usage = self._extract_usage_from_obj(obj.get(key))
+                if usage:
+                    return usage
+            return None
+
+        llm_output = getattr(obj, "llm_output", None)
+        usage = self._extract_usage_from_obj(llm_output)
+        if usage:
+            return usage
+        response_metadata = getattr(obj, "response_metadata", None)
+        usage = self._extract_usage_from_obj(response_metadata)
+        if usage:
+            return usage
+        usage_metadata = getattr(obj, "usage_metadata", None)
+        return self._normalize_usage_dict(usage_metadata)
 
 
 def create_llm_client(config: LLMConfig) -> DeepAgentsClient:
