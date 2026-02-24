@@ -88,7 +88,7 @@ class Agent:
                 timeout=timeout_s,
             )
             dt = time.monotonic() - t0
-            console.print(f"[dim]⏲️ LLM response took {dt:.2f}s[/dim]")
+            console.print(f"[grey50]⚡ LLM response took {dt:.2f}s[/grey50]")
 
             self.messages.append(Message("assistant", response))
             self._print_usage()
@@ -151,7 +151,7 @@ class Agent:
                     return
 
             dt = time.monotonic() - start
-            yield f"\n\n⏲️ LLM response took {dt:.2f}s\n"
+            yield f"\n\n⚡ LLM response took {dt:.2f}s\n"
             self.messages.append(Message("assistant", full_response))
         except Exception as e:
             yield f"❌ Error: {e}"
