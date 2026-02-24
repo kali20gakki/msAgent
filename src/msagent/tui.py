@@ -284,6 +284,7 @@ class CustomFooter(Static):
         super().__init__(**kwargs)
         self._base = "/ for commands"
         self._model_status = "model: unknown"
+        self._context_status = "prompt: N/A"
         self._token_status = "tokens: 0"
 
     def set_model_status(self, status: str) -> None:
@@ -294,8 +295,12 @@ class CustomFooter(Static):
         self._token_status = status
         self.refresh()
 
+    def set_context_status(self, status: str) -> None:
+        self._context_status = status
+        self.refresh()
+
     def render(self) -> str:
-        return f"{self._base} • {self._model_status} • {self._token_status}"
+        return f"{self._base} • {self._model_status} • {self._context_status} • {self._token_status}"
 
 
 class ChatArea(VerticalScroll):
@@ -513,6 +518,7 @@ class ChatScreen(Screen):
         # Focus input
         self.query_one("#message-input", Input).focus()
         self._update_footer_model()
+        self._update_footer_context()
         self._update_footer_tokens()
 
     async def on_input_submitted(self, event: Input.Submitted) -> None:
@@ -649,12 +655,28 @@ class ChatScreen(Screen):
             else "tokens: N/A"
         )
         self.query_one(CustomFooter).set_token_status(token_text)
+        self._update_footer_context()
 
     def _update_footer_model(self) -> None:
         llm_cfg = self.app.agent.config.llm
         provider = (llm_cfg.provider or "unknown").strip()
         model = (llm_cfg.model or "unknown").strip()
         self.query_one(CustomFooter).set_model_status(f"model: {provider}/{model}")
+
+    def _update_footer_context(self) -> None:
+        usage = getattr(self.app.agent.llm_client, "last_usage", None)
+        prompt_tokens: int | None = None
+        if isinstance(usage, dict):
+            val = usage.get("prompt_tokens")
+            if isinstance(val, int):
+                prompt_tokens = val
+
+        if prompt_tokens is None:
+            self.query_one(CustomFooter).set_context_status("prompt: N/A")
+            return
+        self.query_one(CustomFooter).set_context_status(
+            f"prompt: {self._format_token_count(prompt_tokens)}"
+        )
 
     def _format_token_count(self, count: int) -> str:
         if count < 1_000:
