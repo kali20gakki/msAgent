@@ -153,7 +153,7 @@ class Agent:
         all_messages = [Message("system", self.get_system_prompt())] + self.messages
         tools = mcp_manager.get_all_tools()
 
-        timeout_s = float(os.getenv("MSAGENT_LLM_TIMEOUT", "120"))
+        timeout_s = float(os.getenv("MSAGENT_LLM_TIMEOUT", "600"))
         try:
             console.print("[dim]⏳ Waiting for LLM response...[/dim]")
             t0 = time.monotonic()
@@ -244,9 +244,11 @@ class Agent:
                 if event_type == "tool_start":
                     tool_name = chunk.get("name")
                     if isinstance(tool_name, str) and tool_name:
+                        tool_input = chunk.get("input")
                         yield {
                             "type": "tool_call",
                             "full_name": tool_name,
+                            "input": tool_input,
                             **self._split_tool_name(tool_name),
                         }
                     continue

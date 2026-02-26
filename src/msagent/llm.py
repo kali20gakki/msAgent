@@ -110,7 +110,12 @@ class DeepAgentsClient:
             if event_name == "on_tool_start":
                 data = event.get("data", {})
                 tool_name = event.get("name") or data.get("name") or "unknown_tool"
-                yield {"type": "tool_start", "name": str(tool_name)}
+                tool_input = data.get("input")
+                yield {
+                    "type": "tool_start",
+                    "name": str(tool_name),
+                    "input": tool_input,
+                }
                 continue
 
             if event_name == "on_tool_end":

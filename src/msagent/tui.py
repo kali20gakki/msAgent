@@ -1,6 +1,7 @@
 """TUI interface for msagent using Textual."""
 
 import asyncio
+import json
 import time
 from typing import Any
 
@@ -54,6 +55,18 @@ class MessageWidget(Container):
         height: auto;
     }
 
+    .tool-message .role-label {
+        color: #8f9bb3;
+    }
+
+    .tool-message .content-area {
+        color: #aeb8cc;
+    }
+
+    .tool-message .selectable-text {
+        color: #aeb8cc;
+    }
+
     .header-row {
         layout: horizontal;
         height: 1;
@@ -96,6 +109,32 @@ class MessageWidget(Container):
         color: #eceff4;
         padding-top: 0;
     }
+
+    .tool-input-wrap {
+        height: auto;
+        margin-top: 0;
+        padding: 0;
+    }
+
+    .tool-input-toggle {
+        color: #9eacc7;
+        text-style: dim;
+        background: transparent;
+        height: 1;
+        min-height: 1;
+        padding: 0;
+        margin: 0;
+    }
+
+    .tool-input-area {
+        margin-top: 1;
+        border: round #4c566a;
+        background: #1f232b;
+        padding: 0 1;
+        height: auto;
+        max-height: 12;
+        color: #93a0b8;
+    }
     
     /* 可选择的文本区域 */
     .selectable-text {
@@ -122,9 +161,17 @@ class MessageWidget(Container):
     .system-gutter { color: $secondary; }
     """
     
-    def __init__(self, role: str, content: str, **kwargs: Any):
+    def __init__(
+        self,
+        role: str,
+        content: str,
+        *,
+        tool_input_text: str | None = None,
+        **kwargs: Any,
+    ):
         self.role = role
         self.content = content
+        self.tool_input_text = tool_input_text
         super().__init__(**kwargs)
     
     def compose(self) -> ComposeResult:
@@ -141,7 +188,8 @@ class MessageWidget(Container):
         
         yield Label(icon, classes=f"gutter {gutter_class}")
         
-        with Container(classes="content-container"):
+        content_classes = "content-container tool-message" if self.role == "tool" else "content-container"
+        with Container(classes=content_classes):
             # Header with actions
             with Horizontal(classes="header-row"):
                 yield Static(" ", classes="role-label")
@@ -160,6 +208,16 @@ class MessageWidget(Container):
                 classes="selectable-text",
                 show_line_numbers=False
             )
+            if self.tool_input_text:
+                with Container(classes="tool-input-wrap"):
+                    yield Label("▶ Input params (click to expand)", id="tool-input-toggle", classes="tool-input-toggle")
+                    yield CopyableTextArea(
+                        self.tool_input_text,
+                        id="tool-input-text",
+                        read_only=True,
+                        classes="selectable-text tool-input-area hidden",
+                        show_line_numbers=False,
+                    )
 
     def update_content(self, content: str) -> None:
         """Update the message content."""
@@ -217,6 +275,18 @@ class MessageWidget(Container):
                 text_widget.add_class("hidden")
                 md_widget.remove_class("hidden")
                 btn.update("Raw")
+        elif event.widget.id == "tool-input-toggle":
+            try:
+                input_widget = self.query_one("#tool-input-text", CopyableTextArea)
+            except NoMatches:
+                return
+            btn = event.widget
+            if "hidden" in input_widget.classes:
+                input_widget.remove_class("hidden")
+                btn.update("▼ Input params (click to collapse)")
+            else:
+                input_widget.add_class("hidden")
+                btn.update("▶ Input params (click to expand)")
 
 
 class CopyableTextArea(TextArea):
@@ -350,9 +420,11 @@ class ChatArea(VerticalScroll):
         # We start empty now, message added upon initialization
         yield from []
     
-    async def add_message(self, role: str, content: str) -> MessageWidget:
+    async def add_message(
+        self, role: str, content: str, *, tool_input_text: str | None = None
+    ) -> MessageWidget:
         """Add a message to the chat area."""
-        widget = MessageWidget(role, content)
+        widget = MessageWidget(role, content, tool_input_text=tool_input_text)
         await self.mount(widget)
         widget.scroll_visible()
         return widget
@@ -705,7 +777,12 @@ class ChatScreen(Screen):
 
                         server = event.get("server", "unknown")
                         tool = event.get("tool", "unknown_tool")
-                        await chat_area.add_message("tool", f"Calling MCP tool: `{server}__{tool}`")
+                        tool_input = self._format_tool_input(event.get("input"))
+                        await chat_area.add_message(
+                            "tool",
+                            f"Calling MCP tool: `{server}__{tool}`",
+                            tool_input_text=tool_input,
+                        )
                         response_widget = await chat_area.add_message("assistant", "⠋ Thinking...")
                         response_text = ""
                         first_chunk_received = False
@@ -948,6 +1025,25 @@ class ChatScreen(Screen):
 
     async def _add_system_message(self, chat_area: ChatArea, message: str) -> None:
         await chat_area.add_message("system", message)
+
+    def _format_tool_input(self, value: Any) -> str | None:
+        if value is None:
+            return None
+        if isinstance(value, str):
+            stripped = value.strip()
+            if not stripped:
+                return None
+            try:
+                parsed = json.loads(stripped)
+            except Exception:
+                return stripped
+            return json.dumps(parsed, ensure_ascii=False, indent=2)
+        if isinstance(value, (dict, list, tuple)):
+            try:
+                return json.dumps(value, ensure_ascii=False, indent=2)
+            except Exception:
+                return str(value)
+        return str(value)
 
 
 class MSAgentApp(App):
