@@ -9,6 +9,7 @@ from rich.align import Align
 from rich.console import RenderableType
 from rich.text import Text
 from textual import events
+from textual.css.query import NoMatches
 from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal, VerticalScroll, Vertical
 from textual.reactive import reactive
@@ -163,23 +164,32 @@ class MessageWidget(Container):
     def update_content(self, content: str) -> None:
         """Update the message content."""
         self.content = content
-        self.query_one("#content-text", CopyableTextArea).text = content
-        # 同时更新 Markdown 内容，以备切换
-        self.query_one("#render-md", Static).update(RichMarkdown(content))
+        try:
+            self.query_one("#content-text", CopyableTextArea).text = content
+            # 同时更新 Markdown 内容，以备切换
+            self.query_one("#render-md", Static).update(RichMarkdown(content))
+        except NoMatches:
+            # Widget may be removed during async updates.
+            return
     
     def update_content_fast(self, content: str) -> None:
         """快速更新内容（流式输出时使用）"""
         self.content = content
-        self.query_one("#content-text", CopyableTextArea).text = content
+        try:
+            self.query_one("#content-text", CopyableTextArea).text = content
+        except NoMatches:
+            return
     
     def finalize_content(self) -> None:
         """流式输出完成，切换到美观的 Markdown 渲染模式"""
-        # 更新 Markdown 视图
-        self.query_one("#render-md", Static).update(RichMarkdown(self.content))
-        
-        # 切换视图：隐藏文本框，显示 Markdown
-        self.query_one("#content-text", CopyableTextArea).add_class("hidden")
-        self.query_one("#render-md", Static).remove_class("hidden")
+        try:
+            # 更新 Markdown 视图
+            self.query_one("#render-md", Static).update(RichMarkdown(self.content))
+            # 切换视图：隐藏文本框，显示 Markdown
+            self.query_one("#content-text", CopyableTextArea).add_class("hidden")
+            self.query_one("#render-md", Static).remove_class("hidden")
+        except NoMatches:
+            return
 
     def on_click(self, event: events.Click) -> None:
         """Handle click events."""
@@ -644,6 +654,8 @@ class ChatScreen(Screen):
         frame_idx = 0
         
         while not stop_event.is_set():
+            if not widget.is_mounted:
+                break
             widget.update_content(f"{loading_frames[frame_idx]} Thinking...")
             frame_idx = (frame_idx + 1) % len(loading_frames)
             await asyncio.sleep(0.1)  # 100ms 更新一次
@@ -671,38 +683,101 @@ class ChatScreen(Screen):
             animation_task = asyncio.create_task(self._animate_loading(loading_widget, stop_animation))
             
             # 3. 流式接收并实时更新
+            response_widget = loading_widget
             response_text = ""
             first_chunk_received = False
             chunk_count = 0
             
             try:
-                async for chunk in app.agent.chat_stream(message):
+                async for event in app.agent.chat_stream_events(message):
+                    event_type = event.get("type")
+
+                    if event_type == "tool_call":
+                        # 当前 assistant 段落结束，后续回答应显示在 tool 提示下方
+                        stop_animation.set()
+                        if not animation_task.done():
+                            await animation_task
+                        if first_chunk_received:
+                            response_widget.finalize_content()
+                        else:
+                            # 还未收到文本时，移除占位 thinking，避免界面残留“卡住”提示
+                            await response_widget.remove()
+
+                        server = event.get("server", "unknown")
+                        tool = event.get("tool", "unknown_tool")
+                        await chat_area.add_message("tool", f"Calling MCP tool: `{server}__{tool}`")
+                        response_widget = await chat_area.add_message("assistant", "⠋ Thinking...")
+                        response_text = ""
+                        first_chunk_received = False
+                        stop_animation = asyncio.Event()
+                        animation_task = asyncio.create_task(
+                            self._animate_loading(response_widget, stop_animation)
+                        )
+                        chat_area.scroll_end(animate=False)
+                        await asyncio.sleep(0)
+                        continue
+
+                    if event_type == "error":
+                        err = event.get("content")
+                        if isinstance(err, str) and err:
+                            if not first_chunk_received:
+                                stop_animation.set()
+                                if not animation_task.done():
+                                    await animation_task
+                                first_chunk_received = True
+                                response_text = err
+                            else:
+                                response_text += err
+                            response_widget.update_content_fast(response_text)
+                            chat_area.scroll_end(animate=False)
+                            await asyncio.sleep(0)
+                        continue
+
+                    if event_type != "text":
+                        continue
+
+                    chunk = event.get("content")
+                    if not isinstance(chunk, str) or not chunk:
+                        continue
+
                     chunk_count += 1
-                    
+
                     if not first_chunk_received:
                         # 停止加载动画
                         stop_animation.set()
-                        await animation_task
-                        
+                        if not animation_task.done():
+                            await animation_task
+
                         # 收到第一个 chunk，开始显示内容
                         first_chunk_received = True
                         response_text = chunk
-                        loading_widget.update_content_fast(response_text)  # 使用快速更新
+                        response_widget.update_content_fast(response_text)  # 使用快速更新
                     else:
                         # 追加内容并立即更新
                         response_text += chunk
-                        loading_widget.update_content_fast(response_text)  # 使用快速更新
-                    
+                        response_widget.update_content_fast(response_text)  # 使用快速更新
+
                     # 滚动到底部（不触发全局刷新）
                     chat_area.scroll_end(animate=False)
-                    
+
                     # 让出控制权
                     await asyncio.sleep(0)
-                
+
+                # 循环结束后确保动画停止，避免残留 spinner
+                stop_animation.set()
+                if not animation_task.done():
+                    await animation_task
+
                 # 流式输出完成后，渲染最终的 Markdown
                 if first_chunk_received:
-                    loading_widget.finalize_content()
+                    response_widget.finalize_content()
                 
+            except asyncio.CancelledError:
+                # Worker cancelled (e.g. quit screen); stop background animation quietly.
+                stop_animation.set()
+                if not animation_task.done():
+                    await animation_task
+                return
             except Exception as stream_error:
                 # 确保停止动画
                 stop_animation.set()
@@ -713,15 +788,19 @@ class ChatScreen(Screen):
             # 如果没有收到任何内容
             if not first_chunk_received:
                 stop_animation.set()
-                await animation_task
-                loading_widget.update_content("_No response received_")
+                if not animation_task.done():
+                    await animation_task
+                response_widget.update_content("_No response received_")
                  
+        except asyncio.CancelledError:
+            return
         except Exception as e:
             await chat_area.add_message("system", f"❌ Error: {str(e)}")
         finally:
             app.is_processing = False
-            self._update_footer_tokens()
-            chat_area.scroll_end(animate=False)
+            if self.is_mounted:
+                self._update_footer_tokens()
+                chat_area.scroll_end(animate=False)
 
     def _update_footer_tokens(self) -> None:
         usage = getattr(self.app.agent.llm_client, "last_usage", None)
@@ -735,14 +814,20 @@ class ChatScreen(Screen):
             if total_tokens is not None
             else "tokens: N/A"
         )
-        self.query_one(CustomFooter).set_token_status(token_text)
+        footer = self._query_footer()
+        if footer is None:
+            return
+        footer.set_token_status(token_text)
         self._update_footer_context()
 
     def _update_footer_model(self) -> None:
         llm_cfg = self.app.agent.config.llm
         provider = (llm_cfg.provider or "unknown").strip()
         model = (llm_cfg.model or "unknown").strip()
-        self.query_one(CustomFooter).set_model_status(f"model: {provider}/{model}")
+        footer = self._query_footer()
+        if footer is None:
+            return
+        footer.set_model_status(f"model: {provider}/{model}")
 
     def _update_footer_context(self) -> None:
         usage = getattr(self.app.agent.llm_client, "last_usage", None)
@@ -753,11 +838,21 @@ class ChatScreen(Screen):
                 prompt_tokens = val
 
         if prompt_tokens is None:
-            self.query_one(CustomFooter).set_context_status("prompt: N/A")
+            footer = self._query_footer()
+            if footer is None:
+                return
+            footer.set_context_status("prompt: N/A")
             return
-        self.query_one(CustomFooter).set_context_status(
-            f"prompt: {self._format_token_count(prompt_tokens)}"
-        )
+        footer = self._query_footer()
+        if footer is None:
+            return
+        footer.set_context_status(f"prompt: {self._format_token_count(prompt_tokens)}")
+
+    def _query_footer(self) -> CustomFooter | None:
+        try:
+            return self.query_one(CustomFooter)
+        except NoMatches:
+            return None
 
     def _format_token_count(self, count: int) -> str:
         if count < 1_000:

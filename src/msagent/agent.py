@@ -7,6 +7,7 @@ import re
 import time
 from collections.abc import AsyncGenerator
 from pathlib import Path
+from typing import Any
 
 from rich.console import Console
 
@@ -72,6 +73,7 @@ class Agent:
                 self.config.llm,
                 skills=skill_sources,
                 memory=self.config.deepagents.memory,
+                recursion_limit=self.config.deepagents.recursion_limit,
             )
             self._loaded_skill_sources = skill_sources
             self._loaded_skills = self._discover_skills(skill_sources)
@@ -172,8 +174,25 @@ class Agent:
 
     async def chat_stream(self, user_input: str) -> AsyncGenerator[str, None]:
         """Process a chat message and stream the response."""
+        async for event in self.chat_stream_events(user_input):
+            if event.get("type") == "text":
+                text = event.get("content")
+                if isinstance(text, str) and text:
+                    yield text
+            elif event.get("type") == "error":
+                error = event.get("content")
+                if isinstance(error, str) and error:
+                    yield error
+
+    async def chat_stream_events(
+        self, user_input: str
+    ) -> AsyncGenerator[dict[str, Any], None]:
+        """Process a chat message and stream response + tool call events."""
         if not self._initialized or not self.llm_client:
-            yield "Error: Agent not initialized. Please check your configuration."
+            yield {
+                "type": "error",
+                "content": "Error: Agent not initialized. Please check your configuration.",
+            }
             return
 
         self.messages.append(Message("user", self._inject_file_context(user_input)))
@@ -183,9 +202,12 @@ class Agent:
         timeout_s = float(os.getenv("MSAGENT_LLM_TIMEOUT", "120"))
         start = time.monotonic()
         full_response = ""
+        stream = None
 
         try:
-            stream = self.llm_client.chat_stream(all_messages, tools=tools if tools else None)
+            stream = self.llm_client.chat_stream_events(
+                all_messages, tools=tools if tools else None
+            )
 
             while True:
                 elapsed = time.monotonic() - start
@@ -199,12 +221,35 @@ class Agent:
                         await stream.aclose()
                     except Exception:
                         pass
-                    yield f"❌ Error: LLM stream timed out after {timeout_s:.0f}s"
+                    yield {
+                        "type": "error",
+                        "content": f"❌ Error: LLM stream timed out after {timeout_s:.0f}s",
+                    }
                     return
 
-                if chunk:
-                    full_response += chunk
-                    yield chunk
+                if not isinstance(chunk, dict):
+                    continue
+
+                event_type = chunk.get("type")
+                if event_type == "text":
+                    text = chunk.get("content")
+                    if not isinstance(text, str):
+                        continue
+                    cleaned = self._filter_info_logs(text)
+                    if cleaned:
+                        full_response += cleaned
+                        yield {"type": "text", "content": cleaned}
+                    continue
+
+                if event_type == "tool_start":
+                    tool_name = chunk.get("name")
+                    if isinstance(tool_name, str) and tool_name:
+                        yield {
+                            "type": "tool_call",
+                            "full_name": tool_name,
+                            **self._split_tool_name(tool_name),
+                        }
+                    continue
 
             if not full_response:
                 fallback = await asyncio.wait_for(
@@ -212,21 +257,56 @@ class Agent:
                     timeout=timeout_s,
                 )
                 if fallback:
-                    full_response = fallback
-                    yield fallback
+                    cleaned_fallback = self._filter_info_logs(fallback)
+                    if cleaned_fallback:
+                        full_response = cleaned_fallback
+                        yield {"type": "text", "content": cleaned_fallback}
                 else:
                     last_msgs = [m.to_dict() for m in all_messages[-3:]]
-                    yield (
-                        "❌ Error: LLM returned empty response.\n"
-                        f"Last messages: {json.dumps(last_msgs, ensure_ascii=False)}"
-                    )
+                    yield {
+                        "type": "error",
+                        "content": (
+                            "❌ Error: LLM returned empty response.\n"
+                            f"Last messages: {json.dumps(last_msgs, ensure_ascii=False)}"
+                        ),
+                    }
                     return
 
             dt = time.monotonic() - start
-            yield f"\n\n⚡ LLM response took {dt:.2f}s\n"
             self.messages.append(Message("assistant", full_response))
+            yield {"type": "done", "duration_s": dt}
+        except asyncio.CancelledError:
+            try:
+                if stream is not None:
+                    await stream.aclose()
+            except Exception:
+                pass
+            return
         except Exception as e:
-            yield f"❌ Error: {e}"
+            yield {"type": "error", "content": f"❌ Error: {e}"}
+
+    def _filter_info_logs(self, text: str) -> str:
+        """Remove verbose INFO log lines from streamed text."""
+        if not text:
+            return text
+
+        filtered_lines: list[str] = []
+        for line in text.splitlines(keepends=True):
+            stripped = line.lstrip()
+            if stripped.startswith("INFO"):
+                continue
+            if re.match(r"^\d{4}-\d{2}-\d{2}.*\bINFO\b", stripped):
+                continue
+            if re.match(r"^\[?INFO\]?", stripped):
+                continue
+            filtered_lines.append(line)
+        return "".join(filtered_lines)
+
+    def _split_tool_name(self, full_tool_name: str) -> dict[str, str]:
+        if "__" in full_tool_name:
+            server, tool = full_tool_name.split("__", 1)
+            return {"server": server, "tool": tool}
+        return {"server": "unknown", "tool": full_tool_name}
 
     def clear_history(self) -> None:
         """Clear conversation history."""

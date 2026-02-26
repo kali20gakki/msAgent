@@ -50,3 +50,5 @@ dmypy.json
 # Project specific
 *.log
 config.local.json
+
+test_data/

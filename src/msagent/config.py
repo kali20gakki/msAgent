@@ -39,6 +39,7 @@ class DeepAgentsConfig(BaseModel):
 
     skills: list[str] = Field(default_factory=list)
     memory: list[str] = Field(default_factory=list)
+    recursion_limit: int = Field(default=80, ge=1)
 
 
 def get_default_mcp_servers() -> list[MCPConfig]:

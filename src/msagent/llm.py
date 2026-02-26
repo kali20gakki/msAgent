@@ -48,6 +48,7 @@ class DeepAgentsClient:
         *,
         skills: list[str] | None = None,
         memory: list[str] | None = None,
+        recursion_limit: int = 80,
     ):
         self.config = config
         self.last_usage: dict[str, Any] | None = None
@@ -55,12 +56,16 @@ class DeepAgentsClient:
         self._agent_cache: dict[str, Any] = {}
         self._skills = skills or []
         self._memory = memory or []
+        self._recursion_limit = max(1, int(recursion_limit))
 
     async def chat(self, messages: list[Message], tools: list[dict] | None = None) -> str:
         system_prompt, input_messages = self._split_messages(messages)
         agent = self._get_agent(system_prompt, tools or [])
         self.last_usage = None
-        result = await agent.ainvoke({"messages": input_messages})
+        result = await agent.ainvoke(
+            {"messages": input_messages},
+            config={"recursion_limit": self._recursion_limit},
+        )
         self.last_usage = self._extract_usage_from_result(result)
         content = self._extract_assistant_content(result)
         return content or ""
@@ -68,6 +73,15 @@ class DeepAgentsClient:
     async def chat_stream(
         self, messages: list[Message], tools: list[dict] | None = None
     ) -> AsyncGenerator[str, None]:
+        async for event in self.chat_stream_events(messages, tools=tools):
+            if event.get("type") == "text":
+                text = event.get("content")
+                if isinstance(text, str) and text:
+                    yield text
+
+    async def chat_stream_events(
+        self, messages: list[Message], tools: list[dict] | None = None
+    ) -> AsyncGenerator[dict[str, Any], None]:
         system_prompt, input_messages = self._split_messages(messages)
         agent = self._get_agent(system_prompt, tools or [])
         self.last_usage = None
@@ -75,25 +89,41 @@ class DeepAgentsClient:
 
         async for event in agent.astream_events(
             {"messages": input_messages},
+            config={"recursion_limit": self._recursion_limit},
             version="v2",
         ):
             usage = self._extract_usage_from_event(event)
             if usage:
                 self.last_usage = usage
-            if event.get("event") != "on_chat_model_stream":
+                yield {"type": "usage", "usage": usage}
+
+            event_name = event.get("event")
+            if event_name == "on_chat_model_stream":
+                data = event.get("data", {})
+                chunk = data.get("chunk")
+                text = self._extract_chunk_text(chunk)
+                if text:
+                    got_chunk = True
+                    yield {"type": "text", "content": text}
                 continue
-            data = event.get("data", {})
-            chunk = data.get("chunk")
-            text = self._extract_chunk_text(chunk)
-            if text:
-                got_chunk = True
-                yield text
+
+            if event_name == "on_tool_start":
+                data = event.get("data", {})
+                tool_name = event.get("name") or data.get("name") or "unknown_tool"
+                yield {"type": "tool_start", "name": str(tool_name)}
+                continue
+
+            if event_name == "on_tool_end":
+                data = event.get("data", {})
+                tool_name = event.get("name") or data.get("name") or "unknown_tool"
+                yield {"type": "tool_end", "name": str(tool_name)}
+                continue
 
         if not got_chunk:
             # Fallback: if streaming path returns no token events, return one-shot output.
             text = await self.chat(messages, tools)
             if text:
-                yield text
+                yield {"type": "text", "content": text}
 
     async def chat_with_tools(
         self, messages: list[Message], tools: list[dict]
@@ -361,6 +391,12 @@ def create_llm_client(
     *,
     skills: list[str] | None = None,
     memory: list[str] | None = None,
+    recursion_limit: int = 80,
 ) -> DeepAgentsClient:
     """Factory function to create deepagents client."""
-    return DeepAgentsClient(config, skills=skills, memory=memory)
+    return DeepAgentsClient(
+        config,
+        skills=skills,
+        memory=memory,
+        recursion_limit=recursion_limit,
+    )
