@@ -255,16 +255,40 @@ class ChatWelcomeBanner(Vertical):
         padding-top: 1;
         border-top: solid #d8dee9;
     }
+
+    .skills-status {
+        color: $accent;
+        padding-top: 1;
+        border-top: solid #d8dee9;
+    }
     """
-    
+
+    def __init__(
+        self,
+        *,
+        mcp_servers: list[str] | None = None,
+        loaded_skills: list[str] | None = None,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(**kwargs)
+        self._mcp_servers = mcp_servers
+        self._loaded_skills = loaded_skills or []
+
     def compose(self) -> ComposeResult:
         yield Label("✱ msAgent initialized. How can I help you?", classes="welcome-message")
-        
-        from .mcp_client import mcp_manager
-        servers = mcp_manager.get_connected_servers()
+
+        if self._mcp_servers is None:
+            from .mcp_client import mcp_manager
+
+            servers = mcp_manager.get_connected_servers()
+        else:
+            servers = self._mcp_servers
         if servers:
             server_str = ", ".join(servers)
             yield Label(f"🔌 Connected MCP Servers: {server_str}", classes="mcp-status")
+        if self._loaded_skills:
+            skills_str = ", ".join(self._loaded_skills)
+            yield Label(f"🧠 Loaded Skills: {skills_str}", classes="skills-status")
 
 class CustomFooter(Static):
     """Custom footer with shortcuts."""
@@ -522,7 +546,14 @@ class ChatScreen(Screen):
         chat_area = self.query_one("#chat-area", ChatArea)
         
         if agent.is_initialized:
-            chat_area.mount(ChatWelcomeBanner())
+            from .mcp_client import mcp_manager
+
+            chat_area.mount(
+                ChatWelcomeBanner(
+                    mcp_servers=mcp_manager.get_connected_servers(),
+                    loaded_skills=agent.get_loaded_skills(),
+                )
+            )
         else:
             # If not initialized (should not happen if we init in app.on_mount, but just in case)
             await chat_area.add_message("system", agent.error_message)
@@ -741,7 +772,14 @@ class ChatScreen(Screen):
         self.app.agent.clear_history()
         chat_area = self.query_one("#chat-area", ChatArea)
         chat_area.remove_children()
-        chat_area.mount(ChatWelcomeBanner())
+        from .mcp_client import mcp_manager
+
+        chat_area.mount(
+            ChatWelcomeBanner(
+                mcp_servers=mcp_manager.get_connected_servers(),
+                loaded_skills=self.app.agent.get_loaded_skills(),
+            )
+        )
         chat_area.run_worker(self._add_system_message(chat_area, "Chat history cleared."))
 
     def _refresh_at_candidates(self, input_widget: Input) -> None:

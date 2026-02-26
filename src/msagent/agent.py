@@ -28,6 +28,8 @@ class Agent:
         self._error_message = ""
         self._workspace_root = Path.cwd()
         self._file_index_cache: tuple[float, list[str]] | None = None
+        self._loaded_skill_sources: list[str] = []
+        self._loaded_skills: list[str] = []
 
     _AT_REF_PATTERN = re.compile(r"(?<!\S)@([^\s]+)")
     _MAX_ATTACHED_FILES = 5
@@ -65,7 +67,14 @@ class Agent:
                 )
                 return False
 
-            self.llm_client = create_llm_client(self.config.llm)
+            skill_sources = self._resolve_skill_sources()
+            self.llm_client = create_llm_client(
+                self.config.llm,
+                skills=skill_sources,
+                memory=self.config.deepagents.memory,
+            )
+            self._loaded_skill_sources = skill_sources
+            self._loaded_skills = self._discover_skills(skill_sources)
 
             for mcp_config in self.config.mcp_servers:
                 if mcp_config.enabled:
@@ -77,6 +86,49 @@ class Agent:
         except Exception as e:
             self._error_message = f"❌ Failed to initialize agent: {e}"
             return False
+
+    def _resolve_skill_sources(self) -> list[str]:
+        """Resolve deepagents skill source directories."""
+        sources: list[str] = []
+        project_skills_dir = (self._workspace_root / "skills").resolve()
+        if project_skills_dir.is_dir():
+            sources.append(project_skills_dir.as_posix())
+
+        for source in self.config.deepagents.skills:
+            if source not in sources:
+                sources.append(source)
+        return sources
+
+    def _discover_skills(self, sources: list[str]) -> list[str]:
+        """Discover skill names from source directories."""
+        discovered: list[str] = []
+        seen: set[str] = set()
+
+        for source in sources:
+            source_path = Path(source)
+            if not source_path.is_dir():
+                continue
+            try:
+                children = sorted(source_path.iterdir(), key=lambda p: p.name)
+            except Exception:
+                continue
+
+            for child in children:
+                if not child.is_dir():
+                    continue
+                if not (child / "SKILL.md").is_file():
+                    continue
+                skill_name = child.name
+                if skill_name in seen:
+                    continue
+                seen.add(skill_name)
+                discovered.append(skill_name)
+
+        return discovered
+
+    def get_loaded_skills(self) -> list[str]:
+        """Get loaded skill names."""
+        return self._loaded_skills.copy()
 
     def get_system_prompt(self) -> str:
         """Get the system prompt for the agent."""

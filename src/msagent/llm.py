@@ -42,11 +42,19 @@ class Message:
 class DeepAgentsClient:
     """deepagents-powered LLM client."""
 
-    def __init__(self, config: LLMConfig):
+    def __init__(
+        self,
+        config: LLMConfig,
+        *,
+        skills: list[str] | None = None,
+        memory: list[str] | None = None,
+    ):
         self.config = config
         self.last_usage: dict[str, Any] | None = None
         self._model = self._build_model(config)
         self._agent_cache: dict[str, Any] = {}
+        self._skills = skills or []
+        self._memory = memory or []
 
     async def chat(self, messages: list[Message], tools: list[dict] | None = None) -> str:
         system_prompt, input_messages = self._split_messages(messages)
@@ -107,6 +115,8 @@ class DeepAgentsClient:
             model=self._model,
             system_prompt=system_prompt,
             tools=deep_tools,
+            skills=self._skills or None,
+            memory=self._memory or None,
         )
         self._agent_cache[cache_key] = agent
         return agent
@@ -346,6 +356,11 @@ class DeepAgentsClient:
         return self._normalize_usage_dict(usage_metadata)
 
 
-def create_llm_client(config: LLMConfig) -> DeepAgentsClient:
+def create_llm_client(
+    config: LLMConfig,
+    *,
+    skills: list[str] | None = None,
+    memory: list[str] | None = None,
+) -> DeepAgentsClient:
     """Factory function to create deepagents client."""
-    return DeepAgentsClient(config)
+    return DeepAgentsClient(config, skills=skills, memory=memory)

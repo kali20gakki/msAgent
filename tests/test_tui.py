@@ -30,6 +30,13 @@ def test_chat_welcome_banner_compose_shows_server_status_when_connected(
     assert len(with_server_widgets) == 2
 
 
+def test_chat_welcome_banner_compose_shows_loaded_skills() -> None:
+    widgets = list(
+        ChatWelcomeBanner(mcp_servers=["filesystem"], loaded_skills=["code-review", "devops"]).compose()
+    )
+    assert len(widgets) == 3
+
+
 def test_run_tui_creates_app_and_runs(monkeypatch: pytest.MonkeyPatch) -> None:
     called = {"run": False}
 

@@ -84,7 +84,11 @@ async def test_initialize_loads_only_enabled_mcp_servers(monkeypatch: pytest.Mon
     fake_mcp = FakeMCPManager()
     fake_llm = FakeLLMClient()
     monkeypatch.setattr(agent_module, "mcp_manager", fake_mcp)
-    monkeypatch.setattr(agent_module, "create_llm_client", lambda _cfg: fake_llm)
+    monkeypatch.setattr(
+        agent_module,
+        "create_llm_client",
+        lambda _cfg, skills=None, memory=None: fake_llm,
+    )
 
     config = make_config(
         api_key="configured",
@@ -101,6 +105,41 @@ async def test_initialize_loads_only_enabled_mcp_servers(monkeypatch: pytest.Mon
     assert agent.is_initialized is True
     assert agent.llm_client is fake_llm
     assert fake_mcp.added_servers == ["enabled"]
+
+
+@pytest.mark.asyncio
+async def test_initialize_passes_deepagents_settings_to_llm_client(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    fake_mcp = FakeMCPManager()
+    fake_llm = FakeLLMClient()
+    captured: dict[str, Any] = {}
+    monkeypatch.setattr(agent_module, "mcp_manager", fake_mcp)
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "skills").mkdir()
+
+    def _fake_create_llm_client(_cfg, skills=None, memory=None):
+        captured["skills"] = skills
+        captured["memory"] = memory
+        return fake_llm
+
+    monkeypatch.setattr(agent_module, "create_llm_client", _fake_create_llm_client)
+
+    config = make_config(api_key="configured", mcp_servers=[])
+    config.deepagents.skills = ["/skills/user/", "/skills/project/"]
+    config.deepagents.memory = ["/memory/AGENTS.md"]
+    agent = Agent(config)
+
+    initialized = await agent.initialize()
+
+    assert initialized is True
+    assert captured["skills"] == [
+        (tmp_path / "skills").resolve().as_posix(),
+        "/skills/user/",
+        "/skills/project/",
+    ]
+    assert captured["memory"] == ["/memory/AGENTS.md"]
 
 
 def test_get_system_prompt_includes_connected_servers(monkeypatch: pytest.MonkeyPatch) -> None:

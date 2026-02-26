@@ -34,6 +34,13 @@ class MCPConfig(BaseModel):
     enabled: bool = True
 
 
+class DeepAgentsConfig(BaseModel):
+    """Configuration for deepagents features."""
+
+    skills: list[str] = Field(default_factory=list)
+    memory: list[str] = Field(default_factory=list)
+
+
 def get_default_mcp_servers() -> list[MCPConfig]:
     """Get default MCP servers."""
     return [
@@ -54,6 +61,9 @@ class AppConfig(BaseSettings):
     
     # MCP Servers Configuration
     mcp_servers: list[MCPConfig] = Field(default_factory=get_default_mcp_servers)
+
+    # deepagents Configuration
+    deepagents: DeepAgentsConfig = Field(default_factory=DeepAgentsConfig)
     
     # UI Configuration
     theme: Literal["dark", "light"] = "dark"

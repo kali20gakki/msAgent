@@ -86,6 +86,42 @@ msagent mcp add --name filesystem --command npx --args "-y,@modelcontextprotocol
 msagent mcp remove --name filesystem
 ```
 
+## 🧠 Skills（内置技能）
+
+msAgent 启动时会自动加载工程根目录下的 `skills/` 目录，并将其中的 skill 提供给 deepagents 使用。
+
+### 目录结构
+
+每个 skill 必须使用以下结构：
+
+```text
+skills/
+  <skill-name>/
+    SKILL.md
+```
+
+### SKILL.md 格式要求
+
+`SKILL.md` 需要包含 YAML frontmatter，并至少有以下字段：
+
+```markdown
+---
+name: your-skill-name
+description: 说明这个 skill 做什么，以及在什么场景触发
+---
+```
+
+注意：
+
+- `name` 需要和 skill 目录名保持一致（例如 `skills/code-review/SKILL.md` 的 `name` 应为 `code-review`）。
+- `description` 要写清楚触发条件，便于 agent 正确选择 skill。
+
+### 新增一个 skill
+
+1. 在工程根目录创建子目录：`skills/<skill-name>/`
+2. 新建 `skills/<skill-name>/SKILL.md`，按上面的格式填写 `name` 和 `description`
+3. 重新启动 `msagent`，新 skill 会被自动加载
+
 ### 查看帮助
 
 ```bash

@@ -103,3 +103,36 @@ async def test_chat_stream_fallbacks_to_chat_when_no_events(monkeypatch: pytest.
     chunks = [c async for c in client.chat_stream([Message("user", "hi")], tools=[])]
 
     assert "".join(chunks) == "fallback-text"
+
+
+@pytest.mark.asyncio
+async def test_chat_passes_skills_and_memory_to_create_deep_agent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch_model_build(monkeypatch)
+    captured: dict[str, Any] = {}
+
+    fake_agent = FakeAgent(
+        {
+            "messages": [
+                {"role": "assistant", "content": "ok"},
+            ]
+        }
+    )
+
+    def _fake_create_deep_agent(**kwargs: Any):
+        captured.update(kwargs)
+        return fake_agent
+
+    monkeypatch.setattr(llm_module, "create_deep_agent", _fake_create_deep_agent)
+
+    client = DeepAgentsClient(
+        LLMConfig(provider="openai", api_key="k", model="m"),
+        skills=["/skills/user/", "/skills/project/"],
+        memory=["/memory/AGENTS.md"],
+    )
+    text = await client.chat([Message("user", "hi")], tools=[])
+
+    assert text == "ok"
+    assert captured["skills"] == ["/skills/user/", "/skills/project/"]
+    assert captured["memory"] == ["/memory/AGENTS.md"]
