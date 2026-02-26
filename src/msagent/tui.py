@@ -16,7 +16,6 @@ from textual.containers import Container, Horizontal, VerticalScroll, Vertical
 from textual.reactive import reactive
 from textual.screen import Screen
 from textual.widgets import (
-    Button,
     Footer,
     Header,
     Input,
@@ -430,6 +429,26 @@ class ChatArea(VerticalScroll):
         return widget
 
 
+class SendButton(Static):
+    """Compact send/stop control with deterministic centered text."""
+
+    def __init__(self, text: str = "Send", **kwargs: Any) -> None:
+        super().__init__("", **kwargs)
+        self._text = text
+
+    def set_text(self, text: str) -> None:
+        self._text = text
+        self.refresh()
+
+    def render(self) -> RenderableType:
+        inner_width = max((self.size.width or 7) - 2, len(self._text))
+        diff = max(inner_width - len(self._text), 0)
+        # For odd extra space, bias one cell to the left padding to avoid visual left-lean.
+        left_pad = (diff + 1) // 2
+        right_pad = diff - left_pad
+        return Text((" " * left_pad) + self._text + (" " * right_pad))
+
+
 class InputArea(Container):
     """Area for user input."""
     
@@ -441,7 +460,8 @@ class InputArea(Container):
         margin: 0 0 1 0;
         border: none;
         background: #1f232b;
-        padding: 0 1;
+        padding: 0;
+        align-vertical: middle;
     }
     
     InputArea:focus-within {
@@ -449,31 +469,56 @@ class InputArea(Container):
     }
     
     .input-row {
+        layout: horizontal;
         align-vertical: middle;
-        height: 1fr;
-        margin: 0;
+        height: 3;
+        margin: 0 1 0 0;
+        width: 100%;
     }
     
     .prompt-label {
         width: 2;
-        height: 1fr;
-        padding-left: 0;
+        height: 3;
+        padding: 0;
         color: #81a1c1;
         text-style: none;
         content-align: center middle;
     }
     
-    Input {
+    #message-input {
         width: 1fr;
-        background: transparent;
-        border: none;
+        min-width: 20;
+        background: #1a1e26;
+        border: round #5a6478;
         color: #eceff4;
-        padding: 0;
-        height: 1fr;
+        padding: 0 1;
+        height: 3;
+        margin: 0 1 0 0;
     }
     
-    Input:focus {
-        border: none;
+    #message-input:focus {
+        border: round #88c0d0;
+    }
+
+    #send-btn {
+        width: 7;
+        min-width: 7;
+        max-width: 7;
+        height: 3;
+        margin: 0;
+        background: #5e81ac;
+        color: #eceff4;
+        border: round #88c0d0;
+        padding: 0;
+        text-style: bold;
+        text-align: center;
+        content-align: center middle;
+    }
+
+    #send-btn.processing {
+        background: #bf616a;
+        color: #ffffff;
+        border: round #d08770;
     }
     """
     
@@ -484,6 +529,7 @@ class InputArea(Container):
                 placeholder="Type your message...  (@file, ↑/↓ select, Enter/Tab complete)",
                 id="message-input",
             )
+            yield SendButton("Send", id="send-btn")
 
 class WelcomeScreen(Screen):
     """Full screen welcome page."""
@@ -610,6 +656,7 @@ class ChatScreen(Screen):
         self._at_matches: list[str] = []
         self._at_target_range: tuple[int, int] | None = None
         self._at_selected_index = 0
+        self._current_worker: Any | None = None
     
     def compose(self) -> ComposeResult:
         with Container(id="main-container"):
@@ -646,6 +693,15 @@ class ChatScreen(Screen):
         self._update_footer_context()
         self._update_footer_tokens()
         self._render_at_suggestions([])
+        self._set_send_button_state(False)
+
+    def on_click(self, event: events.Click) -> None:
+        if event.widget.id != "send-btn":
+            return
+        if self.app.is_processing:
+            self.interrupt_message()
+            return
+        self.send_message()
 
     def on_input_changed(self, event: Input.Changed) -> None:
         """Update @-path suggestions as user types."""
@@ -716,9 +772,19 @@ class ChatScreen(Screen):
         
         # 标记正在处理
         app.is_processing = True
+        self._set_send_button_state(True)
         
         # 使用 run_worker 在后台执行，UI 立即更新
         self._current_worker = self.run_worker(self._process_message(message), exclusive=True)
+
+    def interrupt_message(self) -> None:
+        app: MSAgentApp = self.app
+        if not app.is_processing:
+            return
+        worker = self._current_worker
+        if worker is not None:
+            worker.cancel()
+        self._set_send_button_state(True)
     
     async def _animate_loading(self, widget: MessageWidget, stop_event: asyncio.Event) -> None:
         """动态加载动画"""
@@ -875,7 +941,9 @@ class ChatScreen(Screen):
             await chat_area.add_message("system", f"❌ Error: {str(e)}")
         finally:
             app.is_processing = False
+            self._current_worker = None
             if self.is_mounted:
+                self._set_send_button_state(False)
                 self._update_footer_tokens()
                 chat_area.scroll_end(animate=False)
 
@@ -1044,6 +1112,18 @@ class ChatScreen(Screen):
             except Exception:
                 return str(value)
         return str(value)
+
+    def _set_send_button_state(self, processing: bool) -> None:
+        try:
+            btn = self.query_one("#send-btn", SendButton)
+        except NoMatches:
+            return
+        if processing:
+            btn.set_text("Stop")
+            btn.add_class("processing")
+            return
+        btn.set_text("Send")
+        btn.remove_class("processing")
 
 
 class MSAgentApp(App):
