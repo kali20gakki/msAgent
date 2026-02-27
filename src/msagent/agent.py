@@ -31,11 +31,13 @@ class Agent:
         self._file_index_cache: tuple[float, list[str]] | None = None
         self._loaded_skill_sources: list[str] = []
         self._loaded_skills: list[str] = []
+        self._system_prompt_template: str | None = None
 
     _AT_REF_PATTERN = re.compile(r"(?<!\S)@([^\s]+)")
     _MAX_ATTACHED_FILES = 5
     _MAX_FILE_CHARS = 4000
     _FILE_INDEX_TTL_S = 3.0
+    _SYSTEM_PROMPT_FILE = "prompts/system_prompt.txt"
     _SKIP_DIRS = {
         ".git",
         ".hg",
@@ -136,14 +138,17 @@ class Agent:
     def get_system_prompt(self) -> str:
         """Get the system prompt for the agent."""
         mcp_servers = mcp_manager.get_connected_servers()
-        prompt = (
-            "You are msagent, a helpful AI assistant that can use tools to help users.\n\n"
-            "When you need to use a tool, call the tool directly.\n"
-            "When you receive tool results, incorporate them into your response naturally.\n\n"
-            f"Available MCP servers: {', '.join(mcp_servers) if mcp_servers else 'None'}\n\n"
-            "Be concise, helpful, and friendly in your responses."
-        )
-        return prompt
+        server_text = ", ".join(mcp_servers) if mcp_servers else "None"
+        template = self._load_system_prompt_template()
+        return template.replace("__MCP_SERVERS__", server_text)
+
+    def _load_system_prompt_template(self) -> str:
+        if self._system_prompt_template is not None:
+            return self._system_prompt_template
+
+        template_path = Path(__file__).resolve().parent / self._SYSTEM_PROMPT_FILE
+        self._system_prompt_template = template_path.read_text(encoding="utf-8").strip()
+        return self._system_prompt_template
 
     async def chat(self, user_input: str) -> str:
         """Process a chat message and return the response."""

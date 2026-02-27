@@ -165,7 +165,7 @@ def test_get_system_prompt_includes_connected_servers(monkeypatch: pytest.Monkey
     prompt = agent.get_system_prompt()
 
     assert "alpha, beta" in prompt
-    assert "You are msagent" in prompt
+    assert "MSProf Agent" in prompt
 
 
 @pytest.mark.asyncio
