@@ -74,6 +74,7 @@ class Agent:
                 skills=skill_sources,
                 memory=self.config.deepagents.memory,
                 recursion_limit=self.config.deepagents.recursion_limit,
+                workspace_root=self._workspace_root,
             )
             self._loaded_skill_sources = skill_sources
             self._loaded_skills = self._discover_skills(skill_sources)

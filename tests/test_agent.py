@@ -87,7 +87,11 @@ async def test_initialize_loads_only_enabled_mcp_servers(monkeypatch: pytest.Mon
     monkeypatch.setattr(
         agent_module,
         "create_llm_client",
-        lambda _cfg, skills=None, memory=None: fake_llm,
+        lambda _cfg,
+        skills=None,
+        memory=None,
+        recursion_limit=80,
+        workspace_root=None: fake_llm,
     )
 
     config = make_config(
@@ -119,9 +123,17 @@ async def test_initialize_passes_deepagents_settings_to_llm_client(
     monkeypatch.chdir(tmp_path)
     (tmp_path / "skills").mkdir()
 
-    def _fake_create_llm_client(_cfg, skills=None, memory=None):
+    def _fake_create_llm_client(
+        _cfg,
+        skills=None,
+        memory=None,
+        recursion_limit=80,
+        workspace_root=None,
+    ):
         captured["skills"] = skills
         captured["memory"] = memory
+        captured["recursion_limit"] = recursion_limit
+        captured["workspace_root"] = workspace_root
         return fake_llm
 
     monkeypatch.setattr(agent_module, "create_llm_client", _fake_create_llm_client)
@@ -140,6 +152,8 @@ async def test_initialize_passes_deepagents_settings_to_llm_client(
         "/skills/project/",
     ]
     assert captured["memory"] == ["/memory/AGENTS.md"]
+    assert captured["recursion_limit"] == config.deepagents.recursion_limit
+    assert captured["workspace_root"] == tmp_path
 
 
 def test_get_system_prompt_includes_connected_servers(monkeypatch: pytest.MonkeyPatch) -> None:

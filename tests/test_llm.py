@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from typing import Any
+from pathlib import Path
 
 import pytest
 
 import msagent.llm as llm_module
+from deepagents.backends.filesystem import FilesystemBackend
 from msagent.config import LLMConfig
 from msagent.llm import DeepAgentsClient, Message, create_llm_client
 
@@ -16,10 +18,15 @@ class FakeAgent:
         self.result = result
         self.events = events or []
 
-    async def ainvoke(self, _payload: dict[str, Any]) -> Any:
+    async def ainvoke(self, _payload: dict[str, Any], **_kwargs: Any) -> Any:
         return self.result
 
-    async def astream_events(self, _payload: dict[str, Any], version: str = "v2"):
+    async def astream_events(
+        self,
+        _payload: dict[str, Any],
+        version: str = "v2",
+        **_kwargs: Any,
+    ):
         assert version == "v2"
         for event in self.events:
             yield event
@@ -136,3 +143,16 @@ async def test_chat_passes_skills_and_memory_to_create_deep_agent(
     assert text == "ok"
     assert captured["skills"] == ["/skills/user/", "/skills/project/"]
     assert captured["memory"] == ["/memory/AGENTS.md"]
+    assert isinstance(captured["backend"], FilesystemBackend)
+
+
+def test_client_uses_workspace_root_for_filesystem_backend(monkeypatch: pytest.MonkeyPatch) -> None:
+    _patch_model_build(monkeypatch)
+    workspace_root = Path("/tmp/msagent-workspace")
+    client = DeepAgentsClient(
+        LLMConfig(provider="openai", api_key="k", model="m"),
+        workspace_root=workspace_root,
+    )
+
+    assert isinstance(client._backend, FilesystemBackend)
+    assert client._backend.cwd == workspace_root.resolve()

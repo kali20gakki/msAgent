@@ -2,8 +2,10 @@
 
 import json
 from collections.abc import AsyncGenerator
+from pathlib import Path
 from typing import Any
 
+from deepagents.backends.filesystem import FilesystemBackend
 from deepagents import create_deep_agent
 from langchain_anthropic import ChatAnthropic
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -49,6 +51,7 @@ class DeepAgentsClient:
         skills: list[str] | None = None,
         memory: list[str] | None = None,
         recursion_limit: int = 80,
+        workspace_root: str | Path | None = None,
     ):
         self.config = config
         self.last_usage: dict[str, Any] | None = None
@@ -57,6 +60,15 @@ class DeepAgentsClient:
         self._skills = skills or []
         self._memory = memory or []
         self._recursion_limit = max(1, int(recursion_limit))
+        self._workspace_root = (
+            Path(workspace_root).expanduser().resolve()
+            if workspace_root is not None
+            else Path.cwd().resolve()
+        )
+        self._backend = FilesystemBackend(
+            root_dir=self._workspace_root,
+            virtual_mode=False,
+        )
 
     async def chat(self, messages: list[Message], tools: list[dict] | None = None) -> str:
         system_prompt, input_messages = self._split_messages(messages)
@@ -152,6 +164,7 @@ class DeepAgentsClient:
             tools=deep_tools,
             skills=self._skills or None,
             memory=self._memory or None,
+            backend=self._backend,
         )
         self._agent_cache[cache_key] = agent
         return agent
@@ -397,6 +410,7 @@ def create_llm_client(
     skills: list[str] | None = None,
     memory: list[str] | None = None,
     recursion_limit: int = 80,
+    workspace_root: str | Path | None = None,
 ) -> DeepAgentsClient:
     """Factory function to create deepagents client."""
     return DeepAgentsClient(
@@ -404,4 +418,5 @@ def create_llm_client(
         skills=skills,
         memory=memory,
         recursion_limit=recursion_limit,
+        workspace_root=workspace_root,
     )
