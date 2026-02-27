@@ -1,32 +1,34 @@
-# msAgent
+<h1 align="center">🚀 msAgent</h1>
 
-**msAgent** 是一个面向Ascend NPU性能调优的agent专家。  
-它结合 LLM 分析能力与可扩展工具链，将复杂性能数据转化为清晰的瓶颈结论和可执行优化方向。
+<p align="center"><strong>面向 Ascend NPU 场景的性能问题定位助手</strong></p>
+
+**msAgent** 聚焦“发现瓶颈 -> 定位根因 -> 给出建议”的分析闭环。  
+它结合 LLM 推理能力与可扩展工具链，帮助你把复杂 Profiling 信息快速转化为可执行的优化决策。
 
 <p align="center">
-  <img src="docs/img/msagent.gif" alt="msAgent">
+  <img src="https://raw.gitcode.com/kali20gakki1/Imageshack/raw/main/msagent.gif" alt="msAgent">
 </p>
 
-## 支持的分析场景与扩展能力
+## 🔍 支持的分析场景与扩展能力
 
-- 单卡性能问题：高耗时算子、计算热点、重叠度不足等
-- 多卡性能问题：快慢卡差异、通信效率瓶颈、同步等待等
-- 下发与调度问题：下发延迟、CPU 侧调度阻塞等
-- 集群性能问题：慢节点识别与从全局到单机的逐层定位
-- MCP 扩展：基于 Model Context Protocol 接入工具（默认启用 `msprof-mcp`）
-- Skills 扩展：自动加载 `skills/` 目录技能，复用领域分析流程和知识
+- ⚙️ 单卡性能问题：高耗时算子、计算热点、重叠度不足等
+- 🔗 多卡性能问题：快慢卡差异、通信效率瓶颈、同步等待等
+- ⏱️ 下发与调度问题：下发延迟、CPU 侧调度阻塞等
+- 🧩 集群性能问题：慢节点识别与从全局到单机的逐层定位
+- 🔌 MCP 扩展：基于 Model Context Protocol 接入工具（默认启用 `msprof-mcp`）
+- 🧠 Skills 扩展：自动加载 `skills/` 目录技能，复用领域分析流程和知识
 
 ---
 
-## 快速上手
+## ⚡ 快速上手
 
-### 1) 准备环境
+### 1) 🧰 准备环境
 
 - Python 3.11+
 - [uv](https://docs.astral.sh/uv/)
 - 可用的 LLM API Key（OpenAI / Anthropic / Gemini / 兼容 OpenAI 接口）
 
-### 2) 安装依赖
+### 2) 📦 安装依赖
 
 ```bash
 git clone https://github.com/kali20gakki/msAgent.git
@@ -34,7 +36,7 @@ cd msAgent
 uv sync
 ```
 
-### 3) 配置 LLM（必做）
+### 3) 🔐 配置 LLM（必做）
 
 推荐先用 OpenAI：
 
@@ -48,13 +50,13 @@ uv run msagent config --llm-provider openai --llm-api-key "your-key" --llm-model
 uv run msagent config --show
 ```
 
-### 4) 启动 TUI
+### 4) 🖥️ 启动 TUI
 
 ```bash
 uv run msagent chat --tui
 ```
 
-### 5) 性能分析
+### 5) 📊 性能分析
 
 把 Profiling 目录路径和你的问题一起发给 msAgent，例如：
 
@@ -64,7 +66,7 @@ uv run msagent chat --tui
 
 ---
 
-## 常用命令
+## 📚 常用命令
 
 | 命令 | 说明 |
 |---|---|
@@ -77,9 +79,9 @@ uv run msagent chat --tui
 
 ---
 
-## 参考：配置与扩展
+## 🛠️ 参考：配置与扩展
 
-### LLM 配置示例
+### 🤖 LLM 配置示例
 
 Anthropic:
 
@@ -99,7 +101,7 @@ uv run msagent config --llm-provider gemini --llm-api-key "your-key" --llm-model
 uv run msagent config --llm-provider custom --llm-api-key "your-key" --llm-base-url "http://127.0.0.1:8045/v1" --llm-model "your-model-name"
 ```
 
-### MCP 服务器管理
+### 🔌 MCP 服务器管理
 
 默认配置会启用 `msprof-mcp`。你也可以手动管理 MCP：
 
@@ -114,12 +116,12 @@ uv run msagent mcp add --name filesystem --command npx --args "-y,@modelcontextp
 uv run msagent mcp remove --name filesystem
 ```
 
-### 配置文件位置
+### 📁 配置文件位置
 
 - 优先读取当前工作目录：`config.json`
 - 若不存在，则读取：`~/.config/msagent/config.json`
 
-### Skills
+### 🧠 Skills
 
 msAgent 启动时会自动加载项目根目录 `skills/` 下的技能目录，格式如下：
 
@@ -131,7 +133,7 @@ skills/
 
 ---
 
-## 开发
+## 👨‍💻 开发
 
 ```bash
 uv sync --dev
@@ -142,6 +144,6 @@ uv run ruff format .
 
 ---
 
-## 许可证
+## 📄 许可证
 
 MIT License
