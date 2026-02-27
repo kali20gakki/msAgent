@@ -1,98 +1,127 @@
-# 🚀 msAgent
+# msAgent
 
-**msAgent** 是一个强大的命令行智能助手，专为开发者和运维人员设计。它不仅具备与大语言模型（LLM）对话的能力，还能通过 Model Context Protocol (MCP) 扩展各种本地工具，例如文件操作、代码分析、系统监控等。
+**msAgent** 是一个面向Ascend NPU性能调优的agent专家。  
+它结合 LLM 分析能力与可扩展工具链，将复杂性能数据转化为清晰的瓶颈结论和可执行优化方向。
 
 <p align="center">
-  <img src="docs/img/msagent.png" alt="msAgent">
+  <img src="docs/img/msagent.gif" alt="msAgent">
 </p>
 
-## ✨ 核心特性
+## 支持的分析场景与扩展能力
 
-- **多模态交互**：支持基于 Textual 的现代化 TUI 界面，同时也提供简洁的命令行交互模式。
-- **MCP 扩展支持**：原生支持 Model Context Protocol (MCP)，可以无缝集成任何符合 MCP 标准的工具（如 Fetch, Filesystem 等）。
-- **多 LLM 支持**：灵活切换 OpenAI, Anthropic, Google Gemini 等多种大模型后端。
-- **智能上下文管理**：自动根据任务需求调用相应的工具，无需手动介入。
-- **流式响应**：实时的打字机效果，让对话更加自然流畅。
+- 单卡性能问题：高耗时算子、计算热点、重叠度不足等
+- 多卡性能问题：快慢卡差异、通信效率瓶颈、同步等待等
+- 下发与调度问题：下发延迟、CPU 侧调度阻塞等
+- 集群性能问题：慢节点识别与从全局到单机的逐层定位
+- MCP 扩展：基于 Model Context Protocol 接入工具（默认启用 `msprof-mcp`）
+- Skills 扩展：自动加载 `skills/` 目录技能，复用领域分析流程和知识
 
-## 📦 快速开始
+---
 
-### 安装
+## 快速上手
 
-使用 `uv` 进行安装（推荐，支持 Python >= 3.11）：
+### 1) 准备环境
+
+- Python 3.11+
+- [uv](https://docs.astral.sh/uv/)
+- 可用的 LLM API Key（OpenAI / Anthropic / Gemini / 兼容 OpenAI 接口）
+
+### 2) 安装依赖
 
 ```bash
-# Clone the repository
 git clone https://github.com/kali20gakki/msAgent.git
-cd msagent
-
-# Install dependencies
+cd msAgent
 uv sync
 ```
 
-### 启动对话
+### 3) 配置 LLM（必做）
 
-#### TUI 模式（推荐）
-
-启动现代化的终端用户界面：
+推荐先用 OpenAI：
 
 ```bash
-uv run msagent chat --tui
+uv run msagent config --llm-provider openai --llm-api-key "your-key" --llm-model "gpt-4o-mini"
 ```
 
-#### 命令行模式
-
-启动简单的命令行对话：
-
-```bash
-uv run msagent chat
-```
-
-## ⚙️ 配置指南
-
-msAgent 需要配置 LLM 后端才能工作。首次运行会自动创建配置文件。
-
-### 查看当前配置
+检查配置是否生效：
 
 ```bash
 uv run msagent config --show
 ```
 
-### 设置 LLM 提供商
+### 4) 启动 TUI
 
 ```bash
-# OpenAI
-uv run msagent config --llm-provider openai --llm-api-key "your-key" --llm-model "gpt-4"
+uv run msagent chat --tui
+```
 
-# Anthropic
-uv run msagent config --llm-provider anthropic --llm-api-key "your-key" --llm-model "claude-3-opus-20240229"
+### 5) 性能分析
 
-# Gemini
+把 Profiling 目录路径和你的问题一起发给 msAgent，例如：
+
+```text
+请分析 /path/to/profiler_output 的性能瓶颈，重点关注通信和高耗时算子。
+```
+
+---
+
+## 常用命令
+
+| 命令 | 说明 |
+|---|---|
+| `uv run msagent chat --tui` | 启动 TUI 交互 |
+| `uv run msagent chat` | 启动 CLI 交互 |
+| `uv run msagent ask "..."` | 单轮提问 |
+| `uv run msagent config --show` | 查看当前配置 |
+| `uv run msagent mcp list` | 查看 MCP 服务器 |
+| `uv run msagent info` | 查看工具信息 |
+
+---
+
+## 参考：配置与扩展
+
+### LLM 配置示例
+
+Anthropic:
+
+```bash
+uv run msagent config --llm-provider anthropic --llm-api-key "your-key" --llm-model "claude-3-5-sonnet-20241022"
+```
+
+Gemini:
+
+```bash
 uv run msagent config --llm-provider gemini --llm-api-key "your-key" --llm-model "gemini-2.0-flash"
+```
 
-# Custom OpenAI-compatible API (self-hosted gateway / proxy / compatible vendor)
-uv run msagent config --llm-provider openai --llm-api-key "your-key" --llm-base-url "http://127.0.0.1:8045/v1" --llm-model "your-model-name"
+自定义 OpenAI 兼容接口：
+
+```bash
+uv run msagent config --llm-provider custom --llm-api-key "your-key" --llm-base-url "http://127.0.0.1:8045/v1" --llm-model "your-model-name"
 ```
 
 ### MCP 服务器管理
 
+默认配置会启用 `msprof-mcp`。你也可以手动管理 MCP：
+
 ```bash
-# 列出 MCP 服务器
-msagent mcp list
+# 列表
+uv run msagent mcp list
 
-# 添加 MCP 服务器
-msagent mcp add --name filesystem --command npx --args "-y,@modelcontextprotocol/server-filesystem,/path"
+# 添加
+uv run msagent mcp add --name filesystem --command npx --args "-y,@modelcontextprotocol/server-filesystem,/path"
 
-# 移除 MCP 服务器
-msagent mcp remove --name filesystem
+# 删除
+uv run msagent mcp remove --name filesystem
 ```
 
-## 🧠 Skills（内置技能）
+### 配置文件位置
 
-msAgent 启动时会自动加载工程根目录下的 `skills/` 目录，并将其中的 skill 提供给 deepagents 使用。
+- 优先读取当前工作目录：`config.json`
+- 若不存在，则读取：`~/.config/msagent/config.json`
 
-### 目录结构
+### Skills
 
-每个 skill 必须使用以下结构：
+msAgent 启动时会自动加载项目根目录 `skills/` 下的技能目录，格式如下：
 
 ```text
 skills/
@@ -100,101 +129,19 @@ skills/
     SKILL.md
 ```
 
-### SKILL.md 格式要求
-
-`SKILL.md` 需要包含 YAML frontmatter，并至少有以下字段：
-
-```markdown
 ---
-name: your-skill-name
-description: 说明这个 skill 做什么，以及在什么场景触发
----
-```
 
-注意：
-
-- `name` 需要和 skill 目录名保持一致（例如 `skills/code-review/SKILL.md` 的 `name` 应为 `code-review`）。
-- `description` 要写清楚触发条件，便于 agent 正确选择 skill。
-
-### 新增一个 skill
-
-1. 在工程根目录创建子目录：`skills/<skill-name>/`
-2. 新建 `skills/<skill-name>/SKILL.md`，按上面的格式填写 `name` 和 `description`
-3. 重新启动 `msagent`，新 skill 会被自动加载
-
-### 查看帮助
-
-```bash
-# 显示帮助信息
-msagent --help
-
-# 显示版本
-msagent --version
-
-# 显示详细信息
-msagent info
-```
-
-## 🔌 MCP 服务器示例
-
-### 文件系统服务器
-
-```bash
-msagent mcp add --name filesystem --command npx --args "-y,@modelcontextprotocol/server-filesystem,/home/user/documents"
-```
-
-### SQLite 服务器
-
-```bash
-msagent mcp add --name sqlite --command npx --args "-y,@modelcontextprotocol/server-sqlite,/path/to/database.db"
-```
-
-### 自定义 MCP 服务器
-
-```bash
-msagent mcp add --name myserver --command python --args "/path/to/server.py"
-```
-
-## 🛠️ 开发
-
-### 安装开发依赖
+## 开发
 
 ```bash
 uv sync --dev
-```
-
-### 运行测试
-
-```bash
 uv run pytest
-```
-
-### 代码格式化
-
-```bash
-uv run ruff format .
 uv run ruff check .
+uv run ruff format .
 ```
 
-## 📝 命令参考
+---
 
-| 命令 | 描述 |
-|------|------|
-| `msagent chat [message]` | 启动聊天会话 |
-| `msagent ask <question>` | 单轮问答 |
-| `msagent config --show` | 查看配置 |
-| `msagent mcp list` | 列出 MCP 服务器 |
-| `msagent mcp add --name <n> --command <c>` | 添加 MCP 服务器 |
-| `msagent mcp remove --name <n>` | 移除 MCP 服务器 |
-| `msagent info` | 显示信息 |
-| `msagent --version` | 显示版本 |
-
-## 🔗 相关链接
-
-- [MCP Protocol](https://modelcontextprotocol.io/)
-- [Textual](https://textual.textualize.io/)
-- [Typer](https://typer.tiangolo.com/)
-
-## 📄 许可证
+## 许可证
 
 MIT License
