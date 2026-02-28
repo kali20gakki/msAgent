@@ -57,6 +57,11 @@ class FakeLLMClient:
             yield chunk
             await asyncio.sleep(0)
 
+    async def chat_stream_events(self, messages: list[Any], tools: list[dict] | None = None):
+        for chunk in self.stream_chunks:
+            yield {"type": "text", "content": chunk}
+            await asyncio.sleep(0)
+
 
 def make_config(api_key: str = "test-key", mcp_servers: list[MCPConfig] | None = None) -> AppConfig:
     config = AppConfig()
@@ -165,7 +170,7 @@ def test_get_system_prompt_includes_connected_servers(monkeypatch: pytest.Monkey
     prompt = agent.get_system_prompt()
 
     assert "alpha, beta" in prompt
-    assert "MSProf Agent" in prompt
+    assert "msAgent" in prompt
 
 
 @pytest.mark.asyncio
@@ -247,6 +252,23 @@ def test_clear_history_and_get_history_copy() -> None:
     assert len(agent.messages) == 1
     agent.clear_history()
     assert agent.messages == []
+
+
+def test_start_new_session_increments_session_and_clears_context() -> None:
+    class FakeClient:
+        def __init__(self) -> None:
+            self.last_usage: dict[str, int] | None = {"prompt_tokens": 10, "total_tokens": 10}
+
+    agent = Agent(make_config())
+    agent.llm_client = FakeClient()
+    agent.messages = [agent_module.Message("user", "hello")]
+
+    session_number = agent.start_new_session()
+
+    assert session_number == 2
+    assert agent.session_number == 2
+    assert agent.messages == []
+    assert agent.llm_client.last_usage is None
 
 
 @pytest.mark.asyncio

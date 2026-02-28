@@ -15,6 +15,7 @@ def test_custom_footer_render_contains_shortcuts() -> None:
     footer = CustomFooter()
     rendered = footer.render()
     assert "/ for commands" in rendered
+    assert "session:" in rendered
     assert "tokens:" in rendered
 
 

@@ -2,22 +2,17 @@
 
 import asyncio
 import json
-import time
 from typing import Any
 
 from rich.markdown import Markdown as RichMarkdown
-from rich.align import Align
 from rich.console import RenderableType
 from rich.text import Text
 from textual import events
 from textual.css.query import NoMatches
 from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal, VerticalScroll, Vertical
-from textual.reactive import reactive
 from textual.screen import Screen
 from textual.widgets import (
-    Footer,
-    Header,
     Input,
     Label,
     LoadingIndicator,
@@ -27,7 +22,6 @@ from textual.widgets import (
 from textual.binding import Binding
 
 from .agent import Agent
-from .config import config_manager
 
 
 class MessageWidget(Container):
@@ -480,9 +474,14 @@ class CustomFooter(Static):
     def __init__(self, **kwargs: Any):
         super().__init__(**kwargs)
         self._base = "/ for commands"
+        self._session_status = "session: #1"
         self._model_status = "model: unknown"
         self._context_status = "prompt: N/A"
         self._token_status = "tokens: 0"
+
+    def set_session_status(self, status: str) -> None:
+        self._session_status = status
+        self.refresh()
 
     def set_model_status(self, status: str) -> None:
         self._model_status = status
@@ -497,7 +496,10 @@ class CustomFooter(Static):
         self.refresh()
 
     def render(self) -> str:
-        return f"{self._base} • {self._model_status} • {self._context_status} • {self._token_status}"
+        return (
+            f"{self._base} • {self._session_status} • {self._model_status} • "
+            f"{self._context_status} • {self._token_status}"
+        )
 
 
 class ChatArea(VerticalScroll):
@@ -755,6 +757,7 @@ class ChatScreen(Screen):
     BINDINGS = [
         Binding("ctrl+c", "quit", "Quit", show=False),
         Binding("ctrl+l", "clear", "Clear Chat", show=False),
+        Binding("ctrl+n", "new_session", "New Session", show=False),
     ]
     _MAX_TOOL_OUTPUT_CHARS = 4000
 
@@ -797,6 +800,7 @@ class ChatScreen(Screen):
         # Focus input
         self.query_one("#message-input", Input).focus()
         self._update_footer_model()
+        self._update_footer_session()
         self._update_footer_context()
         self._update_footer_tokens()
         self._render_at_suggestions([])
@@ -866,11 +870,17 @@ class ChatScreen(Screen):
             return
             
         # Commands
-        if message.lower() in ["/exit", "/quit", ":q"]:
+        normalized = " ".join(message.lower().split())
+
+        if normalized in ["/exit", "/quit", ":q"]:
             app.exit()
             return
-        if message.lower() == "/clear":
+        if normalized == "/clear":
             self.action_clear()
+            input_widget.value = ""
+            return
+        if normalized in {"/new", "/new-session", "/session new"}:
+            self.action_new_session()
             input_widget.value = ""
             return
         
@@ -1091,6 +1101,12 @@ class ChatScreen(Screen):
             return
         footer.set_model_status(f"model: {provider}/{model}")
 
+    def _update_footer_session(self) -> None:
+        footer = self._query_footer()
+        if footer is None:
+            return
+        footer.set_session_status(f"session: #{self.app.agent.session_number}")
+
     def _update_footer_context(self) -> None:
         usage = getattr(self.app.agent.llm_client, "last_usage", None)
         prompt_tokens: int | None = None
@@ -1126,7 +1142,24 @@ class ChatScreen(Screen):
         return f"{value:.1f}M" if value < 10 else f"{value:.0f}M"
 
     def action_clear(self) -> None:
+        if self.app.is_processing:
+            self.notify("Stop current response before clearing chat.", severity="warning")
+            return
         self.app.agent.clear_history()
+        self._reset_chat_area("Chat history cleared.")
+        self._update_footer_tokens()
+        self._update_footer_session()
+
+    def action_new_session(self) -> None:
+        if self.app.is_processing:
+            self.notify("Stop current response before starting a new session.", severity="warning")
+            return
+        new_session_number = self.app.agent.start_new_session()
+        self._reset_chat_area(f"Started new session #{new_session_number}. Context cleared.")
+        self._update_footer_tokens()
+        self._update_footer_session()
+
+    def _reset_chat_area(self, system_message: str) -> None:
         chat_area = self.query_one("#chat-area", ChatArea)
         chat_area.remove_children()
         from .mcp_client import mcp_manager
@@ -1137,7 +1170,7 @@ class ChatScreen(Screen):
                 loaded_skills=self.app.agent.get_loaded_skills(),
             )
         )
-        chat_area.run_worker(self._add_system_message(chat_area, "Chat history cleared."))
+        chat_area.run_worker(self._add_system_message(chat_area, system_message))
 
     def _refresh_at_candidates(self, input_widget: Input) -> None:
         cursor = getattr(input_widget, "cursor_position", len(input_widget.value))

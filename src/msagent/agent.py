@@ -25,6 +25,7 @@ class Agent:
         self.config = config or config_manager.get_config()
         self.llm_client = None
         self.messages: list[Message] = []
+        self._session_number = 1
         self._initialized = False
         self._error_message = ""
         self._workspace_root = Path.cwd()
@@ -57,6 +58,10 @@ class Agent:
     @property
     def error_message(self) -> str:
         return self._error_message
+
+    @property
+    def session_number(self) -> int:
+        return self._session_number
 
     async def initialize(self) -> bool:
         """Initialize the agent."""
@@ -330,6 +335,13 @@ class Agent:
     def clear_history(self) -> None:
         """Clear conversation history."""
         self.messages.clear()
+        self._reset_last_usage()
+
+    def start_new_session(self) -> int:
+        """Start a brand new session and clear all previous context."""
+        self._session_number += 1
+        self.clear_history()
+        return self._session_number
 
     def get_history(self) -> list[Message]:
         """Get conversation history."""
@@ -352,6 +364,12 @@ class Agent:
                 "[dim]🧮 Tokens used: "
                 f"prompt={prompt} completion={completion} total={total}[/dim]"
             )
+
+    def _reset_last_usage(self) -> None:
+        if self.llm_client is None:
+            return
+        if hasattr(self.llm_client, "last_usage"):
+            self.llm_client.last_usage = None
 
     def find_local_files(self, query: str, limit: int = 8) -> list[str]:
         """Find workspace files by fuzzy path query."""
