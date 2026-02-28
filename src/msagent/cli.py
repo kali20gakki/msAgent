@@ -12,6 +12,7 @@ from rich.table import Table
 from rich.text import Text
 
 from .agent import Agent
+from .application import ChatApplicationService
 from .config import LLMConfig, MCPConfig, config_manager
 from .tui import run_tui
 from .version import __version__
@@ -53,15 +54,15 @@ def chat_command(
         return
     
     async def do_chat():
-        agent = Agent()
+        service = ChatApplicationService(Agent())
         
         # Initialize agent with spinner
         with console.status("[bold green]Initializing agent and loading MCP servers...[/bold green]", spinner="dots"):
-            initialized = await agent.initialize()
+            initialized = await service.initialize()
         
         if not initialized:
             console.print(Panel(
-                agent.error_message,
+                service.get_status().error_message,
                 title="[yellow]⚠️ Configuration Required[/yellow]",
                 border_style="yellow"
             ))
@@ -74,15 +75,15 @@ def chat_command(
                 console.print("[bold green]🤖 msAgent:[/bold green] ", end="")
                 
                 if stream:
-                    async for chunk in agent.chat_stream(message):
+                    async for chunk in service.chat_stream(message):
                         console.print(chunk, end="")
                     console.print()
                 else:
-                    response = await agent.chat(message)
+                    response = await service.chat(message)
                     console.print(response)
             else:
                 # Interactive mode
-                mcp_servers = list(agent.get_status().connected_servers)
+                mcp_servers = list(service.get_status().connected_servers)
                 if mcp_servers:
                     server_list = ", ".join([f"[cyan]{s}[/cyan]" for s in mcp_servers])
                     mcp_msg = f"\n\n[dim]🔌 Connected MCP Servers: {server_list}[/dim]"
@@ -98,16 +99,12 @@ def chat_command(
                 while True:
                     try:
                         user_input = console.input("[bold cyan]👤 You:[/bold cyan] ")
-                        user_input = user_input.strip()
-                        
-                        if not user_input:
+                        intent = service.resolve_user_input(user_input)
+                        if intent.type == "ignore":
                             continue
-                        
-                        if user_input.lower() in ["/exit", "/quit", "/q"]:
-                            console.print("[dim]Goodbye! 👋[/dim]")
-                            break
-                        
-                        if user_input.lower() == "/help":
+
+                        normalized = " ".join(user_input.strip().lower().split())
+                        if normalized == "/help":
                             console.print(Panel(
                                 "[bold]Available Commands:[/bold]\n"
                                 "  [cyan]/help[/cyan]  - Show this help message\n"
@@ -117,20 +114,29 @@ def chat_command(
                                 border_style="blue"
                             ))
                             continue
-                        
-                        if user_input.lower() == "/clear":
-                            agent.clear_history()
+
+                        if intent.type == "exit":
+                            console.print("[dim]Goodbye! 👋[/dim]")
+                            break
+                        if intent.type == "clear":
+                            service.clear_history()
                             console.print("[dim]Chat history cleared.[/dim]")
+                            continue
+                        if intent.type == "new_session":
+                            session_num = service.start_new_session()
+                            console.print(f"[dim]Started new session #{session_num}.[/dim]")
+                            continue
+                        if intent.type != "chat":
                             continue
                         
                         console.print("[bold green]🤖 msAgent:[/bold green] ", end="")
                         
                         if stream:
-                            async for chunk in agent.chat_stream(user_input):
+                            async for chunk in service.chat_stream(intent.message):
                                 console.print(chunk, end="")
                             console.print()
                         else:
-                            response = await agent.chat(user_input)
+                            response = await service.chat(intent.message)
                             console.print(response)
                             
                     except KeyboardInterrupt:
@@ -139,7 +145,7 @@ def chat_command(
                     except EOFError:
                         break
         finally:
-            await agent.shutdown()
+            await service.shutdown()
     
     asyncio.run(do_chat())
 
@@ -273,12 +279,12 @@ def ask_command(
     """❓ Ask a single question and get an answer."""
     # ... (logic same as before, no text change needed inside async function except variable names which are internal)
     async def do_ask():
-        agent = Agent()
-        initialized = await agent.initialize()
+        service = ChatApplicationService(Agent())
+        initialized = await service.initialize()
         
         if not initialized:
             console.print(Panel(
-                agent.error_message,
+                service.get_status().error_message,
                 title="[yellow]⚠️ Configuration Required[/yellow]",
                 border_style="yellow"
             ))
@@ -286,14 +292,14 @@ def ask_command(
         
         try:
             if stream:
-                async for chunk in agent.chat_stream(question):
+                async for chunk in service.chat_stream(question):
                     console.print(chunk, end="")
                 console.print()
             else:
-                response = await agent.chat(question)
+                response = await service.chat(question)
                 console.print(response)
         finally:
-            await agent.shutdown()
+            await service.shutdown()
     
     asyncio.run(do_ask())
 

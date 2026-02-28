@@ -22,6 +22,7 @@ from textual.widgets import (
 )
 
 from .agent import Agent
+from .application import ChatApplicationService
 from .interfaces import AgentBackend, AgentStatus
 
 
@@ -723,7 +724,7 @@ class WelcomeScreen(Screen):
         try:
             # Wait for agent to be initialized by the App worker
             while True:
-                status = self.app.backend.get_status()
+                status = self.app.service.get_status()
                 if status.is_initialized or status.error_message:
                     break
                 await asyncio.sleep(0.1)
@@ -855,25 +856,23 @@ class ChatScreen(Screen):
             return
             
         input_widget = self.query_one("#message-input", Input)
-        message = input_widget.value.strip()
-        
-        if not message:
+        intent = app.service.resolve_user_input(input_widget.value)
+        if intent.type == "ignore":
             return
-            
-        # Commands
-        normalized = " ".join(message.lower().split())
-
-        if normalized in ["/exit", "/quit", ":q"]:
+        if intent.type == "exit":
             app.exit()
             return
-        if normalized == "/clear":
+        if intent.type == "clear":
             self.action_clear()
             input_widget.value = ""
             return
-        if normalized in {"/new", "/new-session", "/session new"}:
+        if intent.type == "new_session":
             self.action_new_session()
             input_widget.value = ""
             return
+        if intent.type != "chat":
+            return
+        message = intent.message
         
         # 立即清空输入框
         input_widget.value = ""
@@ -939,7 +938,7 @@ class ChatScreen(Screen):
             pending_tool_widgets: list[MessageWidget] = []
             
             try:
-                async for event in app.backend.stream_chat_events(message):
+                async for event in app.service.stream_chat_events(message):
                     event_type = event.type
 
                     if event_type == "tool_call":
@@ -1111,7 +1110,7 @@ class ChatScreen(Screen):
         footer.set_context_status(f"prompt: {self._format_token_count(prompt_tokens)}")
 
     def _get_status(self) -> AgentStatus:
-        return self.app.backend.get_status()
+        return self.app.service.get_status()
 
     def _mount_welcome_banner(self, chat_area: ChatArea, status: AgentStatus) -> None:
         chat_area.mount(
@@ -1140,7 +1139,7 @@ class ChatScreen(Screen):
         if self.app.is_processing:
             self.notify("Stop current response before clearing chat.", severity="warning")
             return
-        self.app.backend.clear_history()
+        self.app.service.clear_history()
         self._reset_chat_area("Chat history cleared.")
         self._update_footer_tokens()
         self._update_footer_session()
@@ -1149,7 +1148,7 @@ class ChatScreen(Screen):
         if self.app.is_processing:
             self.notify("Stop current response before starting a new session.", severity="warning")
             return
-        new_session_number = self.app.backend.start_new_session()
+        new_session_number = self.app.service.start_new_session()
         self._reset_chat_area(f"Started new session #{new_session_number}. Context cleared.")
         self._update_footer_tokens()
         self._update_footer_session()
@@ -1171,7 +1170,7 @@ class ChatScreen(Screen):
             return
 
         query, start, end = token
-        self._at_matches = self.app.backend.find_local_files(query, limit=30)
+        self._at_matches = self.app.service.find_local_files(query, limit=30)
         self._at_target_range = (start, end)
         self._at_selected_index = 0
         self._render_at_suggestions(self._at_matches)
@@ -1339,27 +1338,43 @@ class MSAgentApp(App):
     }
     """
     
-    def __init__(self, backend: AgentBackend | None = None, **kwargs: Any):
-        self._backend: AgentBackend = backend or Agent()
+    def __init__(
+        self,
+        backend: AgentBackend | None = None,
+        service: ChatApplicationService | None = None,
+        **kwargs: Any,
+    ):
+        if service is not None:
+            self._service = service
+        else:
+            self._service = ChatApplicationService(backend or Agent())
         self.is_processing = False
         super().__init__(**kwargs)
 
     @property
+    def service(self) -> ChatApplicationService:
+        return self._service
+
+    @service.setter
+    def service(self, value: ChatApplicationService) -> None:
+        self._service = value
+
+    @property
     def backend(self) -> AgentBackend:
-        return self._backend
+        return self._service.backend
 
     @backend.setter
     def backend(self, value: AgentBackend) -> None:
-        self._backend = value
+        self._service = ChatApplicationService(value)
 
     @property
     def agent(self) -> AgentBackend:
         """Backward-compatible alias."""
-        return self._backend
+        return self._service.backend
 
     @agent.setter
     def agent(self, value: AgentBackend) -> None:
-        self._backend = value
+        self._service = ChatApplicationService(value)
         
     async def on_mount(self) -> None:
         # Start the agent lifecycle worker immediately
@@ -1372,7 +1387,7 @@ class MSAgentApp(App):
         """Manages the agent connection lifecycle."""
         try:
             # Connect
-            await self.backend.initialize()
+            await self.service.initialize()
             
             # Wait until cancelled (app shutdown)
             await asyncio.Event().wait()
@@ -1380,9 +1395,15 @@ class MSAgentApp(App):
             pass
         finally:
             # Disconnect in the same task
-            await self.backend.shutdown()
+            await self.service.shutdown()
 
-def run_tui(backend: AgentBackend | None = None) -> None:
+def run_tui(
+    backend: AgentBackend | None = None,
+    service: ChatApplicationService | None = None,
+) -> None:
     """Run the TUI application."""
-    app = MSAgentApp() if backend is None else MSAgentApp(backend=backend)
+    if backend is None and service is None:
+        app = MSAgentApp()
+    else:
+        app = MSAgentApp(backend=backend, service=service)
     app.run()
