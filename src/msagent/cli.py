@@ -82,7 +82,7 @@ def chat_command(
                     console.print(response)
             else:
                 # Interactive mode
-                mcp_servers = agent.mcp_manager.get_connected_servers()
+                mcp_servers = list(agent.get_status().connected_servers)
                 if mcp_servers:
                     server_list = ", ".join([f"[cyan]{s}[/cyan]" for s in mcp_servers])
                     mcp_msg = f"\n\n[dim]🔌 Connected MCP Servers: {server_list}[/dim]"

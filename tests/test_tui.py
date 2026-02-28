@@ -6,7 +6,6 @@ import asyncio
 
 import pytest
 
-import msagent.mcp_client as mcp_module
 import msagent.tui as tui_module
 from msagent.tui import ChatWelcomeBanner, CustomFooter, MSAgentApp, run_tui
 
@@ -19,15 +18,11 @@ def test_custom_footer_render_contains_shortcuts() -> None:
     assert "tokens:" in rendered
 
 
-def test_chat_welcome_banner_compose_shows_server_status_when_connected(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(mcp_module.mcp_manager, "get_connected_servers", lambda: [])
+def test_chat_welcome_banner_compose_shows_server_status_when_connected() -> None:
     no_server_widgets = list(ChatWelcomeBanner().compose())
     assert len(no_server_widgets) == 1
 
-    monkeypatch.setattr(mcp_module.mcp_manager, "get_connected_servers", lambda: ["filesystem"])
-    with_server_widgets = list(ChatWelcomeBanner().compose())
+    with_server_widgets = list(ChatWelcomeBanner(mcp_servers=["filesystem"]).compose())
     assert len(with_server_widgets) == 2
 
 

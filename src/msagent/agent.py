@@ -9,16 +9,13 @@ from collections.abc import AsyncGenerator
 from pathlib import Path
 from typing import Any
 
-from rich.console import Console
-
 from .config import AppConfig, config_manager
+from .interfaces import AgentBackend, AgentEvent, AgentStatus, UsageSnapshot
 from .llm import Message, create_llm_client
 from .mcp_client import mcp_manager
 
-console = Console()
 
-
-class Agent:
+class Agent(AgentBackend):
     """msagent - Core agent implementation."""
 
     def __init__(self, config: AppConfig | None = None):
@@ -140,6 +137,20 @@ class Agent:
         """Get loaded skill names."""
         return self._loaded_skills.copy()
 
+    def get_status(self) -> AgentStatus:
+        """Return a frontend-safe status snapshot."""
+        llm_cfg = self.config.llm
+        return AgentStatus(
+            is_initialized=self._initialized,
+            error_message=self._error_message,
+            session_number=self._session_number,
+            provider=(llm_cfg.provider or "unknown").strip(),
+            model=(llm_cfg.model or "unknown").strip(),
+            connected_servers=tuple(mcp_manager.get_connected_servers()),
+            loaded_skills=tuple(self._loaded_skills),
+            usage=self._build_usage_snapshot(),
+        )
+
     def get_system_prompt(self) -> str:
         """Get the system prompt for the agent."""
         mcp_servers = mcp_manager.get_connected_servers()
@@ -166,17 +177,12 @@ class Agent:
 
         timeout_s = float(os.getenv("MSAGENT_LLM_TIMEOUT", "600"))
         try:
-            console.print("[dim]⏳ Waiting for LLM response...[/dim]")
-            t0 = time.monotonic()
             response = await asyncio.wait_for(
                 self.llm_client.chat(all_messages, tools=tools if tools else None),
                 timeout=timeout_s,
             )
-            dt = time.monotonic() - t0
-            console.print(f"[grey50]⚡ LLM response took {dt:.2f}s[/grey50]")
 
             self.messages.append(Message("assistant", response))
-            self._print_usage()
             return response
         except asyncio.TimeoutError:
             return f"❌ Error: LLM response timed out after {timeout_s:.0f}s"
@@ -185,25 +191,28 @@ class Agent:
 
     async def chat_stream(self, user_input: str) -> AsyncGenerator[str, None]:
         """Process a chat message and stream the response."""
-        async for event in self.chat_stream_events(user_input):
-            if event.get("type") == "text":
-                text = event.get("content")
-                if isinstance(text, str) and text:
-                    yield text
-            elif event.get("type") == "error":
-                error = event.get("content")
-                if isinstance(error, str) and error:
-                    yield error
+        async for event in self.stream_chat_events(user_input):
+            if event.type == "text" and event.content:
+                yield event.content
+            elif event.type == "error" and event.content:
+                yield event.content
 
     async def chat_stream_events(
         self, user_input: str
     ) -> AsyncGenerator[dict[str, Any], None]:
+        """Backward-compatible dict events for existing callers."""
+        async for event in self.stream_chat_events(user_input):
+            yield event.to_dict()
+
+    async def stream_chat_events(
+        self, user_input: str
+    ) -> AsyncGenerator[AgentEvent, None]:
         """Process a chat message and stream response + tool call events."""
         if not self._initialized or not self.llm_client:
-            yield {
-                "type": "error",
-                "content": "Error: Agent not initialized. Please check your configuration.",
-            }
+            yield AgentEvent(
+                type="error",
+                content="Error: Agent not initialized. Please check your configuration.",
+            )
             return
 
         self.messages.append(Message("user", self._inject_file_context(user_input)))
@@ -232,10 +241,10 @@ class Agent:
                         await stream.aclose()
                     except Exception:
                         pass
-                    yield {
-                        "type": "error",
-                        "content": f"❌ Error: LLM stream timed out after {timeout_s:.0f}s",
-                    }
+                    yield AgentEvent(
+                        type="error",
+                        content=f"❌ Error: LLM stream timed out after {timeout_s:.0f}s",
+                    )
                     return
 
                 if not isinstance(chunk, dict):
@@ -249,30 +258,34 @@ class Agent:
                     cleaned = self._filter_info_logs(text)
                     if cleaned:
                         full_response += cleaned
-                        yield {"type": "text", "content": cleaned}
+                        yield AgentEvent(type="text", content=cleaned)
                     continue
 
                 if event_type == "tool_start":
                     tool_name = chunk.get("name")
                     if isinstance(tool_name, str) and tool_name:
                         tool_input = chunk.get("input")
-                        yield {
-                            "type": "tool_call",
-                            "full_name": tool_name,
-                            "input": tool_input,
-                            **self._split_tool_name(tool_name),
-                        }
+                        split = self._split_tool_name(tool_name)
+                        yield AgentEvent(
+                            type="tool_call",
+                            full_name=tool_name,
+                            server=split["server"],
+                            tool=split["tool"],
+                            payload=tool_input,
+                        )
                     continue
 
                 if event_type == "tool_end":
                     tool_name = chunk.get("name")
                     if isinstance(tool_name, str) and tool_name:
-                        yield {
-                            "type": "tool_result",
-                            "full_name": tool_name,
-                            "output": chunk.get("output"),
-                            **self._split_tool_name(tool_name),
-                        }
+                        split = self._split_tool_name(tool_name)
+                        yield AgentEvent(
+                            type="tool_result",
+                            full_name=tool_name,
+                            server=split["server"],
+                            tool=split["tool"],
+                            payload=chunk.get("output"),
+                        )
                     continue
 
             if not full_response:
@@ -284,21 +297,21 @@ class Agent:
                     cleaned_fallback = self._filter_info_logs(fallback)
                     if cleaned_fallback:
                         full_response = cleaned_fallback
-                        yield {"type": "text", "content": cleaned_fallback}
+                        yield AgentEvent(type="text", content=cleaned_fallback)
                 else:
                     last_msgs = [m.to_dict() for m in all_messages[-3:]]
-                    yield {
-                        "type": "error",
-                        "content": (
+                    yield AgentEvent(
+                        type="error",
+                        content=(
                             "❌ Error: LLM returned empty response.\n"
                             f"Last messages: {json.dumps(last_msgs, ensure_ascii=False)}"
                         ),
-                    }
+                    )
                     return
 
             dt = time.monotonic() - start
             self.messages.append(Message("assistant", full_response))
-            yield {"type": "done", "duration_s": dt}
+            yield AgentEvent(type="done", duration_s=dt)
         except asyncio.CancelledError:
             try:
                 if stream is not None:
@@ -307,7 +320,7 @@ class Agent:
                 pass
             return
         except Exception as e:
-            yield {"type": "error", "content": f"❌ Error: {e}"}
+            yield AgentEvent(type="error", content=f"❌ Error: {e}")
 
     def _filter_info_logs(self, text: str) -> str:
         """Remove verbose INFO log lines from streamed text."""
@@ -352,18 +365,20 @@ class Agent:
         await mcp_manager.disconnect_all()
         self._initialized = False
 
-    def _print_usage(self) -> None:
+    def _build_usage_snapshot(self) -> UsageSnapshot | None:
         usage = getattr(self.llm_client, "last_usage", None)
         if not isinstance(usage, dict):
-            return
+            return None
         prompt = usage.get("prompt_tokens")
         completion = usage.get("completion_tokens")
         total = usage.get("total_tokens")
         if all(isinstance(v, int) for v in (prompt, completion, total)):
-            console.print(
-                "[dim]🧮 Tokens used: "
-                f"prompt={prompt} completion={completion} total={total}[/dim]"
+            return UsageSnapshot(
+                prompt_tokens=int(prompt),
+                completion_tokens=int(completion),
+                total_tokens=int(total),
             )
+        return None
 
     def _reset_last_usage(self) -> None:
         if self.llm_client is None:

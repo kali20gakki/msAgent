@@ -173,6 +173,33 @@ def test_get_system_prompt_includes_connected_servers(monkeypatch: pytest.Monkey
     assert "msAgent" in prompt
 
 
+def test_get_status_returns_frontend_snapshot(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_mcp = FakeMCPManager()
+    fake_mcp.connected_servers = ["filesystem"]
+    monkeypatch.setattr(agent_module, "mcp_manager", fake_mcp)
+
+    class FakeClient:
+        def __init__(self) -> None:
+            self.last_usage = {
+                "prompt_tokens": 12,
+                "completion_tokens": 4,
+                "total_tokens": 16,
+            }
+
+    agent = Agent(make_config())
+    agent._initialized = True
+    agent._loaded_skills = ["code-review"]
+    agent.llm_client = FakeClient()
+
+    status = agent.get_status()
+
+    assert status.is_initialized is True
+    assert status.connected_servers == ("filesystem",)
+    assert status.loaded_skills == ("code-review",)
+    assert status.usage is not None
+    assert status.usage.total_tokens == 16
+
+
 @pytest.mark.asyncio
 async def test_chat_returns_error_if_not_initialized() -> None:
     agent = Agent(make_config())

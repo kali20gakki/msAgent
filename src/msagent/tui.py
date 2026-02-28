@@ -4,13 +4,14 @@ import asyncio
 import json
 from typing import Any
 
-from rich.markdown import Markdown as RichMarkdown
 from rich.console import RenderableType
+from rich.markdown import Markdown as RichMarkdown
 from rich.text import Text
 from textual import events
-from textual.css.query import NoMatches
 from textual.app import App, ComposeResult
+from textual.binding import Binding
 from textual.containers import Container, Horizontal, VerticalScroll, Vertical
+from textual.css.query import NoMatches
 from textual.screen import Screen
 from textual.widgets import (
     Input,
@@ -19,9 +20,9 @@ from textual.widgets import (
     Static,
     TextArea,
 )
-from textual.binding import Binding
 
 from .agent import Agent
+from .interfaces import AgentBackend, AgentStatus
 
 
 class MessageWidget(Container):
@@ -444,12 +445,7 @@ class ChatWelcomeBanner(Vertical):
     def compose(self) -> ComposeResult:
         yield Label("✱ msAgent initialized. How can I help you?", classes="welcome-message")
 
-        if self._mcp_servers is None:
-            from .mcp_client import mcp_manager
-
-            servers = mcp_manager.get_connected_servers()
-        else:
-            servers = self._mcp_servers
+        servers = self._mcp_servers or []
         if servers:
             server_str = ", ".join(servers)
             yield Label(f"🔌 Connected MCP Servers: {server_str}", classes="mcp-status")
@@ -726,13 +722,16 @@ class WelcomeScreen(Screen):
         """Monitor agent initialization status."""
         try:
             # Wait for agent to be initialized by the App worker
-            while not self.app.agent.is_initialized and not self.app.agent.error_message:
+            while True:
+                status = self.app.backend.get_status()
+                if status.is_initialized or status.error_message:
+                    break
                 await asyncio.sleep(0.1)
             
-            if self.app.agent.error_message:
+            if status.error_message:
                 # Show error
                 self.query_one("#loading").add_class("hidden")
-                self.query_one("#status-text").update(f"❌ Error: {self.app.agent.error_message}")
+                self.query_one("#status-text").update(f"❌ Error: {status.error_message}")
             else:
                 # Update UI
                 self.query_one("#loading").add_class("hidden")
@@ -778,24 +777,16 @@ class ChatScreen(Screen):
 
     async def on_mount(self) -> None:
         """Called when screen is mounted."""
-        # Check if agent is already initialized in app
-        agent = self.app.agent
-        
-        # We can trigger a small welcome message in the chat
+        status = self._get_status()
         chat_area = self.query_one("#chat-area", ChatArea)
-        
-        if agent.is_initialized:
-            from .mcp_client import mcp_manager
 
-            chat_area.mount(
-                ChatWelcomeBanner(
-                    mcp_servers=mcp_manager.get_connected_servers(),
-                    loaded_skills=agent.get_loaded_skills(),
-                )
-            )
+        if status.is_initialized:
+            self._mount_welcome_banner(chat_area, status)
         else:
-            # If not initialized (should not happen if we init in app.on_mount, but just in case)
-            await chat_area.add_message("system", agent.error_message)
+            await chat_area.add_message(
+                "system",
+                status.error_message or "Agent not initialized",
+            )
 
         # Focus input
         self.query_one("#message-input", Input).focus()
@@ -925,8 +916,12 @@ class ChatScreen(Screen):
             await chat_area.add_message("user", message)
             chat_area.scroll_end(animate=False)
             
-            if not app.agent.is_initialized:
-                await chat_area.add_message("system", app.agent.error_message or "Agent not initialized")
+            status = self._get_status()
+            if not status.is_initialized:
+                await chat_area.add_message(
+                    "system",
+                    status.error_message or "Agent not initialized",
+                )
                 return
             
             # 2. 创建加载消息并启动动画
@@ -944,8 +939,8 @@ class ChatScreen(Screen):
             pending_tool_widgets: list[MessageWidget] = []
             
             try:
-                async for event in app.agent.chat_stream_events(message):
-                    event_type = event.get("type")
+                async for event in app.backend.stream_chat_events(message):
+                    event_type = event.type
 
                     if event_type == "tool_call":
                         # 当前 assistant 段落结束，后续回答应显示在 tool 提示下方
@@ -958,9 +953,9 @@ class ChatScreen(Screen):
                             # 还未收到文本时，移除占位 thinking，避免界面残留“卡住”提示
                             await response_widget.remove()
 
-                        server = event.get("server", "unknown")
-                        tool = event.get("tool", "unknown_tool")
-                        tool_input = self._format_tool_input(event.get("input"))
+                        server = event.server or "unknown"
+                        tool = event.tool or "unknown_tool"
+                        tool_input = self._format_tool_input(event.payload)
                         tool_widget = await chat_area.add_message(
                             "tool",
                             f"Calling MCP tool: `{server}__{tool}`",
@@ -979,7 +974,7 @@ class ChatScreen(Screen):
                         continue
 
                     if event_type == "tool_result":
-                        tool_output, output_truncated = self._format_tool_output(event.get("output"))
+                        tool_output, output_truncated = self._format_tool_output(event.payload)
                         if pending_tool_widgets:
                             pending_tool_widgets.pop(0).update_tool_output(
                                 tool_output,
@@ -990,16 +985,15 @@ class ChatScreen(Screen):
                         continue
 
                     if event_type == "error":
-                        err = event.get("content")
-                        if isinstance(err, str) and err:
+                        if event.content:
                             if not first_chunk_received:
                                 stop_animation.set()
                                 if not animation_task.done():
                                     await animation_task
                                 first_chunk_received = True
-                                response_text = err
+                                response_text = event.content
                             else:
-                                response_text += err
+                                response_text += event.content
                             response_widget.update_content_fast(response_text)
                             chat_area.scroll_end(animate=False)
                             await asyncio.sleep(0)
@@ -1008,8 +1002,8 @@ class ChatScreen(Screen):
                     if event_type != "text":
                         continue
 
-                    chunk = event.get("content")
-                    if not isinstance(chunk, str) or not chunk:
+                    chunk = event.content
+                    if not chunk:
                         continue
 
                     if not first_chunk_received:
@@ -1075,12 +1069,8 @@ class ChatScreen(Screen):
                 chat_area.scroll_end(animate=False)
 
     def _update_footer_tokens(self) -> None:
-        usage = getattr(self.app.agent.llm_client, "last_usage", None)
-        total_tokens: int | None = None
-        if isinstance(usage, dict):
-            val = usage.get("total_tokens")
-            if isinstance(val, int):
-                total_tokens = val
+        usage = self._get_status().usage
+        total_tokens = usage.total_tokens if usage is not None else None
         token_text = (
             f"tokens: {self._format_token_count(total_tokens)}"
             if total_tokens is not None
@@ -1093,27 +1083,21 @@ class ChatScreen(Screen):
         self._update_footer_context()
 
     def _update_footer_model(self) -> None:
-        llm_cfg = self.app.agent.config.llm
-        provider = (llm_cfg.provider or "unknown").strip()
-        model = (llm_cfg.model or "unknown").strip()
+        status = self._get_status()
         footer = self._query_footer()
         if footer is None:
             return
-        footer.set_model_status(f"model: {provider}/{model}")
+        footer.set_model_status(f"model: {status.provider}/{status.model}")
 
     def _update_footer_session(self) -> None:
         footer = self._query_footer()
         if footer is None:
             return
-        footer.set_session_status(f"session: #{self.app.agent.session_number}")
+        footer.set_session_status(f"session: #{self._get_status().session_number}")
 
     def _update_footer_context(self) -> None:
-        usage = getattr(self.app.agent.llm_client, "last_usage", None)
-        prompt_tokens: int | None = None
-        if isinstance(usage, dict):
-            val = usage.get("prompt_tokens")
-            if isinstance(val, int):
-                prompt_tokens = val
+        usage = self._get_status().usage
+        prompt_tokens = usage.prompt_tokens if usage is not None else None
 
         if prompt_tokens is None:
             footer = self._query_footer()
@@ -1125,6 +1109,17 @@ class ChatScreen(Screen):
         if footer is None:
             return
         footer.set_context_status(f"prompt: {self._format_token_count(prompt_tokens)}")
+
+    def _get_status(self) -> AgentStatus:
+        return self.app.backend.get_status()
+
+    def _mount_welcome_banner(self, chat_area: ChatArea, status: AgentStatus) -> None:
+        chat_area.mount(
+            ChatWelcomeBanner(
+                mcp_servers=list(status.connected_servers),
+                loaded_skills=list(status.loaded_skills),
+            )
+        )
 
     def _query_footer(self) -> CustomFooter | None:
         try:
@@ -1145,7 +1140,7 @@ class ChatScreen(Screen):
         if self.app.is_processing:
             self.notify("Stop current response before clearing chat.", severity="warning")
             return
-        self.app.agent.clear_history()
+        self.app.backend.clear_history()
         self._reset_chat_area("Chat history cleared.")
         self._update_footer_tokens()
         self._update_footer_session()
@@ -1154,7 +1149,7 @@ class ChatScreen(Screen):
         if self.app.is_processing:
             self.notify("Stop current response before starting a new session.", severity="warning")
             return
-        new_session_number = self.app.agent.start_new_session()
+        new_session_number = self.app.backend.start_new_session()
         self._reset_chat_area(f"Started new session #{new_session_number}. Context cleared.")
         self._update_footer_tokens()
         self._update_footer_session()
@@ -1162,14 +1157,7 @@ class ChatScreen(Screen):
     def _reset_chat_area(self, system_message: str) -> None:
         chat_area = self.query_one("#chat-area", ChatArea)
         chat_area.remove_children()
-        from .mcp_client import mcp_manager
-
-        chat_area.mount(
-            ChatWelcomeBanner(
-                mcp_servers=mcp_manager.get_connected_servers(),
-                loaded_skills=self.app.agent.get_loaded_skills(),
-            )
-        )
+        self._mount_welcome_banner(chat_area, self._get_status())
         chat_area.run_worker(self._add_system_message(chat_area, system_message))
 
     def _refresh_at_candidates(self, input_widget: Input) -> None:
@@ -1183,7 +1171,7 @@ class ChatScreen(Screen):
             return
 
         query, start, end = token
-        self._at_matches = self.app.agent.find_local_files(query, limit=30)
+        self._at_matches = self.app.backend.find_local_files(query, limit=30)
         self._at_target_range = (start, end)
         self._at_selected_index = 0
         self._render_at_suggestions(self._at_matches)
@@ -1351,10 +1339,27 @@ class MSAgentApp(App):
     }
     """
     
-    def __init__(self, **kwargs: Any):
-        self.agent = Agent()
+    def __init__(self, backend: AgentBackend | None = None, **kwargs: Any):
+        self._backend: AgentBackend = backend or Agent()
         self.is_processing = False
         super().__init__(**kwargs)
+
+    @property
+    def backend(self) -> AgentBackend:
+        return self._backend
+
+    @backend.setter
+    def backend(self, value: AgentBackend) -> None:
+        self._backend = value
+
+    @property
+    def agent(self) -> AgentBackend:
+        """Backward-compatible alias."""
+        return self._backend
+
+    @agent.setter
+    def agent(self, value: AgentBackend) -> None:
+        self._backend = value
         
     async def on_mount(self) -> None:
         # Start the agent lifecycle worker immediately
@@ -1367,7 +1372,7 @@ class MSAgentApp(App):
         """Manages the agent connection lifecycle."""
         try:
             # Connect
-            await self.agent.initialize()
+            await self.backend.initialize()
             
             # Wait until cancelled (app shutdown)
             await asyncio.Event().wait()
@@ -1375,10 +1380,9 @@ class MSAgentApp(App):
             pass
         finally:
             # Disconnect in the same task
-            if self.agent.is_initialized:
-                await self.agent.shutdown()
+            await self.backend.shutdown()
 
-def run_tui() -> None:
+def run_tui(backend: AgentBackend | None = None) -> None:
     """Run the TUI application."""
-    app = MSAgentApp()
+    app = MSAgentApp() if backend is None else MSAgentApp(backend=backend)
     app.run()
