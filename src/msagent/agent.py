@@ -259,6 +259,17 @@ class Agent:
                         }
                     continue
 
+                if event_type == "tool_end":
+                    tool_name = chunk.get("name")
+                    if isinstance(tool_name, str) and tool_name:
+                        yield {
+                            "type": "tool_result",
+                            "full_name": tool_name,
+                            "output": chunk.get("output"),
+                            **self._split_tool_name(tool_name),
+                        }
+                    continue
+
             if not full_response:
                 fallback = await asyncio.wait_for(
                     self.llm_client.chat(all_messages, tools=tools if tools else None),

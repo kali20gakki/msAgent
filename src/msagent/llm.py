@@ -133,7 +133,11 @@ class DeepAgentsClient:
             if event_name == "on_tool_end":
                 data = event.get("data", {})
                 tool_name = event.get("name") or data.get("name") or "unknown_tool"
-                yield {"type": "tool_end", "name": str(tool_name)}
+                yield {
+                    "type": "tool_end",
+                    "name": str(tool_name),
+                    "output": data.get("output"),
+                }
                 continue
 
         if not got_chunk:

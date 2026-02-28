@@ -134,6 +134,32 @@ class MessageWidget(Container):
         max-height: 12;
         color: #93a0b8;
     }
+
+    .tool-output-wrap {
+        height: auto;
+        margin-top: 0;
+        padding: 0;
+    }
+
+    .tool-output-toggle {
+        color: #9eacc7;
+        text-style: dim;
+        background: transparent;
+        height: 1;
+        min-height: 1;
+        padding: 0;
+        margin: 0;
+    }
+
+    .tool-output-area {
+        margin-top: 1;
+        border: round #4c566a;
+        background: #191d24;
+        padding: 0 1;
+        height: auto;
+        max-height: 18;
+        color: #b5c0d5;
+    }
     
     /* 可选择的文本区域 */
     .selectable-text {
@@ -166,11 +192,15 @@ class MessageWidget(Container):
         content: str,
         *,
         tool_input_text: str | None = None,
+        tool_output_text: str | None = None,
+        tool_output_truncated: bool = False,
         **kwargs: Any,
     ):
         self.role = role
         self.content = content
         self.tool_input_text = tool_input_text
+        self.tool_output_text = tool_output_text
+        self.tool_output_truncated = tool_output_truncated
         super().__init__(**kwargs)
     
     def compose(self) -> ComposeResult:
@@ -207,14 +237,36 @@ class MessageWidget(Container):
                 classes="selectable-text",
                 show_line_numbers=False
             )
-            if self.tool_input_text:
-                with Container(classes="tool-input-wrap"):
-                    yield Label("▶ Input params (click to expand)", id="tool-input-toggle", classes="tool-input-toggle")
+            if self.role == "tool":
+                if self.tool_input_text:
+                    with Container(classes="tool-input-wrap"):
+                        yield Label(
+                            "▶ Input params (click to expand)",
+                            id="tool-input-toggle",
+                            classes="tool-input-toggle",
+                        )
+                        yield CopyableTextArea(
+                            self.tool_input_text,
+                            id="tool-input-text",
+                            read_only=True,
+                            classes="selectable-text tool-input-area hidden",
+                            show_line_numbers=False,
+                        )
+
+                output_wrap_class = "tool-output-wrap"
+                if not self.tool_output_text:
+                    output_wrap_class = "tool-output-wrap hidden"
+                with Container(id="tool-output-wrap", classes=output_wrap_class):
+                    yield Label(
+                        self._tool_output_toggle_label(expanded=False),
+                        id="tool-output-toggle",
+                        classes="tool-output-toggle",
+                    )
                     yield CopyableTextArea(
-                        self.tool_input_text,
-                        id="tool-input-text",
+                        self.tool_output_text or "",
+                        id="tool-output-text",
                         read_only=True,
-                        classes="selectable-text tool-input-area hidden",
+                        classes="selectable-text tool-output-area hidden",
                         show_line_numbers=False,
                     )
 
@@ -247,6 +299,36 @@ class MessageWidget(Container):
             self.query_one("#render-md", Static).remove_class("hidden")
         except NoMatches:
             return
+
+    def _tool_output_toggle_label(self, *, expanded: bool) -> str:
+        suffix = " (truncated)" if self.tool_output_truncated else ""
+        action = "collapse" if expanded else "expand"
+        arrow = "▼" if expanded else "▶"
+        return f"{arrow} Output{suffix} (click to {action})"
+
+    def update_tool_output(self, content: str | None, *, truncated: bool = False) -> None:
+        if self.role != "tool":
+            return
+        self.tool_output_truncated = truncated
+        self.tool_output_text = content
+        try:
+            output_wrap = self.query_one("#tool-output-wrap", Container)
+            output_toggle = self.query_one("#tool-output-toggle", Label)
+            output_text = self.query_one("#tool-output-text", CopyableTextArea)
+        except NoMatches:
+            return
+
+        if not content:
+            output_wrap.add_class("hidden")
+            output_text.text = ""
+            output_text.add_class("hidden")
+            output_toggle.update(self._tool_output_toggle_label(expanded=False))
+            return
+
+        output_wrap.remove_class("hidden")
+        output_text.text = content
+        output_text.add_class("hidden")
+        output_toggle.update(self._tool_output_toggle_label(expanded=False))
 
     def on_click(self, event: events.Click) -> None:
         """Handle click events."""
@@ -286,6 +368,18 @@ class MessageWidget(Container):
             else:
                 input_widget.add_class("hidden")
                 btn.update("▶ Input params (click to expand)")
+        elif event.widget.id == "tool-output-toggle":
+            try:
+                output_widget = self.query_one("#tool-output-text", CopyableTextArea)
+            except NoMatches:
+                return
+            btn = event.widget
+            if "hidden" in output_widget.classes:
+                output_widget.remove_class("hidden")
+                btn.update(self._tool_output_toggle_label(expanded=True))
+            else:
+                output_widget.add_class("hidden")
+                btn.update(self._tool_output_toggle_label(expanded=False))
 
 
 class CopyableTextArea(TextArea):
@@ -420,10 +514,22 @@ class ChatArea(VerticalScroll):
         yield from []
     
     async def add_message(
-        self, role: str, content: str, *, tool_input_text: str | None = None
+        self,
+        role: str,
+        content: str,
+        *,
+        tool_input_text: str | None = None,
+        tool_output_text: str | None = None,
+        tool_output_truncated: bool = False,
     ) -> MessageWidget:
         """Add a message to the chat area."""
-        widget = MessageWidget(role, content, tool_input_text=tool_input_text)
+        widget = MessageWidget(
+            role,
+            content,
+            tool_input_text=tool_input_text,
+            tool_output_text=tool_output_text,
+            tool_output_truncated=tool_output_truncated,
+        )
         await self.mount(widget)
         widget.scroll_visible()
         return widget
@@ -650,6 +756,7 @@ class ChatScreen(Screen):
         Binding("ctrl+c", "quit", "Quit", show=False),
         Binding("ctrl+l", "clear", "Clear Chat", show=False),
     ]
+    _MAX_TOOL_OUTPUT_CHARS = 4000
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
@@ -824,7 +931,7 @@ class ChatScreen(Screen):
             response_widget = loading_widget
             response_text = ""
             first_chunk_received = False
-            chunk_count = 0
+            pending_tool_widgets: list[MessageWidget] = []
             
             try:
                 async for event in app.agent.chat_stream_events(message):
@@ -844,11 +951,12 @@ class ChatScreen(Screen):
                         server = event.get("server", "unknown")
                         tool = event.get("tool", "unknown_tool")
                         tool_input = self._format_tool_input(event.get("input"))
-                        await chat_area.add_message(
+                        tool_widget = await chat_area.add_message(
                             "tool",
                             f"Calling MCP tool: `{server}__{tool}`",
                             tool_input_text=tool_input,
                         )
+                        pending_tool_widgets.append(tool_widget)
                         response_widget = await chat_area.add_message("assistant", "⠋ Thinking...")
                         response_text = ""
                         first_chunk_received = False
@@ -856,6 +964,17 @@ class ChatScreen(Screen):
                         animation_task = asyncio.create_task(
                             self._animate_loading(response_widget, stop_animation)
                         )
+                        chat_area.scroll_end(animate=False)
+                        await asyncio.sleep(0)
+                        continue
+
+                    if event_type == "tool_result":
+                        tool_output, output_truncated = self._format_tool_output(event.get("output"))
+                        if pending_tool_widgets:
+                            pending_tool_widgets.pop(0).update_tool_output(
+                                tool_output,
+                                truncated=output_truncated,
+                            )
                         chat_area.scroll_end(animate=False)
                         await asyncio.sleep(0)
                         continue
@@ -882,8 +1001,6 @@ class ChatScreen(Screen):
                     chunk = event.get("content")
                     if not isinstance(chunk, str) or not chunk:
                         continue
-
-                    chunk_count += 1
 
                     if not first_chunk_received:
                         # 停止加载动画
@@ -1095,6 +1212,15 @@ class ChatScreen(Screen):
         await chat_area.add_message("system", message)
 
     def _format_tool_input(self, value: Any) -> str | None:
+        return self._format_tool_payload(value)
+
+    def _format_tool_output(self, value: Any) -> tuple[str | None, bool]:
+        payload = self._format_tool_payload(value)
+        if payload is None:
+            return (None, False)
+        return self._truncate_for_tool_output(payload)
+
+    def _format_tool_payload(self, value: Any) -> str | None:
         if value is None:
             return None
         if isinstance(value, str):
@@ -1112,6 +1238,15 @@ class ChatScreen(Screen):
             except Exception:
                 return str(value)
         return str(value)
+
+    def _truncate_for_tool_output(self, text: str) -> tuple[str, bool]:
+        if len(text) <= self._MAX_TOOL_OUTPUT_CHARS:
+            return (text, False)
+
+        kept = text[: self._MAX_TOOL_OUTPUT_CHARS].rstrip()
+        omitted = len(text) - self._MAX_TOOL_OUTPUT_CHARS
+        suffix = f"\n\n...[{omitted} chars omitted]..."
+        return (f"{kept}{suffix}", True)
 
     def _set_send_button_state(self, processing: bool) -> None:
         try:
