@@ -219,8 +219,8 @@ class MessageWidget(Container):
             with Horizontal(classes="header-row"):
                 yield Static(" ", classes="role-label")
                 with Horizontal(classes="actions"):
-                    yield Label("Copy", id="copy-btn", classes="action-btn")
-                    yield Label("Raw", id="raw-btn", classes="action-btn")
+                    yield Label("复制", id="copy-btn", classes="action-btn")
+                    yield Label("原文", id="raw-btn", classes="action-btn")
             
             # Markdown 渲染视图（默认隐藏，流式输出完成后显示）
             yield Static(RichMarkdown(self.content), id="render-md", classes="content-area hidden")
@@ -237,7 +237,7 @@ class MessageWidget(Container):
                 if self.tool_input_text:
                     with Container(classes="tool-input-wrap"):
                         yield Label(
-                            "▶ Input params (click to expand)",
+                            "▶ 输入参数（点击展开）",
                             id="tool-input-toggle",
                             classes="tool-input-toggle",
                         )
@@ -297,10 +297,10 @@ class MessageWidget(Container):
             return
 
     def _tool_output_toggle_label(self, *, expanded: bool) -> str:
-        suffix = " (truncated)" if self.tool_output_truncated else ""
-        action = "collapse" if expanded else "expand"
+        suffix = "（已截断）" if self.tool_output_truncated else ""
+        action = "收起" if expanded else "展开"
         arrow = "▼" if expanded else "▶"
-        return f"{arrow} Output{suffix} (click to {action})"
+        return f"{arrow} 输出{suffix}（点击{action}）"
 
     def update_tool_output(self, content: str | None, *, truncated: bool = False) -> None:
         if self.role != "tool":
@@ -332,10 +332,10 @@ class MessageWidget(Container):
             try:
                 import pyperclip
                 pyperclip.copy(self.content)
-                self.app.notify("Copied to clipboard", severity="information")
+                self.app.notify("已复制到剪贴板", severity="information")
             except Exception:
                 self.app.copy_to_clipboard(self.content)
-                self.app.notify("Copied (fallback)", severity="information")
+                self.app.notify("已复制（备用方式）", severity="information")
         elif event.widget.id == "raw-btn":
             md_widget = self.query_one("#render-md", Static)
             text_widget = self.query_one("#content-text", CopyableTextArea)
@@ -346,12 +346,12 @@ class MessageWidget(Container):
                 text_widget.remove_class("hidden")
                 md_widget.add_class("hidden")
                 # Label 不支持直接修改 label 属性，使用 update
-                btn.update("View")
+                btn.update("渲染")
             else:
                 # 切换回 Markdown 渲染模式
                 text_widget.add_class("hidden")
                 md_widget.remove_class("hidden")
-                btn.update("Raw")
+                btn.update("原文")
         elif event.widget.id == "tool-input-toggle":
             try:
                 input_widget = self.query_one("#tool-input-text", CopyableTextArea)
@@ -360,10 +360,10 @@ class MessageWidget(Container):
             btn = event.widget
             if "hidden" in input_widget.classes:
                 input_widget.remove_class("hidden")
-                btn.update("▼ Input params (click to collapse)")
+                btn.update("▼ 输入参数（点击收起）")
             else:
                 input_widget.add_class("hidden")
-                btn.update("▶ Input params (click to expand)")
+                btn.update("▶ 输入参数（点击展开）")
         elif event.widget.id == "tool-output-toggle":
             try:
                 output_widget = self.query_one("#tool-output-text", CopyableTextArea)
@@ -382,7 +382,7 @@ class CopyableTextArea(TextArea):
     """TextArea with copy support."""
     
     BINDINGS = [
-        Binding("ctrl+c", "copy_selection", "Copy", show=False),
+        Binding("ctrl+c", "copy_selection", "复制", show=False),
     ]
     
     def action_copy_selection(self) -> None:
@@ -391,13 +391,13 @@ class CopyableTextArea(TextArea):
             try:
                 import pyperclip
                 pyperclip.copy(self.selected_text)
-                self.app.notify("Selection copied", severity="information")
+                self.app.notify("已复制选中文本", severity="information")
             except Exception:
                 self.app.copy_to_clipboard(self.selected_text)
-                self.app.notify("Selection copied", severity="information")
+                self.app.notify("已复制选中文本", severity="information")
         else:
             # If nothing selected, maybe quit? No, better safe than sorry.
-            self.app.notify("No text selected", severity="warning")
+            self.app.notify("未选择文本", severity="warning")
 
 
 class ChatWelcomeBanner(Vertical):
@@ -444,15 +444,15 @@ class ChatWelcomeBanner(Vertical):
         self._loaded_skills = loaded_skills or []
 
     def compose(self) -> ComposeResult:
-        yield Label("✱ msAgent initialized. How can I help you?", classes="welcome-message")
+        yield Label("✱ msAgent 已就绪，我可以帮你做什么？", classes="welcome-message")
 
         servers = self._mcp_servers or []
         if servers:
             server_str = ", ".join(servers)
-            yield Label(f"🔌 Connected MCP Servers: {server_str}", classes="mcp-status")
+            yield Label(f"🔌 已连接 MCP 服务器：{server_str}", classes="mcp-status")
         if self._loaded_skills:
             skills_str = ", ".join(self._loaded_skills)
-            yield Label(f"🧠 Loaded Skills: {skills_str}", classes="skills-status")
+            yield Label(f"🧠 已加载技能：{skills_str}", classes="skills-status")
 
 class CustomFooter(Static):
     """Custom footer with shortcuts."""
@@ -470,11 +470,11 @@ class CustomFooter(Static):
     
     def __init__(self, **kwargs: Any):
         super().__init__(**kwargs)
-        self._base = "/ for commands"
-        self._session_status = "session: #1"
-        self._model_status = "model: unknown"
-        self._context_status = "prompt: N/A"
-        self._token_status = "tokens: 0"
+        self._base = "/ 打开命令"
+        self._session_status = "会话: #1"
+        self._model_status = "模型: unknown"
+        self._context_status = "提示词: N/A"
+        self._token_status = "Token: 0"
 
     def set_session_status(self, status: str) -> None:
         self._session_status = status
@@ -537,7 +537,7 @@ class ChatArea(VerticalScroll):
 class SendButton(Static):
     """Compact send/stop control with deterministic centered text."""
 
-    def __init__(self, text: str = "Send", **kwargs: Any) -> None:
+    def __init__(self, text: str = "发送", **kwargs: Any) -> None:
         super().__init__("", **kwargs)
         self._text = text
 
@@ -631,10 +631,10 @@ class InputArea(Container):
         with Horizontal(classes="input-row"):
             yield Label(">", classes="prompt-label")
             yield Input(
-                placeholder="Type your message...  (@file, ↑/↓ select, Enter/Tab complete)",
+                placeholder="向msAgent提问",
                 id="message-input",
             )
-            yield SendButton("Send", id="send-btn")
+            yield SendButton("发送", id="send-btn")
 
 class WelcomeScreen(Screen):
     """Full screen welcome page."""
@@ -690,7 +690,7 @@ class WelcomeScreen(Screen):
     """
     
     BINDINGS = [
-        Binding("enter", "continue", "Continue"),
+        Binding("enter", "continue", "继续"),
     ]
     
     def compose(self) -> ComposeResult:
@@ -704,15 +704,15 @@ class WelcomeScreen(Screen):
 """
         
         with Vertical(classes="welcome-container"):
-            yield Label("✱ Welcome to msAgent", classes="welcome-box")
+            yield Label("✱ 欢迎使用 msAgent", classes="welcome-box")
             yield Static(ascii_text, classes="ascii-art")
             
             # Loading state components
             yield LoadingIndicator(id="loading")
-            yield Label("Initializing agent and MCP tools...", id="status-text", classes="status-text")
+            yield Label("正在初始化 Agent 与 MCP 工具...", id="status-text", classes="status-text")
             
             # Ready state component (initially hidden)
-            t = Text.from_markup("Press [bold white]Enter[/bold white] to continue")
+            t = Text.from_markup("按 [bold white]Enter[/bold white] 继续")
             yield Label(t, id="continue-text", classes="continue-text hidden")
             
     async def on_mount(self) -> None:
@@ -732,7 +732,7 @@ class WelcomeScreen(Screen):
             if status.error_message:
                 # Show error
                 self.query_one("#loading").add_class("hidden")
-                self.query_one("#status-text").update(f"❌ Error: {status.error_message}")
+                self.query_one("#status-text").update(f"❌ 错误：{status.error_message}")
             else:
                 # Update UI
                 self.query_one("#loading").add_class("hidden")
@@ -744,7 +744,7 @@ class WelcomeScreen(Screen):
         except Exception as e:
             # Show error
             self.query_one("#loading").add_class("hidden")
-            self.query_one("#status-text").update(f"❌ Error: {e}")
+            self.query_one("#status-text").update(f"❌ 错误：{e}")
             
     def action_continue(self) -> None:
         if getattr(self, "is_ready", False):
@@ -755,9 +755,9 @@ class ChatScreen(Screen):
     """Main chat interface."""
     
     BINDINGS = [
-        Binding("ctrl+c", "quit", "Quit", show=False),
-        Binding("ctrl+l", "clear", "Clear Chat", show=False),
-        Binding("ctrl+n", "new_session", "New Session", show=False),
+        Binding("ctrl+c", "quit", "退出", show=False),
+        Binding("ctrl+l", "clear", "清空对话", show=False),
+        Binding("ctrl+n", "new_session", "新会话", show=False),
     ]
     _MAX_TOOL_OUTPUT_CHARS = 4000
 
@@ -786,7 +786,7 @@ class ChatScreen(Screen):
         else:
             await chat_area.add_message(
                 "system",
-                status.error_message or "Agent not initialized",
+                status.error_message or "Agent 尚未初始化",
             )
 
         # Focus input
@@ -901,7 +901,7 @@ class ChatScreen(Screen):
         while not stop_event.is_set():
             if not widget.is_mounted:
                 break
-            widget.update_content(f"{loading_frames[frame_idx]} Thinking...")
+            widget.update_content(f"{loading_frames[frame_idx]} 思考中...")
             frame_idx = (frame_idx + 1) % len(loading_frames)
             await asyncio.sleep(0.1)  # 100ms 更新一次
     
@@ -919,12 +919,12 @@ class ChatScreen(Screen):
             if not status.is_initialized:
                 await chat_area.add_message(
                     "system",
-                    status.error_message or "Agent not initialized",
+                    status.error_message or "Agent 尚未初始化",
                 )
                 return
             
             # 2. 创建加载消息并启动动画
-            loading_widget = await chat_area.add_message("assistant", "⠋ Thinking...")
+            loading_widget = await chat_area.add_message("assistant", "⠋ 思考中...")
             chat_area.scroll_end(animate=False)
             
             # 启动加载动画
@@ -957,11 +957,11 @@ class ChatScreen(Screen):
                         tool_input = self._format_tool_input(event.payload)
                         tool_widget = await chat_area.add_message(
                             "tool",
-                            f"Calling MCP tool: `{server}__{tool}`",
+                            f"调用 MCP 工具：`{server}__{tool}`",
                             tool_input_text=tool_input,
                         )
                         pending_tool_widgets.append(tool_widget)
-                        response_widget = await chat_area.add_message("assistant", "⠋ Thinking...")
+                        response_widget = await chat_area.add_message("assistant", "⠋ 思考中...")
                         response_text = ""
                         first_chunk_received = False
                         stop_animation = asyncio.Event()
@@ -1053,12 +1053,12 @@ class ChatScreen(Screen):
                 stop_animation.set()
                 if not animation_task.done():
                     await animation_task
-                response_widget.update_content("_No response received_")
+                response_widget.update_content("_未收到回复_")
                  
         except asyncio.CancelledError:
             return
         except Exception as e:
-            await chat_area.add_message("system", f"❌ Error: {str(e)}")
+            await chat_area.add_message("system", f"❌ 错误：{str(e)}")
         finally:
             app.is_processing = False
             self._current_worker = None
@@ -1071,9 +1071,9 @@ class ChatScreen(Screen):
         usage = self._get_status().usage
         total_tokens = usage.total_tokens if usage is not None else None
         token_text = (
-            f"tokens: {self._format_token_count(total_tokens)}"
+            f"Token: {self._format_token_count(total_tokens)}"
             if total_tokens is not None
-            else "tokens: N/A"
+            else "Token: N/A"
         )
         footer = self._query_footer()
         if footer is None:
@@ -1086,13 +1086,13 @@ class ChatScreen(Screen):
         footer = self._query_footer()
         if footer is None:
             return
-        footer.set_model_status(f"model: {status.provider}/{status.model}")
+        footer.set_model_status(f"模型: {status.provider}/{status.model}")
 
     def _update_footer_session(self) -> None:
         footer = self._query_footer()
         if footer is None:
             return
-        footer.set_session_status(f"session: #{self._get_status().session_number}")
+        footer.set_session_status(f"会话: #{self._get_status().session_number}")
 
     def _update_footer_context(self) -> None:
         usage = self._get_status().usage
@@ -1102,12 +1102,12 @@ class ChatScreen(Screen):
             footer = self._query_footer()
             if footer is None:
                 return
-            footer.set_context_status("prompt: N/A")
+            footer.set_context_status("提示词: N/A")
             return
         footer = self._query_footer()
         if footer is None:
             return
-        footer.set_context_status(f"prompt: {self._format_token_count(prompt_tokens)}")
+        footer.set_context_status(f"提示词: {self._format_token_count(prompt_tokens)}")
 
     def _get_status(self) -> AgentStatus:
         return self.app.service.get_status()
@@ -1137,19 +1137,19 @@ class ChatScreen(Screen):
 
     def action_clear(self) -> None:
         if self.app.is_processing:
-            self.notify("Stop current response before clearing chat.", severity="warning")
+            self.notify("请先停止当前回复，再清空对话。", severity="warning")
             return
         self.app.service.clear_history()
-        self._reset_chat_area("Chat history cleared.")
+        self._reset_chat_area("对话历史已清空。")
         self._update_footer_tokens()
         self._update_footer_session()
 
     def action_new_session(self) -> None:
         if self.app.is_processing:
-            self.notify("Stop current response before starting a new session.", severity="warning")
+            self.notify("请先停止当前回复，再开始新会话。", severity="warning")
             return
         new_session_number = self.app.service.start_new_session()
-        self._reset_chat_area(f"Started new session #{new_session_number}. Context cleared.")
+        self._reset_chat_area(f"已开始新会话 #{new_session_number}，上下文已清空。")
         self._update_footer_tokens()
         self._update_footer_session()
 
@@ -1265,7 +1265,7 @@ class ChatScreen(Screen):
 
         kept = text[: self._MAX_TOOL_OUTPUT_CHARS].rstrip()
         omitted = len(text) - self._MAX_TOOL_OUTPUT_CHARS
-        suffix = f"\n\n...[{omitted} chars omitted]..."
+        suffix = f"\n\n...[省略 {omitted} 个字符]..."
         return (f"{kept}{suffix}", True)
 
     def _set_send_button_state(self, processing: bool) -> None:
@@ -1274,10 +1274,10 @@ class ChatScreen(Screen):
         except NoMatches:
             return
         if processing:
-            btn.set_text("Stop")
+            btn.set_text("停止")
             btn.add_class("processing")
             return
-        btn.set_text("Send")
+        btn.set_text("发送")
         btn.remove_class("processing")
 
 
