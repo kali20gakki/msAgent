@@ -676,9 +676,8 @@ class WelcomeScreen(Screen):
     }
     
     .welcome-container {
-        width: 80%;
+        width: 63;
         height: auto;
-        align: center middle;
     }
     
     .welcome-box {
@@ -692,24 +691,27 @@ class WelcomeScreen(Screen):
     
     .ascii-art {
         color: $accent;
-        text-align: center;
-        margin-bottom: 4;
+        text-align: left;
+        margin-bottom: 2;
         width: 100%;
     }
     
     .continue-text {
         color: $text-muted;
         text-align: left;
+        width: 100%;
     }
     
     .status-text {
         color: $warning;
-        text-align: center;
+        text-align: left;
         margin-top: 1;
+        width: 100%;
     }
     
     LoadingIndicator {
         height: 1;
+        width: 100%;
         margin: 1 0;
         color: $accent;
     }
@@ -734,7 +736,6 @@ class WelcomeScreen(Screen):
 """
         
         with Vertical(classes="welcome-container"):
-            yield Label("✱ 欢迎使用 msAgent", classes="welcome-box")
             yield Static(ascii_text, classes="ascii-art")
             
             # Loading state components
