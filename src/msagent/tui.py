@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import time
 from typing import Any
 
 from rich.console import RenderableType
@@ -28,6 +29,8 @@ from .interfaces import AgentBackend, AgentStatus
 
 class MessageWidget(Container):
     """Widget to display a chat message."""
+
+    _STREAM_MARKDOWN_INTERVAL_S = 0.08
     
     DEFAULT_CSS = """
     MessageWidget {
@@ -197,6 +200,8 @@ class MessageWidget(Container):
         self.tool_input_text = tool_input_text
         self.tool_output_text = tool_output_text
         self.tool_output_truncated = tool_output_truncated
+        self._stream_markdown_enabled = False
+        self._last_markdown_render_ts = 0.0
         super().__init__(**kwargs)
     
     def compose(self) -> ComposeResult:
@@ -220,7 +225,7 @@ class MessageWidget(Container):
                 yield Static(" ", classes="role-label")
                 with Horizontal(classes="actions"):
                     yield Label("复制", id="copy-btn", classes="action-btn")
-                    yield Label("原文", id="raw-btn", classes="action-btn")
+                    yield Label("渲染", id="raw-btn", classes="action-btn")
             
             # Markdown 渲染视图（默认隐藏，流式输出完成后显示）
             yield Static(RichMarkdown(self.content), id="render-md", classes="content-area hidden")
@@ -271,30 +276,64 @@ class MessageWidget(Container):
         self.content = content
         try:
             self.query_one("#content-text", CopyableTextArea).text = content
-            # 同时更新 Markdown 内容，以备切换
-            self.query_one("#render-md", Static).update(RichMarkdown(content))
+            self._render_markdown(force=True)
         except NoMatches:
             # Widget may be removed during async updates.
             return
     
-    def update_content_fast(self, content: str) -> None:
+    def update_content_fast(self, content: str, *, render_markdown: bool = False) -> None:
         """快速更新内容（流式输出时使用）"""
         self.content = content
         try:
             self.query_one("#content-text", CopyableTextArea).text = content
+            if render_markdown or self._stream_markdown_enabled:
+                self._render_markdown(force=False)
+        except NoMatches:
+            return
+
+    def start_stream_markdown(self) -> None:
+        """Enable markdown rendering while streaming."""
+        self._stream_markdown_enabled = True
+        self._last_markdown_render_ts = 0.0
+        try:
+            self._set_render_mode("markdown")
+            self._render_markdown(force=True)
         except NoMatches:
             return
     
     def finalize_content(self) -> None:
         """流式输出完成，切换到美观的 Markdown 渲染模式"""
+        self._stream_markdown_enabled = False
         try:
-            # 更新 Markdown 视图
-            self.query_one("#render-md", Static).update(RichMarkdown(self.content))
-            # 切换视图：隐藏文本框，显示 Markdown
-            self.query_one("#content-text", CopyableTextArea).add_class("hidden")
-            self.query_one("#render-md", Static).remove_class("hidden")
+            self._render_markdown(force=True)
+            text_widget = self.query_one("#content-text", CopyableTextArea)
+            if "hidden" in text_widget.classes:
+                self._set_render_mode("markdown")
         except NoMatches:
             return
+
+    def _render_markdown(self, *, force: bool) -> None:
+        if not force:
+            now = time.monotonic()
+            if now - self._last_markdown_render_ts < self._STREAM_MARKDOWN_INTERVAL_S:
+                return
+            self._last_markdown_render_ts = now
+        else:
+            self._last_markdown_render_ts = time.monotonic()
+        self.query_one("#render-md", Static).update(RichMarkdown(self.content))
+
+    def _set_render_mode(self, mode: str) -> None:
+        md_widget = self.query_one("#render-md", Static)
+        text_widget = self.query_one("#content-text", CopyableTextArea)
+        raw_btn = self.query_one("#raw-btn", Label)
+        if mode == "raw":
+            text_widget.remove_class("hidden")
+            md_widget.add_class("hidden")
+            raw_btn.update("渲染")
+            return
+        text_widget.add_class("hidden")
+        md_widget.remove_class("hidden")
+        raw_btn.update("原文")
 
     def _tool_output_toggle_label(self, *, expanded: bool) -> str:
         suffix = "（已截断）" if self.tool_output_truncated else ""
@@ -337,21 +376,11 @@ class MessageWidget(Container):
                 self.app.copy_to_clipboard(self.content)
                 self.app.notify("已复制（备用方式）", severity="information")
         elif event.widget.id == "raw-btn":
-            md_widget = self.query_one("#render-md", Static)
             text_widget = self.query_one("#content-text", CopyableTextArea)
-            btn = event.widget
-            
             if "hidden" in text_widget.classes:
-                # 切换到纯文本模式（可选择）
-                text_widget.remove_class("hidden")
-                md_widget.add_class("hidden")
-                # Label 不支持直接修改 label 属性，使用 update
-                btn.update("渲染")
+                self._set_render_mode("raw")
             else:
-                # 切换回 Markdown 渲染模式
-                text_widget.add_class("hidden")
-                md_widget.remove_class("hidden")
-                btn.update("原文")
+                self._set_render_mode("markdown")
         elif event.widget.id == "tool-input-toggle":
             try:
                 input_widget = self.query_one("#tool-input-text", CopyableTextArea)
@@ -910,7 +939,7 @@ class ChatScreen(Screen):
         while not stop_event.is_set():
             if not widget.is_mounted:
                 break
-            widget.update_content(f"{loading_frames[frame_idx]} 思考中...")
+            widget.update_content_fast(f"{loading_frames[frame_idx]} 思考中...")
             frame_idx = (frame_idx + 1) % len(loading_frames)
             await asyncio.sleep(0.1)  # 100ms 更新一次
     
@@ -1000,9 +1029,12 @@ class ChatScreen(Screen):
                                     await animation_task
                                 first_chunk_received = True
                                 response_text = event.content
+                                response_widget.start_stream_markdown()
                             else:
                                 response_text += event.content
-                            response_widget.update_content_fast(response_text)
+                            response_widget.update_content_fast(
+                                response_text, render_markdown=True
+                            )
                             chat_area.scroll_end(animate=False)
                             await asyncio.sleep(0)
                         continue
@@ -1023,11 +1055,16 @@ class ChatScreen(Screen):
                         # 收到第一个 chunk，开始显示内容
                         first_chunk_received = True
                         response_text = chunk
-                        response_widget.update_content_fast(response_text)  # 使用快速更新
+                        response_widget.start_stream_markdown()
+                        response_widget.update_content_fast(
+                            response_text, render_markdown=True
+                        )
                     else:
                         # 追加内容并立即更新
                         response_text += chunk
-                        response_widget.update_content_fast(response_text)  # 使用快速更新
+                        response_widget.update_content_fast(
+                            response_text, render_markdown=True
+                        )
 
                     # 滚动到底部（不触发全局刷新）
                     chat_area.scroll_end(animate=False)
