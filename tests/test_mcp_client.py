@@ -13,46 +13,44 @@ from msagent.config import MCPConfig
 from msagent.mcp_client import MCPClient, MCPManager
 
 
-class FakeContent:
-    """Simple content object matching MCP response shape."""
+@pytest.mark.asyncio
+async def test_mcp_client_connect_passes_empty_args_to_adapter(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, Any] = {}
 
-    def __init__(self, content_type: str, text: str = "", mime_type: str = "") -> None:
-        self.type = content_type
-        self.text = text
-        self.mimeType = mime_type
+    class FakeAdapter:
+        def __init__(self, *, connections: dict[str, Any], **_: Any) -> None:
+            captured["connections"] = connections
 
+    monkeypatch.setattr(mcp_module, "MultiServerMCPClient", FakeAdapter)
+    monkeypatch.setattr(MCPClient, "_fetch_tools", AsyncMock())
 
-class FakeToolCallResult:
-    def __init__(self, content: list[FakeContent]) -> None:
-        self.content = content
+    client = MCPClient(MCPConfig(name="srv", command="msprof-mcp"))
+    connected = await client.connect()
 
-
-class FakeSession:
-    """Simple session for MCPClient tests."""
-
-    def __init__(self, result: FakeToolCallResult | None = None) -> None:
-        self.result = result or FakeToolCallResult([])
-
-    async def call_tool(self, tool_name: str, arguments: dict[str, Any]) -> FakeToolCallResult:
-        return self.result
+    assert connected is True
+    assert captured["connections"]["srv"]["args"] == []
 
 
 @pytest.mark.asyncio
 async def test_mcp_client_call_tool_returns_combined_text_and_images() -> None:
     client = MCPClient(MCPConfig(name="test", command="python"))
     client._connected = True
-    client.session = FakeSession(
-        FakeToolCallResult(
-            [
-                FakeContent("text", text="hello"),
-                FakeContent("image", mime_type="image/png"),
+    fake_tool = SimpleNamespace(
+        ainvoke=AsyncMock(
+            return_value=[
+                {"type": "text", "text": "hello"},
+                {"type": "image", "mime_type": "image/png"},
             ]
         )
     )
+    client._tool_map["tool"] = fake_tool
 
     result = await client.call_tool("tool", {"x": 1})
 
     assert result == "hello\n[Image: image/png]"
+    fake_tool.ainvoke.assert_awaited_once_with({"x": 1})
 
 
 @pytest.mark.asyncio
@@ -65,13 +63,13 @@ async def test_mcp_client_call_tool_requires_connection() -> None:
 
 @pytest.mark.asyncio
 async def test_mcp_client_fetch_tools_populates_openai_tool_schema() -> None:
-    response = SimpleNamespace(
-        tools=[
-            SimpleNamespace(name="sum", description="Add numbers", inputSchema={"type": "object"}),
-        ]
+    fake_tool = SimpleNamespace(
+        name="sum",
+        description="Add numbers",
+        args_schema={"type": "object"},
     )
     client = MCPClient(MCPConfig(name="test", command="python"))
-    client.session = SimpleNamespace(list_tools=AsyncMock(return_value=response))
+    client._adapter_client = SimpleNamespace(get_tools=AsyncMock(return_value=[fake_tool]))
 
     await client._fetch_tools()
 

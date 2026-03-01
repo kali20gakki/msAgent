@@ -15,7 +15,7 @@ dependencies = [
     "langchain-openai",
     "langchain-anthropic",
     "langchain-google-genai",
-    "mcp>=1.0.0",
+    "langchain-mcp-adapters",
     "pyperclip>=1.11.0",
     "msprof-mcp",  # 添加 msprof-mcp 作为依赖
 ]
