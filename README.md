@@ -151,6 +151,22 @@ skills/
 
 ---
 
+## 🏗️ 编译与打包
+
+### 打包 wheel（可直接 pip install）
+
+```bash
+bash scripts/build_whl.sh
+```
+
+打包完成后会在 `dist/` 目录生成 `msagent-*.whl`，可直接安装：
+
+```bash
+pip install dist/msagent-*.whl
+```
+
+---
+
 ## 👨‍💻 开发
 
 ```bash
