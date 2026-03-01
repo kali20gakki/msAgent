@@ -63,11 +63,21 @@ def test_resolve_user_input_commands() -> None:
 
     assert service.resolve_user_input("").type == "ignore"
     assert service.resolve_user_input("  /clear ").type == "clear"
-    assert service.resolve_user_input("/new-session").type == "new_session"
-    assert service.resolve_user_input(":q").type == "exit"
+    assert service.resolve_user_input("/new").type == "new_session"
+    assert service.resolve_user_input("/exit").type == "exit"
     chat_intent = service.resolve_user_input(" hello ")
     assert chat_intent.type == "chat"
     assert chat_intent.message == "hello"
+
+
+def test_find_commands_supports_prefix_and_description() -> None:
+    service = ChatApplicationService(FakeBackend())
+
+    suggestions = service.find_commands("/n", limit=5)
+
+    assert suggestions
+    assert suggestions[0] == ("/new", "开启新会话并清空上下文")
+    assert all(command in {"/new", "/clear", "/exit"} for command, _ in suggestions)
 
 
 @pytest.mark.asyncio

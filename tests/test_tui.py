@@ -13,7 +13,7 @@ from msagent.tui import ChatWelcomeBanner, CustomFooter, MSAgentApp, run_tui
 def test_custom_footer_render_contains_shortcuts() -> None:
     footer = CustomFooter()
     rendered = footer.render()
-    assert "/ 打开命令" in rendered
+    assert "/" not in rendered
     assert "会话:" in rendered
     assert "Token:" in rendered
 

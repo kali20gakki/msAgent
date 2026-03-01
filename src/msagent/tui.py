@@ -423,12 +423,14 @@ class ChatWelcomeBanner(Vertical):
         color: $success;
         padding-top: 1;
         border-top: solid #d8dee9;
+        width: 100%;
     }
 
     .skills-status {
         color: $accent;
         padding-top: 1;
         border-top: solid #d8dee9;
+        width: 100%;
     }
     """
 
@@ -452,7 +454,7 @@ class ChatWelcomeBanner(Vertical):
             yield Label(f"🔌 已连接 MCP 服务器：{server_str}", classes="mcp-status")
         if self._loaded_skills:
             skills_str = ", ".join(self._loaded_skills)
-            yield Label(f"🧠 已加载技能：{skills_str}", classes="skills-status")
+            yield Label(f"🧠 已加载SKILLS：{skills_str}", classes="skills-status")
 
 class CustomFooter(Static):
     """Custom footer with shortcuts."""
@@ -470,7 +472,6 @@ class CustomFooter(Static):
     
     def __init__(self, **kwargs: Any):
         super().__init__(**kwargs)
-        self._base = "/ 打开命令"
         self._session_status = "会话: #1"
         self._model_status = "模型: unknown"
         self._context_status = "提示词: N/A"
@@ -494,7 +495,7 @@ class CustomFooter(Static):
 
     def render(self) -> str:
         return (
-            f"{self._base} • {self._session_status} • {self._model_status} • "
+            f"{self._session_status} • {self._model_status} • "
             f"{self._context_status} • {self._token_status}"
         )
 
@@ -631,7 +632,7 @@ class InputArea(Container):
         with Horizontal(classes="input-row"):
             yield Label(">", classes="prompt-label")
             yield Input(
-                placeholder="向msAgent提问",
+                placeholder="向msAgent提问（@ 引用文件，/ 命令补全）",
                 id="message-input",
             )
             yield SendButton("发送", id="send-btn")
@@ -763,9 +764,9 @@ class ChatScreen(Screen):
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
-        self._at_matches: list[str] = []
-        self._at_target_range: tuple[int, int] | None = None
-        self._at_selected_index = 0
+        self._completion_matches: list[tuple[str, str]] = []
+        self._completion_target_range: tuple[int, int] | None = None
+        self._completion_selected_index = 0
         self._current_worker: Any | None = None
     
     def compose(self) -> ComposeResult:
@@ -795,7 +796,7 @@ class ChatScreen(Screen):
         self._update_footer_session()
         self._update_footer_context()
         self._update_footer_tokens()
-        self._render_at_suggestions([])
+        self._render_completion_suggestions([])
         self._set_send_button_state(False)
 
     def on_click(self, event: events.Click) -> None:
@@ -807,14 +808,18 @@ class ChatScreen(Screen):
         self.send_message()
 
     def on_input_changed(self, event: Input.Changed) -> None:
-        """Update @-path suggestions as user types."""
+        """Update completion suggestions as user types."""
         if event.input.id != "message-input":
             return
-        self._refresh_at_candidates(event.input)
+        self._refresh_completion_candidates(event.input)
 
     async def on_input_submitted(self, event: Input.Submitted) -> None:
         """处理输入提交事件"""
         if event.input.id != "message-input":
+            return
+        intent = self.app.service.resolve_user_input(event.input.value)
+        if intent.type != "chat":
+            self.send_message()
             return
         if self._try_apply_selected_completion(event.input):
             return
@@ -825,19 +830,23 @@ class ChatScreen(Screen):
         input_widget = self.query_one("#message-input", Input)
         if self.focused is not input_widget:
             return
-        if not self._at_matches or not self._at_target_range:
+        if not self._completion_matches or not self._completion_target_range:
             return
 
         if event.key == "up":
-            self._at_selected_index = (self._at_selected_index - 1) % len(self._at_matches)
-            self._render_at_suggestions(self._at_matches)
+            self._completion_selected_index = (
+                self._completion_selected_index - 1
+            ) % len(self._completion_matches)
+            self._render_completion_suggestions(self._completion_matches)
             event.stop()
             event.prevent_default()
             return
 
         if event.key == "down":
-            self._at_selected_index = (self._at_selected_index + 1) % len(self._at_matches)
-            self._render_at_suggestions(self._at_matches)
+            self._completion_selected_index = (
+                self._completion_selected_index + 1
+            ) % len(self._completion_matches)
+            self._render_completion_suggestions(self._completion_matches)
             event.stop()
             event.prevent_default()
             return
@@ -1159,21 +1168,32 @@ class ChatScreen(Screen):
         self._mount_welcome_banner(chat_area, self._get_status())
         chat_area.run_worker(self._add_system_message(chat_area, system_message))
 
-    def _refresh_at_candidates(self, input_widget: Input) -> None:
+    def _refresh_completion_candidates(self, input_widget: Input) -> None:
         cursor = getattr(input_widget, "cursor_position", len(input_widget.value))
-        token = self._extract_active_at_token(input_widget.value, cursor)
-        if token is None:
-            self._at_matches = []
-            self._at_target_range = None
-            self._at_selected_index = 0
-            self._render_at_suggestions([])
+        at_token = self._extract_active_at_token(input_widget.value, cursor)
+        if at_token is not None:
+            query, start, end = at_token
+            file_matches = self.app.service.find_local_files(query, limit=30)
+            self._completion_matches = [(f"@{path}", "") for path in file_matches]
+            self._completion_target_range = (start, end)
+            self._completion_selected_index = 0
+            self._render_completion_suggestions(self._completion_matches)
             return
 
-        query, start, end = token
-        self._at_matches = self.app.service.find_local_files(query, limit=30)
-        self._at_target_range = (start, end)
-        self._at_selected_index = 0
-        self._render_at_suggestions(self._at_matches)
+        slash_token = self._extract_active_slash_token(input_widget.value, cursor)
+        if slash_token is not None:
+            query, start, end = slash_token
+            command_matches = self.app.service.find_commands(query, limit=30)
+            self._completion_matches = list(command_matches)
+            self._completion_target_range = (start, end)
+            self._completion_selected_index = 0
+            self._render_completion_suggestions(self._completion_matches)
+            return
+
+        self._completion_matches = []
+        self._completion_target_range = None
+        self._completion_selected_index = 0
+        self._render_completion_suggestions([])
 
     def _extract_active_at_token(
         self, value: str, cursor: int
@@ -1192,29 +1212,67 @@ class ChatScreen(Screen):
             return None
         return (token, at_pos, cursor)
 
-    def _render_at_suggestions(self, items: list[str]) -> None:
+    def _extract_active_slash_token(
+        self, value: str, cursor: int
+    ) -> tuple[str, int, int] | None:
+        if cursor < 0 or cursor > len(value):
+            return None
+        if not value:
+            return None
+        if "\n" in value:
+            return None
+
+        start = 0
+        while start < len(value) and value[start].isspace():
+            start += 1
+        if start >= len(value):
+            return None
+        if value[start] != "/":
+            return None
+
+        if value[:start].strip():
+            return None
+        if value[cursor:].strip():
+            return None
+
+        query = value[start:cursor]
+        if not query:
+            query = "/"
+        if query[-1].isspace():
+            return None
+        return (query, start, len(value))
+
+    def _render_completion_suggestions(self, items: list[tuple[str, str]]) -> None:
         container = self.query_one("#at-suggestions", VerticalScroll)
         container.remove_children()
         if not items:
             container.add_class("hidden")
             return
         container.remove_class("hidden")
-        for idx, path in enumerate(items):
-            cls = "suggestion-item selected" if idx == self._at_selected_index else "suggestion-item"
-            container.mount(Label(path, classes=cls))
+        for idx, (value, detail) in enumerate(items):
+            cls = (
+                "suggestion-item selected"
+                if idx == self._completion_selected_index
+                else "suggestion-item"
+            )
+            text = value if not detail else f"{value}  {detail}"
+            container.mount(Label(text, classes=cls))
         selected_nodes = list(container.query(".suggestion-item.selected"))
         if selected_nodes:
             selected_nodes[0].scroll_visible(animate=False)
 
     def _try_apply_selected_completion(self, input_widget: Input) -> bool:
-        if not self._at_matches or not self._at_target_range:
+        if not self._completion_matches or not self._completion_target_range:
             return False
         cursor = getattr(input_widget, "cursor_position", len(input_widget.value))
-        if self._extract_active_at_token(input_widget.value, cursor) is None:
+        if (
+            self._extract_active_at_token(input_widget.value, cursor) is None
+            and self._extract_active_slash_token(input_widget.value, cursor) is None
+        ):
             return False
 
-        start, end = self._at_target_range
-        replacement = f"@{self._at_matches[self._at_selected_index]}"
+        start, end = self._completion_target_range
+        replacement = self._completion_matches[self._completion_selected_index][0]
         value = input_widget.value
         updated = value[:start] + replacement + value[end:]
         new_cursor = start + len(replacement)
@@ -1225,7 +1283,7 @@ class ChatScreen(Screen):
         input_widget.value = updated
         if hasattr(input_widget, "cursor_position"):
             input_widget.cursor_position = new_cursor
-        self._refresh_at_candidates(input_widget)
+        self._refresh_completion_candidates(input_widget)
         return True
 
     async def _add_system_message(self, chat_area: ChatArea, message: str) -> None:

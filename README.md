@@ -83,7 +83,7 @@ uv run msagent chat --tui
 
 参考 Codex / Claude Code 的交互体验，msAgent 现在支持一键切换到新会话：
 
-- 在 TUI 输入框中输入 `/new`（也支持 `/new-session`、`/session new`）
+- 在 TUI 输入框中输入 `/new`
 - 或使用快捷键 `Ctrl+N`
 - 切换后会立即清空上下文（历史消息与上下文 token），从全新 Session 开始对话
 

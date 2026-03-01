@@ -22,9 +22,14 @@ class UserIntent:
 class ChatApplicationService:
     """Coordinates frontend actions with backend use-cases."""
 
-    _EXIT_COMMANDS = frozenset({"/exit", "/quit", "/q", ":q"})
+    _EXIT_COMMANDS = frozenset({"/exit"})
     _CLEAR_COMMANDS = frozenset({"/clear"})
-    _NEW_SESSION_COMMANDS = frozenset({"/new", "/new-session", "/session new"})
+    _NEW_SESSION_COMMANDS = frozenset({"/new"})
+    _COMMAND_HELP: tuple[tuple[str, str], ...] = (
+        ("/new", "开启新会话并清空上下文"),
+        ("/clear", "清空当前会话历史"),
+        ("/exit", "退出 msAgent"),
+    )
 
     def __init__(self, backend: AgentBackend):
         self._backend = backend
@@ -75,3 +80,24 @@ class ChatApplicationService:
 
     def find_local_files(self, query: str, limit: int = 8) -> list[str]:
         return self._backend.find_local_files(query, limit=limit)
+
+    def find_commands(self, query: str, limit: int = 8) -> list[tuple[str, str]]:
+        normalized_query = " ".join(query.strip().lower().split())
+        if not normalized_query:
+            return list(self._COMMAND_HELP[:limit])
+
+        scored: list[tuple[int, int, str, str]] = []
+        for idx, (command, description) in enumerate(self._COMMAND_HELP):
+            normalized_command = " ".join(command.lower().split())
+            if normalized_command == normalized_query:
+                score = 0
+            elif normalized_command.startswith(normalized_query):
+                score = 1
+            elif normalized_query in normalized_command:
+                score = 2
+            else:
+                continue
+            scored.append((score, idx, command, description))
+
+        scored.sort(key=lambda item: (item[0], item[1], len(item[2]), item[2]))
+        return [(command, description) for _, _, command, description in scored[:limit]]
