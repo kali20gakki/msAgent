@@ -18,6 +18,10 @@
 - 🔌 MCP 扩展：基于 Model Context Protocol 接入工具（默认启用 `msprof-mcp`）
 - 🧠 Skills 扩展：自动加载 `skills/` 目录技能，复用领域分析流程和知识
 
+<p align="center">
+  <img src="https://raw.gitcode.com/kali20gakki1/Imageshack/raw/main/arch.png" alt="arch">
+</p>
+
 ---
 
 ## ⚡ 快速上手
