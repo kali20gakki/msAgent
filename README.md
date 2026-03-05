@@ -17,12 +17,14 @@
 - 🧩 集群性能问题：慢节点识别与从全局到单机的逐层定位
 - 🔌 MCP 扩展：基于 Model Context Protocol 接入工具（默认启用 `msprof-mcp`）
 - 🧠 Skills 扩展：自动加载 `skills/` 目录技能，复用领域分析流程和知识
+---
 
+## 使用示例
+- MFU计算
 <p align="center">
-  <img src="https://raw.gitcode.com/kali20gakki1/Imageshack/raw/main/arch.png" alt="arch">
+  <img src="https://raw.githubusercontent.com/kali20gakki/images/main/mfu.jpeg" alt="mfu">
 </p>
 
----
 
 ## ⚡ 快速上手
 
@@ -105,6 +107,12 @@ uv run msagent chat --tui
 
 ### 🤖 LLM 配置示例
 
+OpenAI:
+
+```bash
+uv run msagent config --llm-provider openai --llm-api-key "your-key" --llm-model "gpt-4o-mini"
+```
+
 Anthropic:
 
 ```bash
@@ -117,10 +125,12 @@ Gemini:
 uv run msagent config --llm-provider gemini --llm-api-key "your-key" --llm-model "gemini-2.0-flash"
 ```
 
-自定义 OpenAI 兼容接口：
+说明：OpenAI 兼容接口与 OpenAI Provider 共用 `openai`（通过 `--llm-base-url` 指向兼容服务）。
+
+OpenAI 兼容接口（自定义 Base URL）：
 
 ```bash
-uv run msagent config --llm-provider custom --llm-api-key "your-key" --llm-base-url "http://127.0.0.1:8045/v1" --llm-model "your-model-name"
+uv run msagent config --llm-provider openai --llm-api-key "your-key" --llm-base-url "http://127.0.0.1:8045/v1" --llm-model "your-model-name"
 ```
 
 ### 🔌 MCP 服务器管理
