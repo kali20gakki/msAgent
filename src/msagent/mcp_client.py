@@ -102,7 +102,7 @@ class MCPClient:
             if tool is None:
                 return f"Error calling tool {tool_name}: tool not found"
 
-            timeout_s = float(os.getenv("MSAGENT_TOOL_TIMEOUT", "300"))
+            timeout_s = float(os.getenv("MSAGENT_TOOL_TIMEOUT", "1200"))
             start = time.monotonic()
             result = await asyncio.wait_for(
                 tool.ainvoke(arguments),
