@@ -1,5 +1,5 @@
 [project]
-name = "msagent"
+name = "mindstudio-agent"
 description = "msAgent - A CLI agent with MCP support"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -29,6 +29,9 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/msagent"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"skills" = "msagent/skills"
 
 [tool.hatch.version]
 path = "src/msagent/version.py"

@@ -1103,7 +1103,7 @@ wheels = [
 ]
 
 [[package]]
-name = "msagent"
+name = "mindstudio-agent"
 source = { editable = "." }
 dependencies = [
     { name = "deepagents" },

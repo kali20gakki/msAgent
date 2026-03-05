@@ -155,7 +155,7 @@ uv run msagent mcp remove --name filesystem
 
 ### 🧠 Skills
 
-msAgent 启动时会自动加载项目根目录 `skills/` 下的技能目录，格式如下：
+msAgent 启动时会自动加载项目根目录 `skills/` 下的技能目录；若当前目录没有 `skills/`，会回退加载安装包内置技能（如 `op-mfu-calculator`）。格式如下：
 
 ```text
 skills/
@@ -173,10 +173,16 @@ skills/
 bash scripts/build_whl.sh
 ```
 
-打包完成后会在 `dist/` 目录生成 `msagent-*.whl`，可直接安装：
+打包完成后会在 `dist/` 目录生成 `mindstudio_agent-*.whl`，可直接安装：
 
 ```bash
-pip install dist/msagent-*.whl
+pip install dist/mindstudio_agent-*.whl
+```
+
+从 TestPyPI 安装时，建议同时添加 PyPI 作为依赖源（部分依赖仅发布在 PyPI）：
+
+```bash
+pip install -i https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ mindstudio-agent==0.1.0
 ```
 
 ---

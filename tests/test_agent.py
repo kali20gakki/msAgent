@@ -161,6 +161,20 @@ async def test_initialize_passes_deepagents_settings_to_llm_client(
     assert captured["workspace_root"] == tmp_path
 
 
+def test_resolve_skill_sources_includes_packaged_skills(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    packaged_skills_dir = tmp_path / "packaged-skills"
+    packaged_skills_dir.mkdir()
+    monkeypatch.setattr(Agent, "_PACKAGE_SKILLS_DIR", packaged_skills_dir)
+
+    agent = Agent(make_config(api_key="configured"))
+
+    assert agent._resolve_skill_sources() == [packaged_skills_dir.resolve().as_posix()]
+
+
 def test_get_system_prompt_includes_connected_servers(monkeypatch: pytest.MonkeyPatch) -> None:
     fake_mcp = FakeMCPManager()
     fake_mcp.connected_servers = ["alpha", "beta"]
@@ -327,6 +341,45 @@ def test_find_local_files_supports_partial_queries(
     candidates = agent.find_local_files("msa/tu", limit=5)
 
     assert "src/msagent/tui.py" in candidates
+
+
+def test_find_local_files_empty_query_uses_quick_scan(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "README.md").write_text("# demo", encoding="utf-8")
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "main.py").write_text("print('ok')", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+
+    agent = Agent(make_config())
+    monkeypatch.setattr(
+        agent,
+        "_list_workspace_files",
+        lambda: (_ for _ in ()).throw(AssertionError("should not call full index")),
+    )
+
+    candidates = agent.find_local_files("", limit=5)
+
+    assert "README.md" in candidates
+
+
+def test_find_local_files_exact_relative_path_avoids_full_index(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "agent.py").write_text("pass", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+
+    agent = Agent(make_config())
+    monkeypatch.setattr(
+        agent,
+        "_list_workspace_files",
+        lambda: (_ for _ in ()).throw(AssertionError("should not call full index")),
+    )
+
+    candidates = agent.find_local_files("src/agent.py", limit=5)
+
+    assert candidates == ["src/agent.py"]
 
 
 def test_inject_file_context_from_at_reference(

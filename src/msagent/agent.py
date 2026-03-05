@@ -34,8 +34,10 @@ class Agent(AgentBackend):
     _AT_REF_PATTERN = re.compile(r"(?<!\S)@([^\s]+)")
     _MAX_ATTACHED_FILES = 5
     _MAX_FILE_CHARS = 4000
-    _FILE_INDEX_TTL_S = 3.0
+    _FILE_INDEX_TTL_S = 30.0
+    _QUICK_SCAN_MAX_DEPTH = 2
     _SYSTEM_PROMPT_FILE = "prompts/system_prompt.txt"
+    _PACKAGE_SKILLS_DIR = Path(__file__).resolve().parent / "skills"
     _SKIP_DIRS = {
         ".git",
         ".hg",
@@ -104,6 +106,11 @@ class Agent(AgentBackend):
         for source in self.config.deepagents.skills:
             if source not in sources:
                 sources.append(source)
+
+        package_skills_dir = self._PACKAGE_SKILLS_DIR.resolve()
+        package_source = package_skills_dir.as_posix()
+        if package_skills_dir.is_dir() and package_source not in sources:
+            sources.append(package_source)
         return sources
 
     def _discover_skills(self, sources: list[str]) -> list[str]:
@@ -395,12 +402,16 @@ class Agent(AgentBackend):
             return self._find_absolute_paths(raw_query, limit=limit)
 
         needle = raw_query.lstrip("./")
+        if not needle:
+            return self._list_workspace_files_quick(limit=limit)
+
+        direct_match = self._resolve_direct_workspace_file(needle)
+        if direct_match is not None:
+            return [direct_match]
+
         files = self._list_workspace_files()
         if not files:
             return []
-
-        if not needle:
-            return files[:limit]
 
         q = needle.casefold()
         scored: list[tuple[int, int, str]] = []
@@ -498,6 +509,49 @@ class Agent(AgentBackend):
         files.sort()
         self._file_index_cache = (now, files)
         return files
+
+    def _list_workspace_files_quick(self, limit: int) -> list[str]:
+        if limit <= 0:
+            return []
+
+        files: list[str] = []
+        queue: list[tuple[Path, int]] = [(self._workspace_root, 0)]
+
+        while queue and len(files) < limit:
+            current_dir, depth = queue.pop(0)
+            try:
+                entries = sorted(current_dir.iterdir(), key=lambda p: p.name)
+            except Exception:
+                continue
+
+            for entry in entries:
+                name = entry.name
+                if name.startswith("."):
+                    continue
+                if entry.is_file():
+                    rel = entry.relative_to(self._workspace_root).as_posix()
+                    files.append(rel)
+                    if len(files) >= limit:
+                        break
+                    continue
+                if (
+                    entry.is_dir()
+                    and depth < self._QUICK_SCAN_MAX_DEPTH
+                    and name not in self._SKIP_DIRS
+                ):
+                    queue.append((entry, depth + 1))
+
+        return files
+
+    def _resolve_direct_workspace_file(self, query: str) -> str | None:
+        target = (self._workspace_root / query).resolve()
+        if not target.is_file():
+            return None
+        try:
+            rel = target.relative_to(self._workspace_root.resolve())
+        except Exception:
+            return None
+        return rel.as_posix()
 
     def _inject_file_context(self, user_input: str) -> str:
         matches = self._AT_REF_PATTERN.findall(user_input)

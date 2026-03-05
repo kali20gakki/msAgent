@@ -6,9 +6,9 @@ REPO_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 DIST_DIR="${REPO_ROOT}/dist"
 
 mkdir -p "${DIST_DIR}"
-rm -f "${DIST_DIR}"/msagent-*.whl
+rm -f "${DIST_DIR}"/*.whl
 
-echo "Building msagent wheel package..."
+echo "Building wheel package..."
 
 if command -v uv >/dev/null 2>&1; then
   uv build --wheel --out-dir "${DIST_DIR}" "${REPO_ROOT}"
@@ -17,7 +17,7 @@ else
   python -m build --wheel --outdir "${DIST_DIR}" "${REPO_ROOT}"
 fi
 
-WHEEL_PATH="$(find "${DIST_DIR}" -maxdepth 1 -type f -name "msagent-*.whl" | sort | tail -n 1)"
+WHEEL_PATH="$(find "${DIST_DIR}" -maxdepth 1 -type f -name "*.whl" | sort | tail -n 1)"
 
 if [[ -z "${WHEEL_PATH}" ]]; then
   echo "Build failed: no wheel generated in ${DIST_DIR}" >&2

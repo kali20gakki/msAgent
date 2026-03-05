@@ -798,6 +798,7 @@ class ChatScreen(Screen):
         self._completion_target_range: tuple[int, int] | None = None
         self._completion_selected_index = 0
         self._current_worker: Any | None = None
+        self._completion_refresh_task: asyncio.Task[None] | None = None
     
     def compose(self) -> ComposeResult:
         with Container(id="main-container"):
@@ -829,6 +830,11 @@ class ChatScreen(Screen):
         self._render_completion_suggestions([])
         self._set_send_button_state(False)
 
+    def on_unmount(self) -> None:
+        task = self._completion_refresh_task
+        if task is not None and not task.done():
+            task.cancel()
+
     def on_click(self, event: events.Click) -> None:
         if event.widget.id != "send-btn":
             return
@@ -841,7 +847,7 @@ class ChatScreen(Screen):
         """Update completion suggestions as user types."""
         if event.input.id != "message-input":
             return
-        self._refresh_completion_candidates(event.input)
+        self._schedule_completion_refresh(event.input)
 
     async def on_input_submitted(self, event: Input.Submitted) -> None:
         """处理输入提交事件"""
@@ -1232,6 +1238,23 @@ class ChatScreen(Screen):
         self._completion_target_range = None
         self._completion_selected_index = 0
         self._render_completion_suggestions([])
+
+    def _schedule_completion_refresh(self, input_widget: Input) -> None:
+        task = self._completion_refresh_task
+        if task is not None and not task.done():
+            task.cancel()
+        self._completion_refresh_task = asyncio.create_task(
+            self._debounced_refresh_completion(input_widget)
+        )
+
+    async def _debounced_refresh_completion(self, input_widget: Input) -> None:
+        try:
+            await asyncio.sleep(0.06)
+        except asyncio.CancelledError:
+            return
+        if not self.is_mounted:
+            return
+        self._refresh_completion_candidates(input_widget)
 
     def _extract_active_at_token(
         self, value: str, cursor: int
