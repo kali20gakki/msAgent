@@ -79,10 +79,16 @@ msagent chat --tui
 如需调试或二次开发，再使用源码方式：
 
 ```bash
-git clone https://github.com/kali20gakki/msAgent.git
+git clone --recurse-submodules https://github.com/kali20gakki/msAgent.git
 cd msAgent
 uv sync
 uv run msagent chat --tui
+```
+
+如果你已经完成普通 `git clone`，请补充执行：
+
+```bash
+git submodule update --init --recursive
 ```
 
 ---
@@ -182,7 +188,9 @@ msagent mcp remove --name filesystem
 
 ### 🧠 Skills
 
-msAgent 启动时会自动加载项目根目录 `skills/` 下的技能目录；若当前目录没有 `skills/`，会回退加载安装包内置技能（如 `op-mfu-calculator`）。格式如下：
+msAgent 的内置 Skills 已拆分到独立仓库 [mindstudio-skills](https://github.com/kali20gakki/mindstudio-skills)，在本仓通过 Git Submodule 挂载到根目录 `skills/`。
+
+启动时会自动加载项目根目录 `skills/` 下的技能目录；若当前目录没有可用技能，会回退加载安装包内置技能（如 `op-mfu-calculator`）。格式如下：
 
 ```text
 skills/
@@ -199,6 +207,8 @@ skills/
 ```bash
 bash scripts/build_whl.sh
 ```
+
+构建脚本会自动执行 `git submodule update --init --recursive --depth 1 skills`，确保 `mindstudio-skills` 被打入 wheel 包。
 
 打包完成后会在 `dist/` 目录生成 `mindstudio_agent-*.whl`，可直接安装：
 

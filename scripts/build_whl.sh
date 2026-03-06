@@ -10,6 +10,14 @@ rm -f "${DIST_DIR}"/*.whl
 
 echo "Building wheel package..."
 
+if [[ -f "${REPO_ROOT}/.gitmodules" ]] && command -v git >/dev/null 2>&1; then
+  if git -C "${REPO_ROOT}" config --file .gitmodules --get-regexp '^submodule\..*\.path$' \
+    | awk '{print $2}' | grep -qx "skills"; then
+    echo "Syncing skills submodule..."
+    git -C "${REPO_ROOT}" submodule update --init --recursive --depth 1 skills
+  fi
+fi
+
 if command -v uv >/dev/null 2>&1; then
   uv build --wheel --out-dir "${DIST_DIR}" "${REPO_ROOT}"
 else
