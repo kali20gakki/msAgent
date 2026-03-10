@@ -369,7 +369,10 @@ def info_command() -> None:
   • Custom OpenAI-compatible APIs
 
 [bold]Configuration:[/bold]
-  Config file: ~/.config/msagent/config.json
+  Config file:
+    • Local: ./config.json
+    • Global (Linux / macOS): ~/.config/msagent/config.json
+    • Global (Windows): %USERPROFILE%\.config\msagent\config.json
   (API keys are not stored in this file)
   
   Environment variables:
@@ -379,7 +382,9 @@ def info_command() -> None:
     • CUSTOM_API_KEY / CUSTOM_BASE_URL / CUSTOM_MODEL
 
 [bold]Quick Start:[/bold]
-  1. Set your API key: export OPENAI_API_KEY="your-key"
+  1. Set your API key:
+       Linux / macOS -> export OPENAI_API_KEY="your-key"
+       Windows PowerShell -> $env:OPENAI_API_KEY = "your-key"
   2. Start chatting: msagent chat
   3. Or use TUI: msagent chat --tui
 

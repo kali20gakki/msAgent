@@ -33,6 +33,10 @@
 - Python 3.11+
 - 可用的 LLM API Key（OpenAI / Anthropic / Gemini / 兼容 OpenAI 接口）
 
+说明：
+- 下文中 Linux / macOS 默认使用 `bash` / `zsh`
+- Windows 示例默认使用 PowerShell；若你使用 Git Bash / WSL，可直接复用 Linux / macOS 命令
+
 ### 2) 📦 安装（推荐：PyPI）
 
 ```bash
@@ -49,8 +53,17 @@ msagent --version
 
 推荐先用 OpenAI：
 
+Linux / macOS：
+
 ```bash
 export OPENAI_API_KEY="your-key"
+msagent config --llm-provider openai --llm-api-key-env OPENAI_API_KEY --llm-model "gpt-4o-mini"
+```
+
+Windows（PowerShell）：
+
+```powershell
+$env:OPENAI_API_KEY = "your-key"
 msagent config --llm-provider openai --llm-api-key-env OPENAI_API_KEY --llm-model "gpt-4o-mini"
 ```
 
@@ -70,13 +83,23 @@ msagent chat --tui
 
 把 Profiling 目录路径和你的问题一起发给 msAgent，例如：
 
+Linux / macOS：
+
 ```text
 请分析 /path/to/profiler_output 的性能瓶颈，重点关注通信和高耗时算子。
+```
+
+Windows：
+
+```text
+请分析 C:\path\to\profiler_output 的性能瓶颈，重点关注通信和高耗时算子。
 ```
 
 ### 6) 🧪 可选：从源码运行（开发场景）
 
 如需调试或二次开发，再使用源码方式：
+
+以下命令在 Linux / macOS / Windows（PowerShell）一致：
 
 ```bash
 git clone --recurse-submodules https://github.com/kali20gakki/msAgent.git
@@ -96,7 +119,7 @@ git submodule update --init --recursive --force
 
 ## 📚 常用命令
 
-如果你是源码方式（`git clone` + `uv sync`）运行，请在下列命令前加 `uv run`。
+如果你是源码方式（`git clone` + `uv sync`）运行，请在下列命令前加 `uv run`。以下命令在 Linux / macOS / Windows 一致。
 
 | 命令 | 说明 |
 |---|---|
@@ -114,7 +137,7 @@ git submodule update --init --recursive --force
 参考 Codex / Claude Code 的交互体验，msAgent 现在支持一键切换到新会话：
 
 - 在 TUI 输入框中输入 `/new`
-- 或使用快捷键 `Ctrl+N`
+- 或使用快捷键 `Ctrl+N`（Linux / macOS / Windows 终端默认一致；macOS 不是 `Cmd+N`）
 - 切换后会立即清空上下文（历史消息与上下文 token），从全新 Session 开始对话
 
 常用会话命令（TUI 输入框）：
@@ -133,22 +156,49 @@ git submodule update --init --recursive --force
 
 OpenAI:
 
+Linux / macOS：
+
 ```bash
 export OPENAI_API_KEY="your-key"
 msagent config --llm-provider openai --llm-api-key-env OPENAI_API_KEY --llm-model "gpt-4o-mini"
 ```
 
+Windows（PowerShell）：
+
+```powershell
+$env:OPENAI_API_KEY = "your-key"
+msagent config --llm-provider openai --llm-api-key-env OPENAI_API_KEY --llm-model "gpt-4o-mini"
+```
+
 Anthropic:
+
+Linux / macOS：
 
 ```bash
 export ANTHROPIC_API_KEY="your-key"
 msagent config --llm-provider anthropic --llm-api-key-env ANTHROPIC_API_KEY --llm-model "claude-3-5-sonnet-20241022"
 ```
 
+Windows（PowerShell）：
+
+```powershell
+$env:ANTHROPIC_API_KEY = "your-key"
+msagent config --llm-provider anthropic --llm-api-key-env ANTHROPIC_API_KEY --llm-model "claude-3-5-sonnet-20241022"
+```
+
 Gemini:
+
+Linux / macOS：
 
 ```bash
 export GEMINI_API_KEY="your-key"
+msagent config --llm-provider gemini --llm-api-key-env GEMINI_API_KEY --llm-model "gemini-2.0-flash"
+```
+
+Windows（PowerShell）：
+
+```powershell
+$env:GEMINI_API_KEY = "your-key"
 msagent config --llm-provider gemini --llm-api-key-env GEMINI_API_KEY --llm-model "gemini-2.0-flash"
 ```
 
@@ -161,14 +211,23 @@ msagent config --llm-provider gemini --llm-api-key-env GEMINI_API_KEY --llm-mode
 
 OpenAI 兼容接口（自定义 Base URL）：
 
+Linux / macOS：
+
 ```bash
 export OPENAI_API_KEY="your-key"
 msagent config --llm-provider openai --llm-api-key-env OPENAI_API_KEY --llm-base-url "https://api.deepseek.com" --llm-model "deepseek-chat" --llm-max-tokens 0
 ```
 
+Windows（PowerShell）：
+
+```powershell
+$env:OPENAI_API_KEY = "your-key"
+msagent config --llm-provider openai --llm-api-key-env OPENAI_API_KEY --llm-base-url "https://api.deepseek.com" --llm-model "deepseek-chat" --llm-max-tokens 0
+```
+
 ### 🔌 MCP 服务器管理
 
-默认配置会启用 `msprof-mcp`。你也可以手动管理 MCP：
+默认配置会启用 `msprof-mcp`。你也可以手动管理 MCP。除路径写法外，命令在 Linux / macOS / Windows 一致：
 
 ```bash
 # 列表
@@ -181,10 +240,16 @@ msagent mcp add --name filesystem --command npx --args "-y,@modelcontextprotocol
 msagent mcp remove --name filesystem
 ```
 
+`filesystem` 示例路径：
+- Linux / macOS：`msagent mcp add --name filesystem --command npx --args "-y,@modelcontextprotocol/server-filesystem,/path/to/workspace"`
+- Windows（PowerShell）：`msagent mcp add --name filesystem --command npx --args "-y,@modelcontextprotocol/server-filesystem,C:\path\to\workspace"`
+
 ### 📁 配置文件位置
 
 - 优先读取当前工作目录：`config.json`
-- 若不存在，则读取：`~/.config/msagent/config.json`
+- 若不存在，则读取全局配置：
+  - Linux / macOS：`~/.config/msagent/config.json`
+  - Windows：`%USERPROFILE%\.config\msagent\config.json`（例如 `C:\Users\<用户名>\.config\msagent\config.json`）
 - 安全策略：配置文件仅保存 `api_key_env`，不会保存明文 API Key
 
 ### 🧠 Skills
@@ -205,17 +270,38 @@ skills/
 
 ### 打包 wheel（可直接 pip install）
 
+Linux / macOS：
+
 ```bash
 bash scripts/build_whl.sh
 ```
+
+Windows（PowerShell）：
+
+```powershell
+git submodule update --init --recursive --force --depth 1 skills
+uv build --wheel --out-dir dist .
+```
+
+如果你的 Windows 环境安装了 Git Bash / WSL，也可以直接执行 `bash scripts/build_whl.sh`。
 
 构建脚本会自动执行 `git submodule update --init --recursive --force --depth 1 skills`，确保 `mindstudio-skills` 被打入 wheel 包。
 
 打包完成后会在 `dist/` 目录生成 `mindstudio_agent-*.whl`，可直接安装：
 
+Linux / macOS：
+
 ```bash
-pip install dist/mindstudio_agent-*.whl
+pip install dist/mindstudio_agent-<version>-py3-none-any.whl
 ```
+
+Windows（PowerShell）：
+
+```powershell
+pip install .\dist\mindstudio_agent-<version>-py3-none-any.whl
+```
+
+请将上面的 `<version>` 替换为实际构建出的 wheel 文件名。
 
 从 TestPyPI 安装时，建议同时添加 PyPI 作为依赖源（部分依赖仅发布在 PyPI）：
 
@@ -226,6 +312,8 @@ pip install -i https://test.pypi.org/simple/ --extra-index-url https://pypi.org/
 ---
 
 ## 👨‍💻 开发
+
+以下命令在 Linux / macOS / Windows 一致：
 
 ```bash
 uv sync --dev
