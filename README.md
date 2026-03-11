@@ -22,8 +22,8 @@
 - 🔗 多卡性能问题：快慢卡差异、通信效率瓶颈、同步等待等
 - ⏱️ 下发与调度问题：下发延迟、CPU 侧调度阻塞等
 - 🧩 集群性能问题：慢节点识别与从全局到单机的逐层定位
-- 🔌 MCP 扩展：基于 Model Context Protocol 接入工具（默认启用 `msprof-mcp`）
-- 🧠 Skills 扩展：自动加载 `skills/` 目录技能，复用领域分析流程和知识
+- 🔌 MCP 扩展：基于 Model Context Protocol 接入工具（默认启用 [msprof-mcp](https://gitcode.com/kali20gakki1/msprof_mcp)）
+- 🧠 Skills 扩展：自动加载 `skills/` 目录技能，复用领域分析流程和知识（仓库：[mindstudio-skills](https://github.com/kali20gakki/mindstudio-skills)）
 ---
 
 ## ⚡ 快速上手
@@ -110,7 +110,7 @@ uv sync
 uv run msagent chat --tui
 ```
 
-如果你已经完成普通 `git clone`，请补充执行拉取mindstudio-skills：
+如果你已经完成普通 `git clone`，请补充执行拉取 [mindstudio-skills](https://github.com/kali20gakki/mindstudio-skills)：
 
 ```bash
 git submodule sync --recursive
@@ -229,7 +229,7 @@ msagent config --llm-provider openai --llm-base-url "https://api.deepseek.com" -
 
 ### 🔌 MCP 服务器管理
 
-默认配置会启用 `msprof-mcp`。你也可以手动管理 MCP。除路径写法外，命令在 Linux / macOS / Windows 一致：
+默认配置会启用 `msprof-mcp`（仓库：[msprof-mcp](https://gitcode.com/kali20gakki1/msprof_mcp)）。你也可以手动管理 MCP。除路径写法外，命令在 Linux / macOS / Windows 一致：
 
 ```bash
 # 列表
