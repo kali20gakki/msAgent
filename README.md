@@ -9,6 +9,8 @@
   <img src="https://raw.githubusercontent.com/kali20gakki/images/main/msagent.gif" alt="msAgent">
 </p>
 
+📌 文档导航：[最新消息](#最新消息) ｜ [版本说明](#版本说明) ｜ [使用效果展示](#使用效果展示)
+
 
 ## 最新消息
 
