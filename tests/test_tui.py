@@ -7,7 +7,7 @@ import asyncio
 import pytest
 
 import msagent.tui as tui_module
-from msagent.tui import ChatWelcomeBanner, CustomFooter, MSAgentApp, run_tui
+from msagent.tui import ChatWelcomeBanner, CustomFooter, MSAgentApp, MessageWidget, run_tui
 
 
 def test_custom_footer_render_contains_shortcuts() -> None:
@@ -43,6 +43,14 @@ def test_run_tui_creates_app_and_runs(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(tui_module, "MSAgentApp", FakeApp)
     run_tui()
     assert called["run"] is True
+
+
+def test_message_widget_formats_duration_text() -> None:
+    assert MessageWidget._format_duration_text(None) == ""
+    assert MessageWidget._format_duration_text(0.42) == "耗时 420ms"
+    assert MessageWidget._format_duration_text(3.2) == "耗时 3.2s"
+    assert MessageWidget._format_duration_text(18.7) == "耗时 19s"
+    assert MessageWidget._format_duration_text(65.2) == "耗时 1m 05s"
 
 
 @pytest.mark.asyncio

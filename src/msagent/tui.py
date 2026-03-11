@@ -108,6 +108,13 @@ class MessageWidget(Container):
         padding-top: 0;
     }
 
+    .message-duration {
+        height: 1;
+        color: #7f8aa3;
+        text-style: dim;
+        margin-top: 1;
+    }
+
     .tool-input-wrap {
         height: auto;
         margin-top: 0;
@@ -190,6 +197,7 @@ class MessageWidget(Container):
         role: str,
         content: str,
         *,
+        duration_s: float | None = None,
         tool_input_text: str | None = None,
         tool_output_text: str | None = None,
         tool_output_truncated: bool = False,
@@ -197,6 +205,7 @@ class MessageWidget(Container):
     ):
         self.role = role
         self.content = content
+        self.duration_s = duration_s
         self.tool_input_text = tool_input_text
         self.tool_output_text = tool_output_text
         self.tool_output_truncated = tool_output_truncated
@@ -270,6 +279,15 @@ class MessageWidget(Container):
                         classes="selectable-text tool-output-area hidden",
                         show_line_numbers=False,
                     )
+            if self.role == "assistant":
+                duration_classes = "message-duration"
+                if self.duration_s is None:
+                    duration_classes += " hidden"
+                yield Static(
+                    self._format_duration_label(),
+                    id="message-duration",
+                    classes=duration_classes,
+                )
 
     def update_content(self, content: str) -> None:
         """Update the message content."""
@@ -311,6 +329,42 @@ class MessageWidget(Container):
                 self._set_render_mode("markdown")
         except NoMatches:
             return
+
+    @staticmethod
+    def _format_duration_text(duration_s: float | None) -> str:
+        if duration_s is None or duration_s < 0:
+            return ""
+        if duration_s < 1:
+            return f"耗时 {duration_s * 1000:.0f}ms"
+        if duration_s < 60:
+            precision = 1 if duration_s < 10 else 0
+            return f"耗时 {duration_s:.{precision}f}s"
+        minutes, seconds = divmod(duration_s, 60)
+        rounded_seconds = int(round(seconds))
+        whole_minutes = int(minutes)
+        if rounded_seconds == 60:
+            whole_minutes += 1
+            rounded_seconds = 0
+        return f"耗时 {whole_minutes}m {rounded_seconds:02d}s"
+
+    def _format_duration_label(self) -> str:
+        return self._format_duration_text(self.duration_s)
+
+    def set_duration(self, duration_s: float | None) -> None:
+        if self.role != "assistant":
+            return
+        self.duration_s = duration_s
+        try:
+            duration_widget = self.query_one("#message-duration", Static)
+        except NoMatches:
+            return
+
+        duration_label = self._format_duration_label()
+        duration_widget.update(duration_label)
+        if duration_label:
+            duration_widget.remove_class("hidden")
+            return
+        duration_widget.add_class("hidden")
 
     def _render_markdown(self, *, force: bool) -> None:
         if not force:
@@ -547,6 +601,7 @@ class ChatArea(VerticalScroll):
         role: str,
         content: str,
         *,
+        duration_s: float | None = None,
         tool_input_text: str | None = None,
         tool_output_text: str | None = None,
         tool_output_truncated: bool = False,
@@ -555,6 +610,7 @@ class ChatArea(VerticalScroll):
         widget = MessageWidget(
             role,
             content,
+            duration_s=duration_s,
             tool_input_text=tool_input_text,
             tool_output_text=tool_output_text,
             tool_output_truncated=tool_output_truncated,
@@ -979,6 +1035,7 @@ class ChatScreen(Screen):
             # 3. 流式接收并实时更新
             response_widget = loading_widget
             response_text = ""
+            response_duration_s: float | None = None
             first_chunk_received = False
             pending_tool_widgets: list[MessageWidget] = []
             
@@ -1008,6 +1065,7 @@ class ChatScreen(Screen):
                         pending_tool_widgets.append(tool_widget)
                         response_widget = await chat_area.add_message("assistant", "⠋ 思考中...")
                         response_text = ""
+                        response_duration_s = None
                         first_chunk_received = False
                         stop_animation = asyncio.Event()
                         animation_task = asyncio.create_task(
@@ -1026,6 +1084,10 @@ class ChatScreen(Screen):
                             )
                         chat_area.scroll_end(animate=False)
                         await asyncio.sleep(0)
+                        continue
+
+                    if event_type == "done":
+                        response_duration_s = event.duration_s
                         continue
 
                     if event_type == "error":
@@ -1087,6 +1149,7 @@ class ChatScreen(Screen):
                 # 流式输出完成后，渲染最终的 Markdown
                 if first_chunk_received:
                     response_widget.finalize_content()
+                    response_widget.set_duration(response_duration_s)
                 
             except asyncio.CancelledError:
                 # Worker cancelled (e.g. quit screen); stop background animation quietly.
