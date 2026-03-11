@@ -847,6 +847,9 @@ class ChatScreen(Screen):
         Binding("ctrl+n", "new_session", "新会话", show=False),
     ]
     _MAX_TOOL_OUTPUT_CHARS = 4000
+    _LOADING_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+    _THINKING_STATUS_TEXT = "思考中..."
+    _WAITING_MCP_STATUS_TEXT = "等待 MCP 工具结果..."
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
@@ -994,16 +997,26 @@ class ChatScreen(Screen):
             worker.cancel()
         self._set_send_button_state(True)
     
-    async def _animate_loading(self, widget: MessageWidget, stop_event: asyncio.Event) -> None:
+    def _loading_text(self, status_text: str, frame: str | None = None) -> str:
+        prefix = frame or self._LOADING_FRAMES[0]
+        return f"{prefix} {status_text}"
+
+    async def _animate_loading(
+        self,
+        widget: MessageWidget,
+        stop_event: asyncio.Event,
+        status_text: str,
+    ) -> None:
         """动态加载动画"""
-        loading_frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
         frame_idx = 0
         
         while not stop_event.is_set():
             if not widget.is_mounted:
                 break
-            widget.update_content_fast(f"{loading_frames[frame_idx]} 思考中...")
-            frame_idx = (frame_idx + 1) % len(loading_frames)
+            widget.update_content_fast(
+                self._loading_text(status_text, self._LOADING_FRAMES[frame_idx])
+            )
+            frame_idx = (frame_idx + 1) % len(self._LOADING_FRAMES)
             await asyncio.sleep(0.1)  # 100ms 更新一次
     
     async def _process_message(self, message: str) -> None:
@@ -1025,12 +1038,21 @@ class ChatScreen(Screen):
                 return
             
             # 2. 创建加载消息并启动动画
-            loading_widget = await chat_area.add_message("assistant", "⠋ 思考中...")
+            loading_widget = await chat_area.add_message(
+                "assistant",
+                self._loading_text(self._THINKING_STATUS_TEXT),
+            )
             chat_area.scroll_end(animate=False)
             
             # 启动加载动画
             stop_animation = asyncio.Event()
-            animation_task = asyncio.create_task(self._animate_loading(loading_widget, stop_animation))
+            animation_task = asyncio.create_task(
+                self._animate_loading(
+                    loading_widget,
+                    stop_animation,
+                    self._THINKING_STATUS_TEXT,
+                )
+            )
             
             # 3. 流式接收并实时更新
             response_widget = loading_widget
@@ -1063,13 +1085,20 @@ class ChatScreen(Screen):
                             tool_input_text=tool_input,
                         )
                         pending_tool_widgets.append(tool_widget)
-                        response_widget = await chat_area.add_message("assistant", "⠋ 思考中...")
+                        response_widget = await chat_area.add_message(
+                            "assistant",
+                            self._loading_text(self._WAITING_MCP_STATUS_TEXT),
+                        )
                         response_text = ""
                         response_duration_s = None
                         first_chunk_received = False
                         stop_animation = asyncio.Event()
                         animation_task = asyncio.create_task(
-                            self._animate_loading(response_widget, stop_animation)
+                            self._animate_loading(
+                                response_widget,
+                                stop_animation,
+                                self._WAITING_MCP_STATUS_TEXT,
+                            )
                         )
                         chat_area.scroll_end(animate=False)
                         await asyncio.sleep(0)
@@ -1081,6 +1110,21 @@ class ChatScreen(Screen):
                             pending_tool_widgets.pop(0).update_tool_output(
                                 tool_output,
                                 truncated=output_truncated,
+                            )
+                        if not first_chunk_received:
+                            stop_animation.set()
+                            if not animation_task.done():
+                                await animation_task
+                            response_widget.update_content(
+                                self._loading_text(self._THINKING_STATUS_TEXT)
+                            )
+                            stop_animation = asyncio.Event()
+                            animation_task = asyncio.create_task(
+                                self._animate_loading(
+                                    response_widget,
+                                    stop_animation,
+                                    self._THINKING_STATUS_TEXT,
+                                )
                             )
                         chat_area.scroll_end(animate=False)
                         await asyncio.sleep(0)
