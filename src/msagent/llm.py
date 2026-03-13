@@ -12,6 +12,7 @@ from deepagents.backends.filesystem import FilesystemBackend
 from deepagents import create_deep_agent
 from langchain_anthropic import ChatAnthropic
 from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_openai import ChatOpenAI
 from langchain_core.tools import StructuredTool
 from pydantic import create_model
@@ -109,6 +110,29 @@ class DeepAgentsClient:
         self._tool_invoker = tool_invoker or mcp_manager.call_tool
         self._backend_mode = backend_mode.strip().lower() or "filesystem"
         self._backend = self._build_backend()
+
+    def count_tokens(
+        self, messages: list[Message], tools: list[dict[str, Any]] | None = None
+    ) -> int | None:
+        lc_messages = self._to_langchain_messages(messages)
+        tool_payload = tools or None
+        tool_count = self._estimate_tool_token_count(tool_payload)
+        if not lc_messages:
+            return tool_count
+
+        try:
+            count = self._model.get_num_tokens_from_messages(lc_messages)
+        except TypeError:
+            try:
+                count = self._model.get_num_tokens_from_messages(lc_messages, tools=None)
+            except Exception:
+                return self._estimate_token_count(messages, None) + tool_count
+        except Exception:
+            return self._estimate_token_count(messages, None) + tool_count
+
+        if isinstance(count, int) and count >= 0:
+            return count + tool_count
+        return self._estimate_token_count(messages, None) + tool_count
 
     async def chat(self, messages: list[Message], tools: list[dict] | None = None) -> str:
         system_prompt, input_messages = self._split_messages(messages)
@@ -316,6 +340,30 @@ class DeepAgentsClient:
         system_prompt = "\n\n".join(system_parts)
         input_messages = [m.to_dict() for m in messages if m.role != "system"]
         return system_prompt, input_messages
+
+    def _to_langchain_messages(self, messages: list[Message]) -> list[BaseMessage]:
+        converted: list[BaseMessage] = []
+        for message in messages:
+            if message.role == "system":
+                converted.append(SystemMessage(content=message.content))
+                continue
+            if message.role == "user":
+                converted.append(HumanMessage(content=message.content))
+                continue
+            if message.role == "assistant":
+                kwargs: dict[str, Any] = {}
+                if message.tool_calls:
+                    kwargs["tool_calls"] = message.tool_calls
+                converted.append(AIMessage(content=message.content, **kwargs))
+                continue
+            if message.role == "tool":
+                converted.append(
+                    ToolMessage(
+                        content=message.content,
+                        tool_call_id=message.tool_call_id or "tool",
+                    )
+                )
+        return converted
 
     def _build_structured_tool(self, tool_spec: dict[str, Any]) -> StructuredTool:
         func = tool_spec.get("function", {})
@@ -549,6 +597,30 @@ class DeepAgentsClient:
             return usage
         usage_metadata = getattr(obj, "usage_metadata", None)
         return self._normalize_usage_dict(usage_metadata)
+
+    def _estimate_token_count(
+        self, messages: list[Message], tools: list[dict[str, Any]] | None = None
+    ) -> int:
+        payload = [
+            {
+                "role": message.role,
+                "content": message.content,
+                "tool_call_id": message.tool_call_id,
+                "tool_calls": message.tool_calls,
+            }
+            for message in messages
+        ]
+        if tools:
+            payload.append({"role": "tools", "content": tools})
+        text = json.dumps(payload, ensure_ascii=False)
+        if not text:
+            return 0
+        return max(1, (len(text) + 3) // 4)
+
+    def _estimate_tool_token_count(self, tools: list[dict[str, Any]] | None) -> int:
+        if not tools:
+            return 0
+        return self._estimate_token_count([], tools)
 
 
 def create_llm_client(

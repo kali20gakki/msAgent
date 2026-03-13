@@ -11,7 +11,7 @@ AgentEventType = Literal["text", "tool_call", "tool_result", "error", "done"]
 
 @dataclass(frozen=True, slots=True)
 class UsageSnapshot:
-    """Token usage snapshot for the latest assistant response."""
+    """Token usage counters."""
 
     prompt_tokens: int
     completion_tokens: int
@@ -31,6 +31,8 @@ class AgentStatus:
     connected_servers: tuple[str, ...]
     loaded_skills: tuple[str, ...]
     usage: UsageSnapshot | None = None
+    cumulative_usage: UsageSnapshot | None = None
+    context_tokens: int | None = None
 
 
 @dataclass(frozen=True, slots=True)

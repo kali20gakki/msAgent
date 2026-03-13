@@ -328,6 +328,40 @@ def test_client_can_use_local_shell_backend(monkeypatch: pytest.MonkeyPatch) -> 
     assert client._backend.virtual_mode is True
 
 
+def test_count_tokens_uses_model_counter(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeModel:
+        def get_num_tokens_from_messages(self, messages, tools=None) -> int:
+            assert len(messages) == 2
+            assert tools is None
+            return 123
+
+    monkeypatch.setattr(DeepAgentsClient, "_build_model", lambda self, _cfg: FakeModel())
+
+    client = DeepAgentsClient(LLMConfig(provider="openai", api_key="k", model="m"))
+    count = client.count_tokens(
+        [Message("system", "rules"), Message("user", "hi")],
+        tools=[{"type": "function", "function": {"name": "sum"}}],
+    )
+
+    assert count > 123
+
+
+def test_count_tokens_falls_back_to_estimate_when_model_counter_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeModel:
+        def get_num_tokens_from_messages(self, messages, tools=None) -> int:
+            raise RuntimeError("no tokenizer")
+
+    monkeypatch.setattr(DeepAgentsClient, "_build_model", lambda self, _cfg: FakeModel())
+
+    client = DeepAgentsClient(LLMConfig(provider="openai", api_key="k", model="m"))
+    count = client.count_tokens([Message("user", "hello world")], tools=None)
+
+    assert isinstance(count, int)
+    assert count > 0
+
+
 def test_local_shell_backend_uses_minimal_env(monkeypatch: pytest.MonkeyPatch) -> None:
     _patch_model_build(monkeypatch)
     monkeypatch.setenv("PATH", "/usr/local/bin:/usr/bin")

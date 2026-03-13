@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import tempfile
 from typing import Any
 from pathlib import Path
 
@@ -50,6 +51,8 @@ class FakeLLMClient:
         self.stream_chunks = ["chunk-1", "chunk-2"]
         self.stream_events: list[dict[str, Any]] | None = None
         self.chat_calls = 0
+        self.last_usage: dict[str, int] | None = None
+        self.context_tokens = 0
 
     async def chat(self, messages: list[Any], tools: list[dict] | None = None) -> str:
         self.chat_calls += 1
@@ -69,6 +72,9 @@ class FakeLLMClient:
         for chunk in self.stream_chunks:
             yield {"type": "text", "content": chunk}
             await asyncio.sleep(0)
+
+    def count_tokens(self, messages: list[Any], tools: list[dict] | None = None) -> int:
+        return self.context_tokens
 
 
 def make_config(api_key: str = "test-key", mcp_servers: list[MCPConfig] | None = None) -> AppConfig:
@@ -243,11 +249,21 @@ def test_get_status_returns_frontend_snapshot(monkeypatch: pytest.MonkeyPatch) -
                 "completion_tokens": 4,
                 "total_tokens": 16,
             }
+            self.counted_tokens = 42
+
+        def count_tokens(self, messages: list[Any], tools: list[dict] | None = None) -> int:
+            return self.counted_tokens
 
     agent = Agent(make_config())
     agent._initialized = True
     agent._loaded_skills = ["code-review"]
     agent.llm_client = FakeClient()
+    agent._session_usage_totals = {
+        "prompt_tokens": 30,
+        "completion_tokens": 10,
+        "total_tokens": 40,
+    }
+    agent._context_tokens = 42
 
     status = agent.get_status()
 
@@ -257,6 +273,9 @@ def test_get_status_returns_frontend_snapshot(monkeypatch: pytest.MonkeyPatch) -
     assert status.loaded_skills == ("code-review",)
     assert status.usage is not None
     assert status.usage.total_tokens == 16
+    assert status.cumulative_usage is not None
+    assert status.cumulative_usage.total_tokens == 40
+    assert status.context_tokens == 42
 
 
 @pytest.mark.asyncio
@@ -283,6 +302,35 @@ async def test_chat_without_tools_uses_plain_chat(monkeypatch: pytest.MonkeyPatc
     assert result == "plain-response"
     assert [message.role for message in agent.messages] == ["user", "assistant"]
     assert agent.messages[-1].content == "plain-response"
+
+
+@pytest.mark.asyncio
+async def test_chat_updates_cumulative_usage_and_context_tokens(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_mcp = FakeMCPManager()
+    fake_llm = FakeLLMClient()
+    fake_llm.last_usage = {
+        "prompt_tokens": 12,
+        "completion_tokens": 4,
+        "total_tokens": 16,
+    }
+    fake_llm.context_tokens = 77
+    monkeypatch.setattr(agent_module, "mcp_manager", fake_mcp)
+
+    agent = Agent(make_config())
+    agent._initialized = True
+    agent.llm_client = fake_llm
+
+    result = await agent.chat("hi")
+    status = agent.get_status()
+
+    assert result == "assistant-response"
+    assert status.cumulative_usage is not None
+    assert status.cumulative_usage.prompt_tokens == 12
+    assert status.cumulative_usage.completion_tokens == 4
+    assert status.cumulative_usage.total_tokens == 16
+    assert status.context_tokens == 77
 
 
 @pytest.mark.asyncio
@@ -379,10 +427,20 @@ def test_start_new_session_increments_session_and_clears_context() -> None:
     class FakeClient:
         def __init__(self) -> None:
             self.last_usage: dict[str, int] | None = {"prompt_tokens": 10, "total_tokens": 10}
+            self.counted_tokens = 0
+
+        def count_tokens(self, messages: list[Any], tools: list[dict] | None = None) -> int:
+            return self.counted_tokens
 
     agent = Agent(make_config())
     agent.llm_client = FakeClient()
     agent.messages = [agent_module.Message("user", "hello")]
+    agent._session_usage_totals = {
+        "prompt_tokens": 10,
+        "completion_tokens": 0,
+        "total_tokens": 10,
+    }
+    agent._context_tokens = 25
 
     session_number = agent.start_new_session()
 
@@ -390,6 +448,9 @@ def test_start_new_session_increments_session_and_clears_context() -> None:
     assert agent.session_number == 2
     assert agent.messages == []
     assert agent.llm_client.last_usage is None
+    assert agent.get_status().cumulative_usage is not None
+    assert agent.get_status().cumulative_usage.total_tokens == 0
+    assert agent.get_status().context_tokens == 0
 
 
 @pytest.mark.asyncio
@@ -558,6 +619,6 @@ def test_inject_file_context_from_at_reference(
 
 
 def test_find_local_files_supports_absolute_path_query() -> None:
-    root = Path("/tmp")
-    candidates = Agent(make_config()).find_local_files("/tmp", limit=20)
+    root = Path(tempfile.gettempdir()).resolve()
+    candidates = Agent(make_config()).find_local_files(root.as_posix(), limit=20)
     assert any(path.startswith(root.as_posix()) for path in candidates)

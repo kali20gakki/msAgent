@@ -26,6 +26,7 @@ from prompt_toolkit.shortcuts import CompleteStyle
 from prompt_toolkit.styles import Style as PromptStyle
 from rich.cells import cell_len
 from rich.console import Console, ConsoleOptions, Group, NewLine, RenderableType
+from rich.markup import escape
 from rich.markdown import CodeBlock, Markdown
 from rich.panel import Panel
 from rich.segment import Segment
@@ -150,6 +151,36 @@ def _format_duration_text(duration_s: float | None) -> str:
         whole_minutes += 1
         rounded_seconds = 0
     return f"took {whole_minutes}m {rounded_seconds:02d}s"
+
+
+def _format_token_count(value: int | None) -> str:
+    if value is None or value <= 0:
+        return "0"
+    if value >= 1_000_000:
+        return _format_token_unit(value / 1_000_000, "M")
+    if value >= 100_000:
+        return f"{int(round(value / 1_000))}K"
+    if value >= 1_000:
+        return _format_token_unit(value / 1_000, "K")
+    return str(value)
+
+
+def _format_token_unit(value: float, suffix: str) -> str:
+    text = f"{value:.1f}".rstrip("0").rstrip(".")
+    return f"{text}{suffix}"
+
+
+def _format_prompt_status_text(status: AgentStatus) -> str:
+    cumulative = status.cumulative_usage
+    prompt_tokens = cumulative.prompt_tokens if cumulative is not None else 0
+    completion_tokens = cumulative.completion_tokens if cumulative is not None else 0
+    total_tokens = cumulative.total_tokens if cumulative is not None else 0
+    return (
+        f"Ctx {_format_token_count(status.context_tokens)}"
+        f" | Total {_format_token_count(total_tokens)}"
+        f" | In {_format_token_count(prompt_tokens)}"
+        f" | Out {_format_token_count(completion_tokens)}"
+    )
 
 
 def _format_tool_payload(value: Any) -> dict[str, Any]:
@@ -331,17 +362,26 @@ class Renderer:
         self.console.print(banner.render())
         self.console.print("")
 
-    def render_user_message(self, content: str) -> None:
+    def render_user_message(self, content: str, *, status_text: str | None = None) -> None:
         indent = " " * cell_len(PROMPT_STYLE)
         lines = content.split("\n")
         rendered_lines: list[str] = []
         for index, line in enumerate(lines):
             if index == 0:
-                rendered_lines.append(f"[prompt]{PROMPT_STYLE}[/prompt]{line}")
+                first_line = f"[prompt]{escape(PROMPT_STYLE)}[/prompt]{escape(line)}"
+                if status_text:
+                    plain_left = f"{PROMPT_STYLE}{line}"
+                    gap = self.console.width - cell_len(plain_left) - cell_len(status_text)
+                    spacer = " " * gap if gap >= 2 else "  "
+                    first_line += f"[muted]{escape(spacer + status_text)}[/muted]"
+                rendered_lines.append(first_line)
             else:
-                rendered_lines.append(f"{indent}{line}")
+                rendered_lines.append(f"{indent}{escape(line)}")
         self.console.print("\n".join(rendered_lines), markup=True)
         self.console.print("")
+
+    def render_empty_prompt_submit(self, prompt_text: str) -> None:
+        self.console.print(f"[prompt]{prompt_text}[/prompt]", markup=True)
 
     def build_stream_placeholder(self) -> RenderableType:
         return Group(Text(STREAM_SPINNER_TEXT, style="indicator"))
@@ -694,6 +734,9 @@ class InteractivePrompt:
                 "placeholder": "#414868 italic",
                 "muted": "#565f89",
                 "selected": "#8be4e1",
+                "rprompt.label": "#414868",
+                "rprompt.value": "#565f89 italic",
+                "rprompt.sep": "#414868",
             }
         )
 
@@ -833,6 +876,13 @@ class InteractivePrompt:
                 ("class:placeholder", "尽管问 msAgent，/ 命令，@ 关联文件"),
             ]
         )
+    def _get_rprompt(self) -> Any:
+        try:
+            status = self.service.get_status()
+        except Exception:
+            return FormattedText([])
+        status_text = _format_prompt_status_text(status)
+        return FormattedText([("class:rprompt.value", status_text)])
 
     def _create_session(self) -> Any:
         if self.history_file is not None:
@@ -855,8 +905,15 @@ class InteractivePrompt:
             wrap_lines=True,
             prompt_continuation=lambda width, line_number, is_soft_wrap: " " * len(self.prompt_text),
             placeholder=self._get_placeholder,
+            rprompt=self._get_rprompt,
             erase_when_done=True,
         )
+
+    def get_status_text(self) -> str | None:
+        try:
+            return _format_prompt_status_text(self.service.get_status())
+        except Exception:
+            return None
 
     async def get_input(self) -> tuple[str, bool]:
         prompt_tokens = [("class:prompt", self.prompt_text)]
@@ -926,6 +983,10 @@ class MSAgentApp:
                     self.renderer.render_system_message("Goodbye.", title="Session")
                     break
 
+                if not raw_input:
+                    self.renderer.render_empty_prompt_submit(prompt.prompt_text)
+                    continue
+
                 intent = self.service.resolve_user_input(raw_input)
                 if intent.type == "ignore":
                     continue
@@ -965,7 +1026,10 @@ class MSAgentApp:
                     )
                     continue
 
-                self.renderer.render_user_message(intent.message)
+                self.renderer.render_user_message(
+                    intent.message,
+                    status_text=prompt.get_status_text(),
+                )
                 await self._run_chat_turn(intent.message)
         finally:
             await self.service.shutdown()

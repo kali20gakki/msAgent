@@ -6,6 +6,7 @@ import pytest
 from rich.console import Console
 
 import msagent.tui as tui_module
+from msagent.interfaces import UsageSnapshot
 from msagent.tui import (
     ChatWelcomeBanner,
     MSAgentApp,
@@ -78,6 +79,37 @@ def test_format_duration_text() -> None:
     assert tui_module._format_duration_text(65.2) == "took 1m 05s"
 
 
+def test_format_token_count() -> None:
+    assert tui_module._format_token_count(None) == "0"
+    assert tui_module._format_token_count(0) == "0"
+    assert tui_module._format_token_count(999) == "999"
+    assert tui_module._format_token_count(1200) == "1.2K"
+    assert tui_module._format_token_count(2048) == "2K"
+    assert tui_module._format_token_count(123456) == "123K"
+    assert tui_module._format_token_count(1540000) == "1.5M"
+
+
+def test_format_prompt_status_text() -> None:
+    status = tui_module.AgentStatus(
+        is_initialized=True,
+        error_message="",
+        session_number=1,
+        provider="openai",
+        model="gpt",
+        backend_mode="filesystem",
+        connected_servers=(),
+        loaded_skills=(),
+        usage=None,
+        cumulative_usage=UsageSnapshot(prompt_tokens=1200, completion_tokens=300, total_tokens=1500),
+        context_tokens=2048,
+    )
+
+    assert (
+        tui_module._format_prompt_status_text(status)
+        == "Ctx 2K | Total 1.5K | In 1.2K | Out 300"
+    )
+
+
 def test_renderer_build_assistant_renderable_uses_streaming_prefix() -> None:
     console = Console(record=True, width=100, theme=tui_module._RICH_THEME)
     renderer = Renderer(console)
@@ -122,6 +154,27 @@ def test_renderer_build_tool_call_has_space_between_icon_and_name() -> None:
 
     assert f"{tui_module.TOOL_PREFIX}   ls" in output
     assert "path : /" in output
+
+
+def test_renderer_render_empty_prompt_submit_keeps_prompt_visible() -> None:
+    console = Console(record=True, width=100, theme=tui_module._RICH_THEME)
+    renderer = Renderer(console)
+
+    renderer.render_empty_prompt_submit(tui_module.PROMPT_STYLE)
+    output = console.export_text()
+
+    assert tui_module.PROMPT_STYLE.strip() in output
+
+
+def test_renderer_render_user_message_can_append_status_text() -> None:
+    console = Console(record=True, width=100, theme=tui_module._RICH_THEME)
+    renderer = Renderer(console)
+
+    renderer.render_user_message("hello", status_text="ctx 10 | tok 20 (12/8)")
+    output = console.export_text()
+
+    assert "hello" in output
+    assert "ctx 10 | tok 20 (12/8)" in output
 
 
 def test_tool_browser_format_tool_list_marks_selection_and_expands_parameters() -> None:
@@ -219,6 +272,7 @@ def test_interactive_prompt_configures_session_to_erase_when_done(
     tui_module.InteractivePrompt._create_session(prompt)
 
     assert captured["erase_when_done"] is True
+    assert captured["rprompt"] == prompt._get_rprompt
 
 
 def test_interactive_prompt_placeholder_shows_command_and_file_hints() -> None:
@@ -227,6 +281,38 @@ def test_interactive_prompt_placeholder_shows_command_and_file_hints() -> None:
     placeholder = tui_module.InteractivePrompt._get_placeholder(prompt)
 
     assert list(placeholder) == [("class:placeholder", "尽管问 msAgent，/ 命令，@ 关联文件")]
+
+def test_interactive_prompt_rprompt_shows_context_and_cumulative_tokens() -> None:
+    class FakeService:
+        def get_status(self):
+            return tui_module.AgentStatus(
+                is_initialized=True,
+                error_message="",
+                session_number=1,
+                provider="openai",
+                model="gpt",
+                backend_mode="filesystem",
+                connected_servers=(),
+                loaded_skills=(),
+                usage=None,
+                cumulative_usage=UsageSnapshot(
+                    prompt_tokens=1200,
+                    completion_tokens=300,
+                    total_tokens=1500,
+                ),
+                context_tokens=2048,
+            )
+
+    prompt = tui_module.InteractivePrompt.__new__(tui_module.InteractivePrompt)
+    prompt.service = FakeService()
+
+    rprompt = tui_module.InteractivePrompt._get_rprompt(prompt)
+    rendered = "".join(text for _, text in rprompt)
+
+    assert "Ctx 2K" in rendered
+    assert "Total 1.5K" in rendered
+    assert "In 1.2K" in rendered
+    assert "Out 300" in rendered
 
 
 @pytest.mark.asyncio
@@ -275,3 +361,64 @@ async def test_run_async_initializes_and_shuts_down_on_eof(monkeypatch: pytest.M
 
     assert service.initialize_called is True
     assert service.shutdown_called is True
+
+
+@pytest.mark.asyncio
+async def test_run_async_echoes_blank_enter_before_reprompt(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeService:
+        def __init__(self) -> None:
+            self.initialize_called = False
+            self.shutdown_called = False
+
+        async def initialize(self) -> bool:
+            self.initialize_called = True
+            return True
+
+        async def shutdown(self) -> None:
+            self.shutdown_called = True
+
+        def get_status(self):
+            return tui_module.AgentStatus(
+                is_initialized=True,
+                error_message="",
+                session_number=1,
+                provider="openai",
+                model="gpt",
+                backend_mode="filesystem",
+                connected_servers=(),
+                loaded_skills=(),
+                usage=None,
+            )
+
+        def resolve_user_input(self, _raw_input: str):
+            raise AssertionError("blank input should be handled before resolving intent")
+
+    class FakePrompt:
+        hotkeys: dict[str, str] = {}
+
+        def __init__(self, service, *, history_file=None, prompt_text=tui_module.PROMPT_STYLE):
+            self.service = service
+            self.history_file = history_file
+            self.prompt_text = prompt_text
+            self._calls = 0
+
+        async def get_input(self):
+            self._calls += 1
+            if self._calls == 1:
+                return ("", False)
+            raise EOFError
+
+    service = FakeService()
+    console = Console(record=True, width=100, theme=tui_module._RICH_THEME)
+    app = MSAgentApp(service=service, console=console)
+    monkeypatch.setattr(tui_module, "InteractivePrompt", FakePrompt)
+
+    await app.run_async()
+
+    output = console.export_text()
+
+    assert service.initialize_called is True
+    assert service.shutdown_called is True
+    assert tui_module.PROMPT_STYLE.strip() in output

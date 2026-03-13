@@ -57,6 +57,12 @@ class Agent(AgentBackend):
         self._loaded_skill_sources: list[str] = []
         self._loaded_skills: list[str] = []
         self._system_prompt_template: str | None = None
+        self._session_usage_totals = {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+        }
+        self._context_tokens: int | None = None
 
     _AT_REF_PATTERN = re.compile(r"(?<!\S)@([^\s]+)")
     _MAX_ATTACHED_FILES = 5
@@ -114,6 +120,7 @@ class Agent(AgentBackend):
                 if mcp_config.enabled:
                     await mcp_manager.add_server(mcp_config)
 
+            self._refresh_context_tokens()
             self._initialized = True
             return True
 
@@ -210,6 +217,8 @@ class Agent(AgentBackend):
             connected_servers=tuple(mcp_manager.get_connected_servers()),
             loaded_skills=tuple(self._loaded_skills),
             usage=self._build_usage_snapshot(),
+            cumulative_usage=self._build_cumulative_usage_snapshot(),
+            context_tokens=self._context_tokens,
         )
 
     def get_system_prompt(self) -> str:
@@ -287,6 +296,7 @@ class Agent(AgentBackend):
                 self.llm_client = previous_client
                 return f"❌ 切换 deepagents backend 失败：{exc}"
 
+        self._refresh_context_tokens()
         return self._format_backend_status_message(
             prefix="已切换当前会话的",
             include_command_hint=True,
@@ -340,11 +350,14 @@ class Agent(AgentBackend):
             )
 
             self.messages.append(Message("assistant", response))
+            self._record_latest_usage()
             return response
         except asyncio.TimeoutError:
             return f"❌ Error: LLM response timed out after {timeout_s:.0f}s"
         except Exception as e:
             return f"❌ Error: {e}"
+        finally:
+            self._refresh_context_tokens()
 
     async def chat_stream(self, user_input: str) -> AsyncGenerator[str, None]:
         """Process a chat message and stream the response."""
@@ -451,6 +464,7 @@ class Agent(AgentBackend):
             if not full_response:
                 if saw_tool_event:
                     dt = time.monotonic() - start
+                    self._record_latest_usage()
                     yield AgentEvent(type="done", duration_s=dt)
                     return
 
@@ -477,6 +491,7 @@ class Agent(AgentBackend):
             dt = time.monotonic() - start
             if full_response:
                 self.messages.append(Message("assistant", full_response))
+            self._record_latest_usage()
             yield AgentEvent(type="done", duration_s=dt)
         except asyncio.CancelledError:
             try:
@@ -487,6 +502,8 @@ class Agent(AgentBackend):
             return
         except Exception as e:
             yield AgentEvent(type="error", content=f"❌ Error: {e}")
+        finally:
+            self._refresh_context_tokens()
 
     def _filter_info_logs(self, text: str) -> str:
         """Remove verbose INFO log lines from streamed text."""
@@ -514,7 +531,9 @@ class Agent(AgentBackend):
     def clear_history(self) -> None:
         """Clear conversation history."""
         self.messages.clear()
+        self._reset_session_usage()
         self._reset_last_usage()
+        self._refresh_context_tokens()
 
     def start_new_session(self) -> int:
         """Start a brand new session and clear all previous context."""
@@ -532,7 +551,12 @@ class Agent(AgentBackend):
         self._initialized = False
 
     def _build_usage_snapshot(self) -> UsageSnapshot | None:
-        usage = getattr(self.llm_client, "last_usage", None)
+        return self._usage_snapshot_from_mapping(getattr(self.llm_client, "last_usage", None))
+
+    def _build_cumulative_usage_snapshot(self) -> UsageSnapshot | None:
+        return self._usage_snapshot_from_mapping(self._session_usage_totals)
+
+    def _usage_snapshot_from_mapping(self, usage: Any) -> UsageSnapshot | None:
         if not isinstance(usage, dict):
             return None
         prompt = usage.get("prompt_tokens")
@@ -546,18 +570,48 @@ class Agent(AgentBackend):
             )
         return None
 
+    def _record_latest_usage(self) -> None:
+        snapshot = self._build_usage_snapshot()
+        if snapshot is None:
+            return
+        self._session_usage_totals["prompt_tokens"] += snapshot.prompt_tokens
+        self._session_usage_totals["completion_tokens"] += snapshot.completion_tokens
+        self._session_usage_totals["total_tokens"] += snapshot.total_tokens
+
+    def _reset_session_usage(self) -> None:
+        self._session_usage_totals = {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+        }
+
     def _reset_last_usage(self) -> None:
         if self.llm_client is None:
             return
         if hasattr(self.llm_client, "last_usage"):
             self.llm_client.last_usage = None
 
+    def _refresh_context_tokens(self) -> None:
+        if self.llm_client is None or not hasattr(self.llm_client, "count_tokens"):
+            self._context_tokens = None
+            return
+
+        tools = self._tool_invoker.get_tools()
+        messages = [Message("system", self.get_system_prompt()), *self.messages]
+        try:
+            counted = self.llm_client.count_tokens(messages, tools=tools if tools else None)
+        except Exception:
+            self._context_tokens = None
+            return
+
+        self._context_tokens = counted if isinstance(counted, int) and counted >= 0 else None
+
     def find_local_files(self, query: str, limit: int = 8) -> list[str]:
         """Find workspace files by fuzzy path query."""
         raw_query = query.strip().lstrip("@").replace("\\", "/")
         if raw_query.startswith("~"):
             raw_query = os.path.expanduser(raw_query)
-        if raw_query.startswith("/"):
+        if raw_query.startswith("/") or Path(raw_query).is_absolute():
             return self._find_absolute_paths(raw_query, limit=limit)
 
         needle = raw_query.lstrip("./")
