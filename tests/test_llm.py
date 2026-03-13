@@ -297,6 +297,7 @@ async def test_chat_passes_skills_and_memory_to_create_deep_agent(
     assert captured["skills"] == ["/skills/user/", "/skills/project/"]
     assert captured["memory"] == ["/memory/AGENTS.md"]
     assert isinstance(captured["backend"], FilesystemBackend)
+    assert captured["backend"].virtual_mode is True
 
 
 def test_client_uses_workspace_root_for_filesystem_backend(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -309,6 +310,7 @@ def test_client_uses_workspace_root_for_filesystem_backend(monkeypatch: pytest.M
 
     assert isinstance(client._backend, FilesystemBackend)
     assert client._backend.cwd == workspace_root.resolve()
+    assert client._backend.virtual_mode is True
 
 
 def test_client_can_use_local_shell_backend(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -323,6 +325,7 @@ def test_client_can_use_local_shell_backend(monkeypatch: pytest.MonkeyPatch) -> 
 
     assert isinstance(client._backend, LocalShellBackend)
     assert client._backend.cwd == workspace_root.resolve()
+    assert client._backend.virtual_mode is True
 
 
 def test_local_shell_backend_uses_minimal_env(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -7,7 +7,7 @@ import re
 import sys
 import time
 from collections.abc import AsyncGenerator
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 from .config import AppConfig, config_manager
@@ -102,9 +102,10 @@ class Agent(AgentBackend):
                 return False
 
             skill_sources = self._resolve_skill_sources()
+            skill_directories = self._resolve_skill_directories(skill_sources)
             self.llm_client = self._create_llm_client(skill_sources)
             self._loaded_skill_sources = skill_sources
-            self._loaded_skills = self._discover_skills(skill_sources)
+            self._loaded_skills = self._discover_skills(skill_directories)
 
             if self._uses_local_shell_backend():
                 print(self._LOCAL_SHELL_WARNING, file=sys.stderr, flush=True)
@@ -121,31 +122,59 @@ class Agent(AgentBackend):
             return False
 
     def _resolve_skill_sources(self) -> list[str]:
-        """Resolve deepagents skill source directories."""
+        """Resolve deepagents skill sources as POSIX paths relative to backend root."""
         sources: list[str] = []
         project_skills_dir = (self._workspace_root / "skills").resolve()
         if project_skills_dir.is_dir():
-            sources.append(project_skills_dir.as_posix())
+            sources.append("/skills")
 
         for source in self.config.deepagents.skills:
-            if source not in sources:
-                sources.append(source)
-
-        package_skills_dir = self._PACKAGE_SKILLS_DIR.resolve()
-        package_source = package_skills_dir.as_posix()
-        if package_skills_dir.is_dir() and package_source not in sources:
-            sources.append(package_source)
+            normalized = self._normalize_skill_source(source)
+            if normalized is None or normalized in sources:
+                continue
+            sources.append(normalized)
         return sources
 
-    def _discover_skills(self, sources: list[str]) -> list[str]:
+    def _normalize_skill_source(self, source: str) -> str | None:
+        text = (source or "").strip()
+        if not text:
+            return None
+
+        if text.startswith("/") and not (len(text) > 1 and text[1] == ":"):
+            normalized = PurePosixPath(text).as_posix()
+            return normalized if normalized != "." else "/"
+
+        candidate = Path(text).expanduser()
+        if not candidate.is_absolute():
+            candidate = (self._workspace_root / candidate).resolve()
+        else:
+            candidate = candidate.resolve()
+
+        try:
+            relative = candidate.relative_to(self._workspace_root)
+        except Exception:
+            return None
+
+        if str(relative) in {"", "."}:
+            return "/"
+        return f"/{relative.as_posix()}"
+
+    def _resolve_skill_directories(self, sources: list[str]) -> list[Path]:
+        """Resolve on-disk skill directories for discoverable backend-relative sources."""
+        directories: list[Path] = []
+        for source in sources:
+            parts = [part for part in PurePosixPath(source).parts if part not in {"/", ""}]
+            directory = self._workspace_root.joinpath(*parts).resolve()
+            if directory.is_dir() and directory not in directories:
+                directories.append(directory)
+        return directories
+
+    def _discover_skills(self, directories: list[Path]) -> list[str]:
         """Discover skill names from source directories."""
         discovered: list[str] = []
         seen: set[str] = set()
 
-        for source in sources:
-            source_path = Path(source)
-            if not source_path.is_dir():
-                continue
+        for source_path in directories:
             try:
                 children = sorted(source_path.iterdir(), key=lambda p: p.name)
             except Exception:
@@ -202,7 +231,9 @@ class Agent(AgentBackend):
         return self._system_prompt_template
 
     def _create_llm_client(self, skill_sources: list[str] | None = None):
-        resolved_skill_sources = skill_sources or self._resolve_skill_sources()
+        resolved_skill_sources = skill_sources
+        if resolved_skill_sources is None:
+            resolved_skill_sources = self._resolve_skill_sources()
         return create_llm_client(
             self.config.llm,
             skills=resolved_skill_sources,
@@ -726,3 +757,7 @@ class Agent(AgentBackend):
             "Use these referenced local files as context when helpful:\n"
             f"{file_context}"
         )
+
+    def get_available_tools(self) -> list[dict[str, Any]]:
+        """Return the current merged tool catalog for UI inspection."""
+        return self._tool_invoker.get_tools()

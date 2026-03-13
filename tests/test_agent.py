@@ -166,9 +166,9 @@ async def test_initialize_passes_deepagents_settings_to_llm_client(
 
     assert initialized is True
     assert captured["skills"] == [
-        (tmp_path / "skills").resolve().as_posix(),
-        "/skills/user/",
-        "/skills/project/",
+        "/skills",
+        "/skills/user",
+        "/skills/project",
     ]
     assert captured["memory"] == ["/memory/AGENTS.md"]
     assert captured["recursion_limit"] == config.deepagents.recursion_limit
@@ -177,7 +177,7 @@ async def test_initialize_passes_deepagents_settings_to_llm_client(
     assert captured["backend_mode"] == "filesystem"
 
 
-def test_resolve_skill_sources_includes_packaged_skills(
+def test_resolve_skill_sources_does_not_include_packaged_skills_automatically(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -188,7 +188,22 @@ def test_resolve_skill_sources_includes_packaged_skills(
 
     agent = Agent(make_config(api_key="configured"))
 
-    assert agent._resolve_skill_sources() == [packaged_skills_dir.resolve().as_posix()]
+    assert agent._resolve_skill_sources() == []
+
+
+def test_resolve_skill_sources_normalizes_workspace_absolute_paths(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    custom_skills_dir = tmp_path / "custom-skills"
+    custom_skills_dir.mkdir()
+
+    config = make_config(api_key="configured")
+    config.deepagents.skills = [str(custom_skills_dir.resolve())]
+    agent = Agent(config)
+
+    assert agent._resolve_skill_sources() == ["/custom-skills"]
 
 
 def test_get_system_prompt_includes_connected_servers(monkeypatch: pytest.MonkeyPatch) -> None:

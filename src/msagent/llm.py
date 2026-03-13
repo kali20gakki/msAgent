@@ -283,13 +283,13 @@ class DeepAgentsClient:
         if self._backend_mode == "filesystem":
             return FilesystemBackend(
                 root_dir=self._workspace_root,
-                virtual_mode=False,
+                virtual_mode=True,
             )
 
         if self._backend_mode == "local_shell":
             return LocalShellBackend(
                 root_dir=self._workspace_root,
-                virtual_mode=False,
+                virtual_mode=True,
                 timeout=_read_positive_int_env("MSAGENT_LOCAL_SHELL_TIMEOUT", 120),
                 max_output_bytes=_read_positive_int_env(
                     "MSAGENT_LOCAL_SHELL_MAX_OUTPUT_BYTES", 100_000
