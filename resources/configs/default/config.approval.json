@@ -1,0 +1,30 @@
+{
+  "always_allow": [],
+  "always_deny": [],
+  "always_ask": [
+    {
+      "name": "run_command",
+      "args": {
+        "command": "rm\\s+-rf.*"
+      }
+    },
+    {
+      "name": "run_command",
+      "args": {
+        "command": "git\\s+push.*"
+      }
+    },
+    {
+      "name": "run_command",
+      "args": {
+        "command": "git\\s+reset\\s+--hard.*"
+      }
+    },
+    {
+      "name": "run_command",
+      "args": {
+        "command": "sudo\\s+.*"
+      }
+    }
+  ]
+}

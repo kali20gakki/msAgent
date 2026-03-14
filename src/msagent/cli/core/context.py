@@ -21,7 +21,7 @@ class Context(BaseModel):
     model_display: str | None = None
     thread_id: str
     working_dir: Path
-    approval_mode: ApprovalMode = ApprovalMode.SEMI_ACTIVE
+    approval_mode: ApprovalMode = ApprovalMode.ACTIVE
     bash_mode: bool = False
     current_input_tokens: int | None = None
     current_output_tokens: int | None = None
@@ -108,7 +108,7 @@ class Context(BaseModel):
             model_display=resolved_model_display,
             thread_id=thread_id,
             working_dir=working_dir,
-            approval_mode=approval_mode or ApprovalMode.SEMI_ACTIVE,
+            approval_mode=approval_mode or ApprovalMode.ACTIVE,
             context_window=llm_config.context_window,
             recursion_limit=agent_config.recursion_limit,
             tool_output_max_tokens=tool_output_max_tokens,

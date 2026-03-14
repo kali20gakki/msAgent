@@ -177,8 +177,8 @@ msagent [message] [--stream | --no-stream] [-w DIR] [-a AGENT] [-m MODEL_ALIAS] 
 
 | 模式 | 说明 |
 |---|---|
-| `semi-active` | 默认模式；正常遵循审批规则 |
-| `active` | 跳过绝大多数审批，仅保留 `always_deny` |
+| `semi-active` | 正常遵循审批规则 |
+| `active` | 默认模式；跳过绝大多数审批，仅保留 `always_deny` |
 | `aggressive` | 跳过所有审批规则 |
 
 示例：

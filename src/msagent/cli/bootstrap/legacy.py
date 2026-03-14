@@ -141,7 +141,7 @@ def _add_runtime_options(
         "-am",
         "--approval-mode",
         choices=[mode.value for mode in ApprovalMode],
-        default=ApprovalMode.SEMI_ACTIVE.value,
+        default=ApprovalMode.ACTIVE.value,
         help="Tool approval mode",
     )
 

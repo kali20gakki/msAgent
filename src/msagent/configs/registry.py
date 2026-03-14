@@ -76,7 +76,6 @@ class ConfigRegistry:
                 self.config_dir,
                 ignore=shutil.ignore_patterns(
                     CONFIG_CHECKPOINTS_URL_FILE_NAME.name.replace(".db", ".*"),
-                    CONFIG_APPROVAL_FILE_NAME.name,
                 ),
             )
         else:

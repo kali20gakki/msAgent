@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 class ApprovalMode(str, Enum):
     """Tool approval mode for interactive sessions."""
 
-    SEMI_ACTIVE = "semi-active"  # No effect (default)
+    SEMI_ACTIVE = "semi-active"  # No effect
     ACTIVE = "active"  # Bypass all approval rules except "always_deny"
     AGGRESSIVE = "aggressive"  # Bypass all approval rules
 
