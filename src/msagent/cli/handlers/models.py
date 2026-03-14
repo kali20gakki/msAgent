@@ -14,6 +14,7 @@ from prompt_toolkit.layout.containers import HSplit, Window
 from prompt_toolkit.layout.controls import FormattedTextControl
 
 from msagent.cli.bootstrap.initializer import initializer
+from msagent.cli.core.context import Context
 from msagent.cli.theme import console, theme
 from msagent.cli.ui.shared import (
     create_bottom_toolbar,
@@ -94,6 +95,9 @@ class ModelHandler:
 
                     self.session.update_context(
                         model=selected_model_name,
+                        model_display=Context.format_model_display(
+                            selected_model_name, new_llm_config or selected_model_name
+                        ),
                         context_window=(
                             new_llm_config.context_window if new_llm_config else None
                         ),

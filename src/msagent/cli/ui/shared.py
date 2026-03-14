@@ -10,6 +10,7 @@ from prompt_toolkit.styles import Style
 
 from msagent.cli.theme import theme
 from msagent.configs import ApprovalMode
+from msagent.utils.cost import calculate_context_percentage, format_tokens
 from msagent.utils.version import get_version
 
 
@@ -64,6 +65,7 @@ def create_prompt_style(context, *, bash_mode: bool = False) -> Style:
             # Bottom toolbar styling - override default reverse
             "bottom-toolbar": f"noreverse {theme.muted_text}",
             "bottom-toolbar.text": f"noreverse {theme.muted_text}",
+            "toolbar.model": f"noreverse {theme.accent_color}",
             # Toolbar mode styling - dynamic based on approval mode
             "toolbar.mode": f"noreverse {prompt_color}",
             # Toolbar bash mode styling - danger (pink)
@@ -72,36 +74,98 @@ def create_prompt_style(context, *, bash_mode: bool = False) -> Style:
     )
 
 
+def build_usage_summary(context) -> str:
+    """Build ctx and token usage summary for compact status displays."""
+    input_tokens = context.current_input_tokens
+    if input_tokens is None or input_tokens <= 0:
+        return ""
+
+    output_tokens = context.current_output_tokens or 0
+    total_tokens = input_tokens + output_tokens
+
+    usage_parts: list[str] = []
+    if context.context_window is not None and context.context_window > 0:
+        tokens_formatted = format_tokens(total_tokens)
+        window_formatted = format_tokens(context.context_window)
+        percentage = calculate_context_percentage(total_tokens, context.context_window)
+        percentage_display = int(percentage + 0.5)
+        usage_parts.append(
+            f"ctx {tokens_formatted}/{window_formatted} tokens ({percentage_display}%)"
+        )
+
+    usage_parts.append(f"in {format_tokens(input_tokens)}")
+    usage_parts.append(f"out {format_tokens(output_tokens)}")
+
+    return " | ".join(usage_parts)
+
+
+def _truncate_middle(text: str, max_length: int) -> str:
+    """Truncate text in the middle to fit the available width."""
+    if max_length <= 0:
+        return ""
+    if len(text) <= max_length:
+        return text
+    if max_length <= 3:
+        return text[:max_length]
+
+    head = (max_length - 3) // 2
+    tail = max_length - 3 - head
+    return f"{text[:head]}...{text[-tail:]}"
+
+
 def create_bottom_toolbar(
     context,
     working_dir: str,
     *,
     bash_mode: bool = False,
 ):
-    """Create bottom toolbar with version, directory, and mode info."""
+    """Create bottom toolbar with version, directory, model, usage, and mode info."""
     terminal_width = os.get_terminal_size().columns if os.isatty(1) else 80
     version = get_version()
     working_dir_str = str(working_dir)
+    model_label = getattr(context, "model_display", None) or getattr(context, "model", "")
+    usage_summary = build_usage_summary(context)
 
     # Left side: version + directory
-    escaped_working_dir = html.escape(working_dir_str)
-    left_text = f" v{version} | {working_dir_str}"
-    left_content = f" v{version} | {escaped_working_dir}"
-
-    # Right side: mode info
+    left_prefix = f" v{version} | "
     mode_name = context.approval_mode.value
 
-    right_parts = ["bash-mode", mode_name] if bash_mode else [mode_name]
-    right_content = " | ".join(right_parts)
+    right_parts: list[tuple[str, str]] = []
+    right_plain_parts: list[str] = []
+
+    if bash_mode:
+        right_parts.append(("toolbar.bash", "bash-mode"))
+        right_plain_parts.append("bash-mode")
+
+    if model_label:
+        right_parts.append(("toolbar.model", model_label))
+        right_plain_parts.append(model_label)
+
+    if usage_summary:
+        usage_label = f"[{usage_summary}]"
+        right_parts.append(("muted", usage_label))
+        right_plain_parts.append(usage_label)
+
+    right_parts.append(("toolbar.mode", mode_name))
+    right_plain_parts.append(mode_name)
+
+    right_content = " | ".join(right_plain_parts)
+    working_dir_width = max(0, terminal_width - len(left_prefix) - len(right_content) - 1)
+    display_working_dir = _truncate_middle(working_dir_str, working_dir_width)
+    left_text = f"{left_prefix}{display_working_dir}"
+    left_content = f"{html.escape(left_prefix)}{html.escape(display_working_dir)}"
 
     # Calculate padding
     padding = " " * max(0, terminal_width - len(left_text) - len(right_content) - 1)
 
-    # Build styled output
-    if bash_mode:
-        styled_right = f"<toolbar.bash>bash-mode</toolbar.bash><muted> | </muted><toolbar.mode>{mode_name}</toolbar.mode>"
-    else:
-        styled_right = f"<toolbar.mode>{mode_name}</toolbar.mode>"
+    styled_right_parts = []
+    for i, (style_name, value) in enumerate(right_parts):
+        if i > 0:
+            styled_right_parts.append("<muted> | </muted>")
+        styled_right_parts.append(
+            f"<{style_name}>{html.escape(value)}</{style_name}>"
+        )
+    styled_right = "".join(styled_right_parts)
 
     return HTML(f"<muted>{left_content}{padding}</muted>{styled_right}<muted> </muted>")
 

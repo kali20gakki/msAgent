@@ -11,6 +11,7 @@ from prompt_toolkit.layout.containers import HSplit, Window
 from prompt_toolkit.layout.controls import FormattedTextControl
 
 from msagent.cli.bootstrap.initializer import initializer
+from msagent.cli.core.context import Context
 from msagent.cli.theme import console, theme
 from msagent.cli.ui.shared import create_bottom_toolbar, create_prompt_style
 from msagent.configs import AgentConfig
@@ -59,6 +60,9 @@ class AgentHandler:
                 self.session.update_context(
                     agent=selected_agent_name,
                     model=selected_agent_config.llm.alias,
+                    model_display=Context.format_model_display(
+                        selected_agent_config.llm.alias, selected_agent_config.llm
+                    ),
                 )
                 logger.info(
                     f"Switched to Agent: {selected_agent_name}, "

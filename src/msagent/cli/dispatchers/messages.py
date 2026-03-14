@@ -127,7 +127,7 @@ class MessageDispatcher:
 
                 try:
                     with console.console.status(
-                        f"[{theme.spinner_color}]Randomizing...[/{theme.spinner_color}]"
+                        f"[{theme.spinner_color}]Thinking...[/{theme.spinner_color}]"
                     ) as status:
                         async for chunk in self.session.graph.astream(
                             current_input,
@@ -326,7 +326,7 @@ class MessageDispatcher:
                 indent = "  " * indent_level
 
                 spinner_text = render(
-                    f"[{theme.spinner_color}]{indent}Randomizing...[/{theme.spinner_color}]"
+                    f"[{theme.spinner_color}]{indent}Thinking...[/{theme.spinner_color}]"
                 )
                 preview_text = "\n".join(
                     f"{indent}{line}" for line in streaming_state["preview_lines"][-3:]

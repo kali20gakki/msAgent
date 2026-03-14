@@ -18,7 +18,6 @@ from msagent.cli.ui.shared import create_bottom_toolbar, create_prompt_style
 from msagent.core.constants import CONFIG_HISTORY_FILE_NAME
 from msagent.core.logging import get_logger
 from msagent.core.settings import settings
-from msagent.utils.cost import calculate_context_percentage, format_tokens
 
 logger = get_logger(__name__)
 
@@ -67,20 +66,15 @@ class InteractivePrompt:
 
     def _setup_session(self) -> None:
         """Set up the prompt session with all configurations."""
-        # Create key bindings
         kb = self._create_key_bindings()
-
-        # Create style
         style = create_prompt_style(self.context, bash_mode=self.context.bash_mode)
 
-        # Create completer router for slash commands and @ references
         self.completer = CompleterRouter(
             commands=self.commands,
             working_dir=Path(self.context.working_dir),
             max_suggestions=settings.cli.max_autocomplete_suggestions,
         )
 
-        # Create session
         self.prompt_session = PromptSession(
             history=self.history,
             auto_suggest=AutoSuggestFromHistory(),
@@ -110,24 +104,21 @@ class InteractivePrompt:
             buffer = event.current_buffer
             current_time = time.time()
 
-            # If there's text in the buffer, clear it
             if buffer.text.strip():
                 buffer.text = ""
-                self._reset_ctrl_c_state()  # Reset timer after clearing
+                self._reset_ctrl_c_state()
                 return
 
-            # If buffer is empty, check for double-press
             if self._last_ctrl_c_time is not None:
                 time_since_last = current_time - self._last_ctrl_c_time
-                # If the quit banner is showing, we treat the next Ctrl+C as quit even
-                # if the nominal timeout has elapsed—_show_quit_message keeps the
+                # If the quit banner is showing, treat the next Ctrl+C as quit even
+                # if the nominal timeout has elapsed; _show_quit_message keeps the
                 # window open until the scheduled hide runs.
                 if time_since_last < self._ctrl_c_timeout or self._show_quit_message:
                     self._reset_ctrl_c_state()
                     event.app.exit(exception=EOFError())
                     return
 
-            # First press on empty buffer or stale timer: arm quit and show banner
             self._last_ctrl_c_time = current_time
             self._show_quit_message = True
             self._schedule_hide_message(event.app)
@@ -164,10 +155,8 @@ class InteractivePrompt:
                 current_completion = buffer.complete_state.current_completion
                 buffer.apply_completion(current_completion)
 
-                # For slash commands, submit immediately
                 if buffer.text.lstrip().startswith("/"):
                     buffer.validate_and_handle()
-                # For @ references, add space
                 else:
                     buffer.insert_text(" ")
 
@@ -176,27 +165,21 @@ class InteractivePrompt:
             """Tab: apply first completion immediately."""
             buffer = event.current_buffer
 
-            # If completion is already showing and selected, apply it
             if buffer.complete_state and buffer.complete_state.current_completion:
                 current_completion = buffer.complete_state.current_completion
                 buffer.apply_completion(current_completion)
 
-                # For @ references, add space
                 if not buffer.text.lstrip().startswith("/"):
                     buffer.insert_text(" ")
             else:
-                # Start completion with first item selected
                 buffer.start_completion(select_first=True)
-                # Immediately apply the first completion
                 if buffer.complete_state and buffer.complete_state.current_completion:
                     current_completion = buffer.complete_state.current_completion
                     buffer.apply_completion(current_completion)
 
-                    # For @ references, add space
                     if not buffer.text.lstrip().startswith("/"):
                         buffer.insert_text(" ")
 
-        # Register hotkey descriptions
         self.hotkeys = {
             self._format_key_name(Keys.ControlC): "Clear input (press twice to quit)",
             self._format_key_name(Keys.ControlJ): "Insert newline for multiline input",
@@ -218,38 +201,12 @@ class InteractivePrompt:
         self.bash_mode_toggle_callback = callback
 
     def _get_placeholder(self) -> HTML:
-        """Generate placeholder text with command/file hints and usage info."""
+        """Generate placeholder text with command and file hints."""
         return HTML(f"<placeholder>{self._build_placeholder_text()}</placeholder>")
 
     def _build_placeholder_text(self) -> str:
         """Build placeholder copy shown inside the input box."""
-        usage_info = self._build_usage_info()
-        return f"尽管问msAgent，试试 /命令 或 @文件{usage_info}"
-
-    def _build_usage_info(self) -> str:
-        """Build ctx and token usage summary for the input placeholder."""
-        ctx = self.context
-        input_tokens = ctx.current_input_tokens
-        if input_tokens is None or input_tokens <= 0:
-            return ""
-
-        output_tokens = ctx.current_output_tokens or 0
-        total_tokens = input_tokens + output_tokens
-
-        usage_parts: list[str] = []
-        if ctx.context_window is not None and ctx.context_window > 0:
-            tokens_formatted = format_tokens(total_tokens)
-            window_formatted = format_tokens(ctx.context_window)
-            percentage = calculate_context_percentage(total_tokens, ctx.context_window)
-            percentage_display = int(percentage + 0.5)
-            usage_parts.append(
-                f"ctx {tokens_formatted}/{window_formatted} tokens ({percentage_display}%)"
-            )
-
-        usage_parts.append(f"in {format_tokens(input_tokens)}")
-        usage_parts.append(f"out {format_tokens(output_tokens)}")
-
-        return f"  [{' | '.join(usage_parts)}]"
+        return "\u5c3d\u7ba1\u95eesAgent\uff0c\u8bd5\u8bd5 /\u547d\u4ee4 \u6216 @\u6587\u4ef6"
 
     def _get_bottom_toolbar(self) -> HTML:
         """Generate bottom toolbar text with version, working directory and approval mode."""
@@ -278,7 +235,6 @@ class InteractivePrompt:
     def refresh_style(self) -> None:
         """Refresh the prompt style after approval mode change."""
         if self.prompt_session:
-            # Update the session style
             self.prompt_session.style = create_prompt_style(
                 self.context, bash_mode=self.context.bash_mode
             )
@@ -295,22 +251,20 @@ class InteractivePrompt:
                 default_text = self.session.prefilled_text
                 self.session.prefilled_text = None
 
-            result = await self.prompt_session.prompt_async(prompt_text, default=default_text)  # type: ignore
+            result = await self.prompt_session.prompt_async(
+                prompt_text, default=default_text
+            )  # type: ignore
             print()
 
             content = result.strip()
 
             is_command = False
             if content.startswith("/"):
-                # If it's a known command, treat as command
                 first_word = content.split()[0] if content.split() else content
                 if first_word in self.commands:
                     is_command = True
-                # If it has only one "/" at the start and no path separators after,
-                # treat as command (e.g., "/help", "/exit")
                 elif "/" not in content[1:]:
                     is_command = True
-                # Otherwise it's likely a file path, treat as regular content
 
             return content, is_command
 

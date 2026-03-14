@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 from msagent.cli.bootstrap.initializer import initializer
 from msagent.cli.bootstrap.timer import timer
-from msagent.configs import ApprovalMode
+from msagent.configs import ApprovalMode, LLMProvider
 from msagent.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -18,6 +18,7 @@ class Context(BaseModel):
 
     agent: str
     model: str
+    model_display: str | None = None
     thread_id: str
     working_dir: Path
     approval_mode: ApprovalMode = ApprovalMode.SEMI_ACTIVE
@@ -28,6 +29,32 @@ class Context(BaseModel):
     recursion_limit: int
     tool_output_max_tokens: int | None = None
     stream_output: bool = True
+
+    @staticmethod
+    def format_provider_label(llm_config: object) -> str | None:
+        """Build a user-facing provider label from resolved LLM config."""
+        provider = getattr(llm_config, "provider", None)
+        if provider is None:
+            return None
+
+        provider_value = getattr(provider, "value", provider)
+        provider_labels = {
+            LLMProvider.GOOGLE.value: "Gemini",
+            LLMProvider.LMSTUDIO.value: "LM Studio",
+            LLMProvider.ZHIPUAI.value: "ZhipuAI",
+            LLMProvider.DEEPSEEK.value: "DeepSeek",
+        }
+        return provider_labels.get(str(provider_value), str(provider_value))
+
+    @staticmethod
+    def format_model_display(model_alias: str, llm_config: object) -> str:
+        """Build a user-facing model label from alias and resolved config."""
+        resolved_model = getattr(llm_config, "model", None) or model_alias
+        provider_label = Context.format_provider_label(llm_config)
+
+        if provider_label:
+            return f"{resolved_model} ({provider_label})"
+        return resolved_model
 
     @classmethod
     async def create(
@@ -65,13 +92,20 @@ class Context(BaseModel):
 
         resolved_agent = agent or agent_config.name
         resolved_model = model or agent_config.llm.alias
+        resolved_model_display = cls.format_model_display(resolved_model, llm_config)
 
-        logger.info(f"Agent: {resolved_agent}, Model: {resolved_model}")
+        logger.info(
+            "Agent: %s, Model alias: %s, Model: %s",
+            resolved_agent,
+            resolved_model,
+            resolved_model_display,
+        )
         logger.info(f"Thread ID: {thread_id}")
 
         return cls(
             agent=resolved_agent,
             model=resolved_model,
+            model_display=resolved_model_display,
             thread_id=thread_id,
             working_dir=working_dir,
             approval_mode=approval_mode or ApprovalMode.SEMI_ACTIVE,

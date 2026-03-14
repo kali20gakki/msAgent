@@ -239,7 +239,7 @@ class Renderer:
         from msagent.cli.bootstrap.initializer import initializer
 
         banner = ChatWelcomeBanner(
-            model_label=context.model,
+            model_label=context.model_display or context.model,
             mcp_servers=initializer.cached_mcp_server_names,
             loaded_skills=[skill.name for skill in initializer.cached_agent_skills],
         )
