@@ -106,7 +106,7 @@ class MCPConfig(BaseModel):
         if not path.exists():
             return cls()
         context = context or {}
-        async with aiofiles.open(path) as f:
+        async with aiofiles.open(path, encoding="utf-8") as f:
             config_content = await f.read()
 
         config: dict[str, Any] = json.loads(config_content)
@@ -128,5 +128,5 @@ class MCPConfig(BaseModel):
         config = {"mcpServers": mcp_servers}
 
         path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "w") as f:
+        with open(path, "w", encoding="utf-8") as f:
             json.dump(config, f, indent=2)

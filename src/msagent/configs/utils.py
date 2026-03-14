@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from msagent.configs.base import VersionedConfig
 
 logger = logging.getLogger(__name__)
+TEXT_ENCODING = "utf-8"
 
 
 def _migrate_items(
@@ -52,7 +53,7 @@ async def _atomic_write(file_path: Path, content: str) -> None:
     """Write content to file atomically using temp file and replace."""
     temp_file = file_path.with_suffix(".tmp")
     try:
-        await asyncio.to_thread(temp_file.write_text, content)
+        await asyncio.to_thread(temp_file.write_text, content, encoding=TEXT_ENCODING)
         await asyncio.to_thread(temp_file.replace, file_path)
     except Exception:
         if temp_file.exists():
@@ -90,7 +91,7 @@ async def _load_dir_items(
     items: list[dict] = []
     yml_files = await asyncio.to_thread(lambda: sorted(dir_path.glob("*.yml")))
     for yml_file in yml_files:
-        content = await asyncio.to_thread(yml_file.read_text)
+        content = await asyncio.to_thread(yml_file.read_text, encoding=TEXT_ENCODING)
         data = yaml.safe_load(content)
 
         is_list = isinstance(data, list)
@@ -127,7 +128,9 @@ async def _load_single_file(
     file_path: Path, key: str, config_class: type[VersionedConfig]
 ) -> list[dict]:
     """Load and migrate config items from single file."""
-    yaml_content = await asyncio.to_thread(file_path.read_text)
+    yaml_content = await asyncio.to_thread(
+        file_path.read_text, encoding=TEXT_ENCODING
+    )
     data = yaml.safe_load(yaml_content)
     items = data.get(key, []) if isinstance(data, dict) else []
 
@@ -159,7 +162,9 @@ async def load_prompt_content(
     if isinstance(prompt, str):
         prompt_path = base_path / prompt
         if prompt_path.exists() and prompt_path.is_file():
-            return await asyncio.to_thread(prompt_path.read_text)
+            return await asyncio.to_thread(
+                prompt_path.read_text, encoding=TEXT_ENCODING
+            )
         return prompt
 
     if isinstance(prompt, list):
@@ -167,7 +172,9 @@ async def load_prompt_content(
         for prompt_file in prompt:
             prompt_path = base_path / prompt_file
             if prompt_path.exists() and prompt_path.is_file():
-                content = await asyncio.to_thread(prompt_path.read_text)
+                content = await asyncio.to_thread(
+                    prompt_path.read_text, encoding=TEXT_ENCODING
+                )
                 contents.append(content)
             else:
                 contents.append(prompt_file)

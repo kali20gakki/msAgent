@@ -84,14 +84,14 @@ class ToolApprovalConfig(BaseModel):
         try:
             import json
 
-            with open(file_path) as f:
+            with open(file_path, encoding="utf-8") as f:
                 raw = json.load(f)
 
             if "always_ask" not in raw:
                 raw["always_ask"] = [
                     r.model_dump() for r in _default_always_ask_rules()
                 ]
-                with open(file_path, "w") as f:
+                with open(file_path, "w", encoding="utf-8") as f:
                     json.dump(raw, f, indent=2)
 
             return cls.model_validate(raw)
@@ -101,5 +101,5 @@ class ToolApprovalConfig(BaseModel):
     def save_to_json_file(self, file_path: Path) -> None:
         """Save configuration to JSON file"""
         file_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(file_path, "w") as f:
+        with open(file_path, "w", encoding="utf-8") as f:
             f.write(self.model_dump_json(indent=2))

@@ -32,7 +32,7 @@ def get_latest_features() -> list[str]:
         features_yaml = (
             importlib.resources.files("resources")
             .joinpath("features/notes.yml")
-            .read_text()
+            .read_text(encoding="utf-8")
         )
         data = yaml.safe_load(features_yaml)
         version = get_version()

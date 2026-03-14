@@ -321,15 +321,21 @@ class BatchAgentConfig(BaseBatchConfig):
         if dir_path and dir_path.exists():
             agent_file = dir_path / f"{agent_name}.yml"
             if agent_file.exists():
-                yaml_content = await asyncio.to_thread(agent_file.read_text)
+                yaml_content = await asyncio.to_thread(
+                    agent_file.read_text, encoding="utf-8"
+                )
                 data = yaml.safe_load(yaml_content)
                 data["llm"] = new_llm_name
                 yaml_str = yaml.dump(data, default_flow_style=False, sort_keys=False)
-                await asyncio.to_thread(agent_file.write_text, yaml_str)
+                await asyncio.to_thread(
+                    agent_file.write_text, yaml_str, encoding="utf-8"
+                )
                 return
 
         if file_path.exists():
-            yaml_content = await asyncio.to_thread(file_path.read_text)
+            yaml_content = await asyncio.to_thread(
+                file_path.read_text, encoding="utf-8"
+            )
             data = yaml.safe_load(yaml_content)
             agents: list[dict] = data.get("agents", [])
             for agent in agents:
@@ -337,7 +343,7 @@ class BatchAgentConfig(BaseBatchConfig):
                     agent["llm"] = new_llm_name
                     break
             yaml_str = yaml.dump(data, default_flow_style=False, sort_keys=False)
-            await asyncio.to_thread(file_path.write_text, yaml_str)
+            await asyncio.to_thread(file_path.write_text, yaml_str, encoding="utf-8")
 
     @staticmethod
     async def update_default_agent(
@@ -346,21 +352,27 @@ class BatchAgentConfig(BaseBatchConfig):
         if dir_path and dir_path.exists():
             agent_files = await asyncio.to_thread(list, dir_path.glob("*.yml"))
             for agent_file in agent_files:
-                yaml_content = await asyncio.to_thread(agent_file.read_text)
+                yaml_content = await asyncio.to_thread(
+                    agent_file.read_text, encoding="utf-8"
+                )
                 data = yaml.safe_load(yaml_content)
                 is_target = data.get("name") == agent_name
                 data["default"] = is_target
                 yaml_str = yaml.dump(data, default_flow_style=False, sort_keys=False)
-                await asyncio.to_thread(agent_file.write_text, yaml_str)
+                await asyncio.to_thread(
+                    agent_file.write_text, yaml_str, encoding="utf-8"
+                )
 
         if file_path.exists():
-            yaml_content = await asyncio.to_thread(file_path.read_text)
+            yaml_content = await asyncio.to_thread(
+                file_path.read_text, encoding="utf-8"
+            )
             data = yaml.safe_load(yaml_content)
             agents: list[dict] = data.get("agents", [])
             for agent in agents:
                 agent["default"] = agent.get("name") == agent_name
             yaml_str = yaml.dump(data, default_flow_style=False, sort_keys=False)
-            await asyncio.to_thread(file_path.write_text, yaml_str)
+            await asyncio.to_thread(file_path.write_text, yaml_str, encoding="utf-8")
 
     @classmethod
     async def from_yaml(
