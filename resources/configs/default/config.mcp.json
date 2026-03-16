@@ -3,9 +3,8 @@
     "msprof-mcp": {
       "command": "uvx",
       "args": [
-        "--isolated",
         "--from",
-        "git+https://gitcode.com/kali20gakki1/msprof_mcp.git",
+        "msprof-mcp==0.1.1",
         "msprof-mcp"
       ],
       "transport": "stdio",

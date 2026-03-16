@@ -38,14 +38,6 @@ from msagent.core.constants import (
     CONFIG_SUBAGENTS_FILE_NAME,
 )
 
-LEGACY_MSPROF_MCP_ARGS = [
-    "--isolated",
-    "--refresh",
-    "--from",
-    "git+https://gitcode.com/kali20gakki1/msprof_mcp.git",
-    "msprof-mcp",
-]
-
 
 class ConfigRegistry:
     """Central registry for loading, saving, and caching all configurations."""
@@ -141,7 +133,6 @@ class ConfigRegistry:
                 template_servers = template.get("mcpServers", {})
                 for name, server in template_servers.items():
                     current_servers.setdefault(name, server)
-                self._normalize_legacy_mcp_servers(current_servers, template_servers)
                 mcp_path.write_text(
                     json.dumps(current, indent=2, ensure_ascii=False),
                     encoding="utf-8",
@@ -171,29 +162,6 @@ class ConfigRegistry:
                 )
 
         await asyncio.to_thread(normalize)
-
-    @staticmethod
-    def _normalize_legacy_mcp_servers(
-        current_servers: dict[str, dict], template_servers: dict[str, dict]
-    ) -> None:
-        """Patch known bad MCP defaults while preserving user customizations."""
-
-        current_msprof = current_servers.get("msprof-mcp")
-        template_msprof = template_servers.get("msprof-mcp")
-        if not isinstance(current_msprof, dict) or not isinstance(template_msprof, dict):
-            return
-
-        if current_msprof.get("command") != "uvx":
-            return
-        if current_msprof.get("transport", "stdio") != "stdio":
-            return
-        if current_msprof.get("args") != LEGACY_MSPROF_MCP_ARGS:
-            return
-
-        normalized = dict(current_msprof)
-        normalized["args"] = list(template_msprof.get("args", []))
-        normalized["stateful"] = template_msprof.get("stateful", True)
-        current_servers["msprof-mcp"] = normalized
 
     # === LLM configs ===
 

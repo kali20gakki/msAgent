@@ -22,7 +22,7 @@
 - 🔗 多卡性能问题：快慢卡差异、通信效率瓶颈、同步等待等
 - ⏱️ 下发与调度问题：下发延迟、CPU 侧调度阻塞等
 - 🧩 集群性能问题：慢节点识别与从全局到单机的逐层定位
-- 🔌 MCP 扩展：基于 Model Context Protocol 接入工具（默认启用 [msprof-mcp](https://gitcode.com/kali20gakki1/msprof_mcp)）
+- 🔌 MCP 扩展：基于 Model Context Protocol 接入工具（默认启用 `msprof-mcp==0.1.1`）
 - 🧠 Skills 扩展：自动加载 `<working-dir>/skills` 与内置 Skills；源码仓库中的内置 Skills 由 `resources/configs/default/skills/` 下的 `mindstudio-skills` 子模块提供，复用领域分析流程和知识（仓库：[mindstudio-skills](https://github.com/kali20gakki/mindstudio-skills)）
 ---
 
@@ -400,7 +400,7 @@ LOG_LEVEL=DEBUG
 
 ### 🔌 MCP 配置
 
-默认模板会启用 `msprof-mcp`（仓库：[msprof-mcp](https://gitcode.com/kali20gakki1/msprof_mcp)）。
+默认模板会启用 `msprof-mcp`，并通过 `uvx --isolated --from msprof-mcp==0.1.1 msprof-mcp` 启动。
 
 当前代码中的 MCP 使用方式是：
 
@@ -441,6 +441,7 @@ LOG_LEVEL=DEBUG
 对于像 `msprof-mcp` 这类本地 `stdio` MCP，默认更推荐：
 
 - `stateful: true`，避免每次工具调用都重新拉起服务进程
+- 如需固定稳定版本，推荐通过 `uvx --isolated --from msprof-mcp==0.1.1 msprof-mcp` 启动
 - 只在需要强制刷新远端版本时才临时使用 `uvx --refresh`，不要把它作为常驻默认参数
 
 ### 🧠 Skills

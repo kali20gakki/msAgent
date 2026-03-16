@@ -1,11 +1,20 @@
 from pathlib import Path
 import json
+from importlib.resources import files
 import yaml
 
 import pytest
 
 from msagent.configs.registry import ConfigRegistry
 from msagent.core.constants import CONFIG_APPROVAL_FILE_NAME
+
+
+def _load_default_msprof_server() -> dict:
+    config_path = files("resources")
+    for part in ("configs", "default", "config.mcp.json"):
+        config_path = config_path.joinpath(part)
+    config = json.loads(config_path.read_text(encoding="utf-8"))
+    return config["mcpServers"]["msprof-mcp"]
 
 
 @pytest.mark.asyncio
@@ -28,8 +37,9 @@ async def test_config_registry_bootstraps_default_layout(tmp_path: Path) -> None
     mcp_config = json.loads((config_dir / "config.mcp.json").read_text())
     assert "msprof-mcp" in mcp_config["mcpServers"]
     msprof_server = mcp_config["mcpServers"]["msprof-mcp"]
-    assert "--refresh" not in msprof_server["args"]
-    assert msprof_server["stateful"] is True
+    default_msprof_server = _load_default_msprof_server()
+    assert msprof_server["args"] == default_msprof_server["args"]
+    assert msprof_server["stateful"] == default_msprof_server["stateful"]
 
     approval_config = json.loads(
         (config_dir / CONFIG_APPROVAL_FILE_NAME.name).read_text(encoding="utf-8")
@@ -47,12 +57,12 @@ async def test_config_registry_bootstraps_default_layout(tmp_path: Path) -> None
 
 
 @pytest.mark.asyncio
-async def test_config_registry_normalizes_legacy_msprof_mcp_defaults(
+async def test_config_registry_preserves_existing_mcp_server_config(
     tmp_path: Path,
 ) -> None:
     config_dir = tmp_path / ".msagent"
     config_dir.mkdir(parents=True)
-    legacy_mcp = {
+    existing_mcp = {
         "mcpServers": {
             "msprof-mcp": {
                 "command": "uvx",
@@ -73,7 +83,7 @@ async def test_config_registry_normalizes_legacy_msprof_mcp_defaults(
         }
     }
     (config_dir / "config.mcp.json").write_text(
-        json.dumps(legacy_mcp, ensure_ascii=False, indent=2),
+        json.dumps(existing_mcp, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
 
@@ -83,9 +93,30 @@ async def test_config_registry_normalizes_legacy_msprof_mcp_defaults(
 
     mcp_config = json.loads((config_dir / "config.mcp.json").read_text(encoding="utf-8"))
     msprof_server = mcp_config["mcpServers"]["msprof-mcp"]
-    assert "--refresh" not in msprof_server["args"]
-    assert msprof_server["stateful"] is True
+    assert msprof_server["args"] == existing_mcp["mcpServers"]["msprof-mcp"]["args"]
+    assert msprof_server["stateful"] is False
     assert msprof_server["enabled"] is False
+
+
+@pytest.mark.asyncio
+async def test_config_registry_adds_missing_default_mcp_server(
+    tmp_path: Path,
+) -> None:
+    config_dir = tmp_path / ".msagent"
+    config_dir.mkdir(parents=True)
+    (config_dir / "config.mcp.json").write_text(
+        json.dumps({"mcpServers": {}}, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+    registry = ConfigRegistry(tmp_path)
+
+    await registry.ensure_config_dir()
+
+    mcp_config = json.loads((config_dir / "config.mcp.json").read_text(encoding="utf-8"))
+    msprof_server = mcp_config["mcpServers"]["msprof-mcp"]
+    default_msprof_server = _load_default_msprof_server()
+    assert msprof_server == default_msprof_server
 
 
 @pytest.mark.asyncio
