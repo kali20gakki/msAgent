@@ -565,9 +565,10 @@ uv run ruff format .
 
 ## 使用效果展示
 
-| 场景 | 效果展示 |
-|---|---|
-| MFU 计算 | <img src="https://raw.githubusercontent.com/kali20gakki/images/main/mfu.jpeg" alt="MFU 计算示例" width="800"> |
+| 场景     | 效果展示 |
+|--------|---|
+| MFU 计算 | <img src="https://github.com/luelueFLY/images/blob/main/img/op-mfu-calculate.png" alt="MFU 计算示例" width="800"> |
+| 快慢卡诊断  | <img src="https://github.com/luelueFLY/images/blob/main/img/slow-rank-detect.png" alt="快慢卡诊断示例" width="800"> |
 
 ---
 
