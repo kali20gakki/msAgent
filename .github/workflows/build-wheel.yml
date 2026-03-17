@@ -1,0 +1,145 @@
+name: build-wheel
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+    paths:
+      - ".github/workflows/build-wheel.yml"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "scripts/build_whl.sh"
+      - "resources/**"
+      - "src/**"
+  pull_request:
+    paths:
+      - ".github/workflows/build-wheel.yml"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "scripts/build_whl.sh"
+      - "resources/**"
+      - "src/**"
+  release:
+    types:
+      - published
+
+permissions:
+  contents: write
+
+jobs:
+  build-wheel:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Build wheel
+        id: build
+        env:
+          WHEEL_ARTIFACT_NAME: mindstudio-agent-wheel-${{ github.run_number }}
+        run: bash scripts/build_whl.sh
+
+      - name: Upload wheel artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.build.outputs.artifact_name }}
+          path: dist/*.whl
+          if-no-files-found: error
+
+      - name: Upload wheel to release assets
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.event.release.tag_name }}" dist/*.whl --clobber
+
+      - name: Add download summary
+        env:
+          RUN_URL: ${{ steps.build.outputs.run_url }}
+          WHEEL_NAME: ${{ steps.build.outputs.wheel_name }}
+          SHA256: ${{ steps.build.outputs.sha256 }}
+          ARTIFACT_NAME: ${{ steps.build.outputs.artifact_name }}
+        run: |
+          {
+            echo "## Download"
+            echo
+            echo "- Run page: ${RUN_URL}"
+            echo "- Artifact: \`${ARTIFACT_NAME}\`"
+            echo "- Wheel: \`${WHEEL_NAME}\`"
+            echo "- SHA256: \`${SHA256}\`"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Add release summary
+        if: github.event_name == 'release'
+        run: |
+          {
+            echo "- Release page: ${{ github.event.release.html_url }}"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+  smoke-install:
+    needs: build-wheel
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
+
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Download wheel artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: mindstudio-agent-wheel-${{ github.run_number }}
+          path: dist
+
+      - name: Install wheel with uv
+        shell: bash
+        run: |
+          set -euo pipefail
+          WHEEL_PATH="$(find dist -maxdepth 1 -type f -name '*.whl' | head -n 1)"
+          test -n "${WHEEL_PATH}"
+          uv pip install --system "${WHEEL_PATH}"
+
+      - name: Smoke test installed package
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from importlib import import_module
+          from importlib.resources import files
+
+          import_module("msagent.cli.bootstrap.app")
+          config = json.loads(
+              files("resources").joinpath("configs", "default", "config.mcp.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+          server = config["mcpServers"]["msprof-mcp"]
+          assert server["command"] == "uvx"
+          assert server["args"][:2] == ["--isolated", "--from"]
+          print("cross-platform install smoke test passed")
+          PY

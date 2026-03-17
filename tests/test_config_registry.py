@@ -17,6 +17,13 @@ def _load_default_msprof_server() -> dict:
     return config["mcpServers"]["msprof-mcp"]
 
 
+def test_default_msprof_server_uses_isolated_uvx() -> None:
+    default_msprof_server = _load_default_msprof_server()
+
+    assert default_msprof_server["command"] == "uvx"
+    assert default_msprof_server["args"][:2] == ["--isolated", "--from"]
+
+
 @pytest.mark.asyncio
 async def test_config_registry_bootstraps_default_layout(tmp_path: Path) -> None:
     registry = ConfigRegistry(tmp_path)
