@@ -157,8 +157,8 @@ config = json.loads(
     )
 )
 server = config["mcpServers"]["msprof-mcp"]
-assert server["command"] == "uvx"
-assert server["args"][:2] == ["--isolated", "--from"]
+assert server["command"] == "msprof-mcp"
+assert server["args"] == []
 print("wheel smoke test passed")
 PY
 }

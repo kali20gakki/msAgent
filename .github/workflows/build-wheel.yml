@@ -126,22 +126,19 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Set up uv
-        uses: astral-sh/setup-uv@v4
-
       - name: Download wheel artifact
         uses: actions/download-artifact@v4
         with:
           name: ${{ needs['build-wheel'].outputs.artifact_name }}
           path: dist
 
-      - name: Install wheel with uv
+      - name: Install wheel with pip
         shell: bash
         run: |
           set -euo pipefail
           WHEEL_PATH="$(find dist -maxdepth 1 -type f -name '*.whl' | head -n 1)"
           test -n "${WHEEL_PATH}"
-          uv pip install --system "${WHEEL_PATH}"
+          python -m pip install "${WHEEL_PATH}"
 
       - name: Smoke test installed package
         shell: bash
@@ -149,6 +146,7 @@ jobs:
           set -euo pipefail
           python - <<'PY'
           import json
+          import shutil
           from importlib import import_module
           from importlib.resources import files
 
@@ -159,7 +157,8 @@ jobs:
               )
           )
           server = config["mcpServers"]["msprof-mcp"]
-          assert server["command"] == "uvx"
-          assert server["args"][:2] == ["--isolated", "--from"]
+          assert server["command"] == "msprof-mcp"
+          assert server["args"] == []
+          assert shutil.which("msprof-mcp"), "msprof-mcp executable is not on PATH"
           print("cross-platform install smoke test passed")
           PY
