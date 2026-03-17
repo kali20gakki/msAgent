@@ -6,7 +6,7 @@
 它结合 LLM 推理能力与可扩展工具链，帮助你把复杂 Profiling 信息快速转化为可执行的优化决策。
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/kali20gakki/images/main/msagent.gif" alt="msAgent">
+  <img src="https://github.com/luelueFLY/images/blob/main/img/agent-gif-05.gif" alt="msAgent">
 </p>
 
 📌 文档导航：[最新消息](#最新消息) ｜ [版本说明](#版本说明) ｜ [使用效果展示](#使用效果展示)
