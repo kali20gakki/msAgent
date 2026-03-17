@@ -1,53 +1,82 @@
-name: build-wheel
+name: Build Wheel
 
 on:
+  workflow_call:
   workflow_dispatch:
   push:
     branches:
       - main
-    tags:
-      - "v*"
     paths:
       - ".github/workflows/build-wheel.yml"
+      - ".github/workflows/publish-release.yml"
+      - ".python-version"
       - "pyproject.toml"
       - "uv.lock"
       - "scripts/build_whl.sh"
       - "resources/**"
       - "src/**"
+      - "tests/**"
   pull_request:
     paths:
       - ".github/workflows/build-wheel.yml"
+      - ".github/workflows/publish-release.yml"
+      - ".python-version"
       - "pyproject.toml"
       - "uv.lock"
       - "scripts/build_whl.sh"
       - "resources/**"
       - "src/**"
-  release:
-    types:
-      - published
+      - "tests/**"
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: build-wheel-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  build-wheel:
-    outputs:
-      artifact_name: ${{ steps.meta.outputs.artifact_name }}
-      wheel_name: ${{ steps.meta.outputs.wheel_name }}
-      sha256: ${{ steps.meta.outputs.sha256 }}
-      run_url: ${{ steps.meta.outputs.run_url }}
-    runs-on: ubuntu-latest
+  unit-tests:
+    name: unit-tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           submodules: recursive
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
-          python-version: "3.11"
+          python-version-file: .python-version
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install project and test dependencies
+        run: uv sync --dev
+
+      - name: Run unit tests
+        run: uv run pytest -q
+
+  build-wheel:
+    name: build-wheel
+    needs: unit-tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version-file: .python-version
 
       - name: Set up uv
         uses: astral-sh/setup-uv@v4
@@ -64,10 +93,8 @@ jobs:
           test -n "${WHEEL_PATH}"
           WHEEL_NAME="$(basename "${WHEEL_PATH}")"
           SHA256="$(sha256sum "${WHEEL_PATH}" | awk '{print $1}')"
-          ARTIFACT_NAME="mindstudio-agent-wheel-${{ github.run_number }}"
           RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           {
-            echo "artifact_name=${ARTIFACT_NAME}"
             echo "wheel_name=${WHEEL_NAME}"
             echo "sha256=${SHA256}"
             echo "run_url=${RUN_URL}"
@@ -76,42 +103,31 @@ jobs:
       - name: Upload wheel artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.meta.outputs.artifact_name }}
+          name: wheel
           path: dist/*.whl
           if-no-files-found: error
+          retention-days: 14
 
-      - name: Upload wheel to release assets
-        if: github.event_name == 'release'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${{ github.event.release.tag_name }}" dist/*.whl --clobber
-
-      - name: Add download summary
+      - name: Add build summary
         env:
           RUN_URL: ${{ steps.meta.outputs.run_url }}
           WHEEL_NAME: ${{ steps.meta.outputs.wheel_name }}
           SHA256: ${{ steps.meta.outputs.sha256 }}
-          ARTIFACT_NAME: ${{ steps.meta.outputs.artifact_name }}
         run: |
           {
-            echo "## Download"
+            echo "## Wheel build"
             echo
             echo "- Run page: ${RUN_URL}"
-            echo "- Artifact: \`${ARTIFACT_NAME}\`"
+            echo "- Artifact: \`wheel\`"
             echo "- Wheel: \`${WHEEL_NAME}\`"
             echo "- SHA256: \`${SHA256}\`"
           } >> "${GITHUB_STEP_SUMMARY}"
 
-      - name: Add release summary
-        if: github.event_name == 'release'
-        run: |
-          {
-            echo "- Release page: ${{ github.event.release.html_url }}"
-          } >> "${GITHUB_STEP_SUMMARY}"
-
   smoke-install:
+    name: smoke-install-${{ matrix.os }}
     needs: build-wheel
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -122,20 +138,21 @@ jobs:
 
     steps:
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
-          python-version: "3.11"
+          python-version-file: .python-version
 
       - name: Download wheel artifact
         uses: actions/download-artifact@v4
         with:
-          name: ${{ needs['build-wheel'].outputs.artifact_name }}
+          name: wheel
           path: dist
 
       - name: Install wheel with pip
         shell: bash
         run: |
           set -euo pipefail
+          python -m pip install --upgrade pip
           WHEEL_PATH="$(find dist -maxdepth 1 -type f -name '*.whl' | head -n 1)"
           test -n "${WHEEL_PATH}"
           python -m pip install "${WHEEL_PATH}"

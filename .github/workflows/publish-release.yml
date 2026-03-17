@@ -1,0 +1,257 @@
+name: Publish Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-tag:
+    name: validate-tag
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version-file: .python-version
+
+      - name: Validate tag matches package version
+        id: version
+        run: |
+          python - <<'PY'
+          import os
+          import tomllib
+          from pathlib import Path
+
+          pyproject = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+          version = pyproject["project"]["version"]
+          tag = os.environ["GITHUB_REF_NAME"]
+          expected_tag = f"v{version}"
+
+          if tag != expected_tag:
+              raise SystemExit(
+                  f"Git tag {tag!r} does not match project version {version!r}. "
+                  f"Expected tag: {expected_tag!r}"
+              )
+
+          output_path = Path(os.environ["GITHUB_OUTPUT"])
+          with output_path.open("a", encoding="utf-8") as handle:
+              handle.write(f"version={version}\n")
+
+          print(f"Validated tag {tag} for project version {version}")
+          PY
+
+  build-wheel:
+    name: build-wheel
+    needs: validate-tag
+    permissions:
+      contents: read
+    uses: ./.github/workflows/build-wheel.yml
+
+  build-sdist:
+    name: build-sdist
+    needs: validate-tag
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version-file: .python-version
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Check lockfile
+        run: uv lock --check
+
+      - name: Install build frontend
+        run: python -m pip install --upgrade pip build
+
+      - name: Ensure skills payload is present
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! -d resources/configs/default/skills ]]; then
+            echo "Missing resources/configs/default/skills. Initialize submodules before building." >&2
+            exit 1
+          fi
+
+          if ! find resources/configs/default/skills -mindepth 1 -print -quit 2>/dev/null | grep -q .; then
+            echo "resources/configs/default/skills is empty. Check out submodules before building." >&2
+            exit 1
+          fi
+
+      - name: Build source distribution
+        run: python -m build --sdist --outdir dist
+
+      - name: Verify source distribution contents
+        run: |
+          python - <<'PY'
+          import tarfile
+          from pathlib import Path
+
+          sdists = sorted(Path("dist").glob("*.tar.gz"))
+          if len(sdists) != 1:
+              raise SystemExit(f"Expected exactly one sdist, found {len(sdists)}: {sdists}")
+
+          sdist = sdists[0]
+          with tarfile.open(sdist, "r:gz") as archive:
+              names = archive.getnames()
+
+          required_suffixes = [
+              "/pyproject.toml",
+              "/README.md",
+              "/src/msagent/__init__.py",
+          ]
+          for suffix in required_suffixes:
+              if not any(name.endswith(suffix) for name in names):
+                  raise SystemExit(f"Missing {suffix} in {sdist.name}")
+
+          if not any(
+              "/resources/configs/default/skills/" in name and not name.endswith("/")
+              for name in names
+          ):
+              raise SystemExit(
+                  "Missing bundled skills payload under resources/configs/default/skills/ in "
+                  f"{sdist.name}"
+              )
+
+          print(f"Verified {sdist.name}")
+          PY
+
+      - name: List built files
+        run: ls -lh dist
+
+      - name: Upload sdist artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sdist
+          path: dist/*.tar.gz
+          if-no-files-found: error
+          retention-days: 14
+
+  publish-github-release:
+    name: publish-github-release
+    needs:
+      - validate-tag
+      - build-wheel
+      - build-sdist
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      contents: write
+
+    steps:
+      - name: Download wheel artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: wheel
+          path: dist
+
+      - name: Download sdist artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: sdist
+          path: dist
+
+      - name: Show release artifacts
+        run: ls -lh dist
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          tag="${GITHUB_REF_NAME}"
+          prerelease_flag=()
+          if [[ "${tag}" == *-* ]]; then
+            prerelease_flag+=(--prerelease)
+          fi
+
+          if gh release view "${tag}" >/dev/null 2>&1; then
+            gh release upload "${tag}" dist/* --clobber
+          else
+            gh release create "${tag}" dist/* \
+              --title "${tag}" \
+              --generate-notes \
+              "${prerelease_flag[@]}"
+          fi
+
+      - name: Add release link to job summary
+        run: |
+          release_url="https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}"
+          {
+            echo "### Release link"
+            echo ""
+            echo "- GitHub Release: [${{ github.ref_name }}](${release_url})"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  publish-pypi:
+    name: publish-pypi
+    needs:
+      - validate-tag
+      - build-wheel
+      - build-sdist
+    runs-on: ubuntu-24.04
+    environment:
+      name: pypi
+      url: https://pypi.org/p/mindstudio-agent
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Download wheel artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: wheel
+          path: dist
+
+      - name: Download sdist artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: sdist
+          path: dist
+
+      - name: Show PyPI artifacts
+        run: ls -lh dist
+
+      - name: Publish package distributions to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist
+
+      - name: Add PyPI link to job summary
+        run: |
+          pypi_url="https://pypi.org/project/mindstudio-agent/${{ needs.validate-tag.outputs.version }}/"
+          {
+            echo "### PyPI link"
+            echo ""
+            echo "- PyPI: [mindstudio-agent ${{ needs.validate-tag.outputs.version }}](${pypi_url})"
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -111,6 +111,15 @@ def _render_diff_args(args: dict, config: dict) -> str:
     )
 
 
+def _format_relative_path(path: Path, base_path: Path) -> str:
+    """Format a path relative to a base directory for tool output."""
+    if path == base_path:
+        return "./" if path.is_dir() else path.name
+
+    relative = path.relative_to(base_path).as_posix()
+    return f"{relative}/" if path.is_dir() else relative
+
+
 @tool
 async def read_file(
     runtime: ToolRuntime[AgentContext],
@@ -501,6 +510,83 @@ async def delete_dir(
 delete_dir.metadata = {"approval_config": {}}
 
 
+@tool
+async def ls(
+    runtime: ToolRuntime[AgentContext],
+    dir_path: str = ".",
+    recursive: bool = False,
+) -> ToolMessage:
+    """List files and directories, compatible with deepagents-style `ls` usage."""
+    context: AgentContext = runtime.context
+    working_dir = str(context.working_dir)
+    base_path = resolve_path(working_dir, dir_path)
+
+    if not base_path.exists():
+        raise ToolException(f"Path does not exist: {base_path}")
+
+    if base_path.is_file():
+        entries = [base_path]
+    else:
+        children = (
+            sorted(base_path.rglob("*")) if recursive else sorted(base_path.iterdir())
+        )
+        entries = [base_path, *children]
+
+    content = "\n".join(_format_relative_path(path, base_path) for path in entries)
+    short_content = f"Listed {len(entries)} path(s) in {base_path.name or '.'}"
+
+    return ToolMessage(
+        name=ls.name,
+        content=content,
+        tool_call_id=runtime.tool_call_id,
+        short_content=short_content,
+    )
+
+
+ls.metadata = {
+    "approval_config": {
+        "name_only": True,
+        "always_approve": True,
+    }
+}
+
+
+@tool
+async def glob(
+    pattern: str,
+    runtime: ToolRuntime[AgentContext],
+    dir_path: str = ".",
+) -> ToolMessage:
+    """Match files with a glob pattern, compatible with deepagents-style `glob` usage."""
+    context: AgentContext = runtime.context
+    working_dir = str(context.working_dir)
+    base_path = resolve_path(working_dir, dir_path)
+
+    if not base_path.exists():
+        raise ToolException(f"Path does not exist: {base_path}")
+    if not base_path.is_dir():
+        raise ToolException(f"Path is not a directory: {base_path}")
+
+    matches = sorted(expand_pattern(pattern, base_path))
+    content = "\n".join(_format_relative_path(path, base_path) for path in matches)
+    short_content = f"Matched {len(matches)} path(s) for {pattern!r}"
+
+    return ToolMessage(
+        name=glob.name,
+        content=content or "No matches found.",
+        tool_call_id=runtime.tool_call_id,
+        short_content=short_content,
+    )
+
+
+glob.metadata = {
+    "approval_config": {
+        "name_only": True,
+        "always_approve": True,
+    }
+}
+
+
 FILE_SYSTEM_TOOLS = [
     read_file,
     write_file,
@@ -511,4 +597,6 @@ FILE_SYSTEM_TOOLS = [
     delete_file,
     insert_at_line,
     delete_dir,
+    ls,
+    glob,
 ]
