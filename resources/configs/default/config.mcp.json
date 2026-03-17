@@ -1,13 +1,8 @@
 {
   "mcpServers": {
     "msprof-mcp": {
-      "command": "uvx",
-      "args": [
-        "--isolated",
-        "--from",
-        "msprof-mcp==0.1.4",
-        "msprof-mcp"
-      ],
+      "command": "msprof-mcp",
+      "args": [],
       "transport": "stdio",
       "env": {},
       "include": [],
