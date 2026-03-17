@@ -119,7 +119,7 @@ async def get_directory_structure(
     cmd = [
         "bash",
         "-c",
-        f"cd {safe_dir} && rg --files --hidden --ignore --glob '!.git/' | tree --fromfile -a",
+        f"cd {safe_dir} && ls"
     ]
     status, stdout, stderr = await execute_bash_command(cmd, cwd=working_dir)
     if status not in (0, 1):
