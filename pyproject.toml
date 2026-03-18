@@ -1,6 +1,6 @@
 [project]
 name = "mindstudio-agent"
-version = "0.0.9"
+version = "0.1.0"
 description = "msAgent CLI aligned to the langrepl architecture"
 readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.11"

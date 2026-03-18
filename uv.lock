@@ -2042,7 +2042,7 @@ wheels = [
 
 [[package]]
 name = "mindstudio-agent"
-version = "0.0.8"
+version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "aiofiles" },
