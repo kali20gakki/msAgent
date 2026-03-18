@@ -30,6 +30,10 @@ if TYPE_CHECKING:
 WELCOME_TITLE = "✻ Welcome to msAgent"
 
 
+THINKING_STYLE = Style(italic=True, dim=True)
+LOW_PRIORITY_STYLE = console.console.get_style("muted") + Style(dim=True)
+
+
 def _fix_escaped_code_fences(content: str) -> str:
     """Fix escaped code fence delimiters that should be proper markdown.
 
@@ -403,7 +407,7 @@ class Renderer:
         # Render thinking first if present
         parts: list[RenderableType] = []
         if thinking_parts:
-            parts.append(Text("\n\n".join(thinking_parts), style="italic dim"))
+            parts.append(Text("\n\n".join(thinking_parts), style=THINKING_STYLE))
             parts.append(NewLine())
 
         # Render main content
@@ -473,7 +477,7 @@ class Renderer:
         if is_error:
             console.print(Text(formatted_content, style="error"))
         else:
-            console.print(formatted_content)
+            console.print(formatted_content, style=LOW_PRIORITY_STYLE)
 
         console.print("")
 

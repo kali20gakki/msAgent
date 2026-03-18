@@ -206,7 +206,7 @@ class InteractivePrompt:
 
     def _build_placeholder_text(self) -> str:
         """Build placeholder copy shown inside the input box."""
-        return "\u5c3d\u7ba1\u95eesAgent\uff0c\u8bd5\u8bd5 /\u547d\u4ee4 \u6216 @\u6587\u4ef6"
+        return "\u5c3d\u7ba1\u95eemsAgent"
 
     def _get_bottom_toolbar(self) -> HTML:
         """Generate bottom toolbar text with version, working directory and approval mode."""
