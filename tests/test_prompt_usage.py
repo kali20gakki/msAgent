@@ -47,13 +47,19 @@ def test_bottom_toolbar_hides_usage_without_input_tokens() -> None:
     assert " out " not in usage
 
 
-def test_placeholder_text_uses_msagent_prompt_and_hints() -> None:
+def test_placeholder_text_uses_msagent_prompt() -> None:
     prompt = InteractivePrompt.__new__(InteractivePrompt)
     prompt.context = _build_prompt_context()
 
     text = prompt._build_placeholder_text()
 
-    assert "/" in text
-    assert "@" in text
-    assert "ctx " not in text
-    assert "general:default" not in text
+    assert text == "尽管问msAgent"
+
+
+def test_placeholder_text_stays_consistent_in_bash_mode() -> None:
+    prompt = InteractivePrompt.__new__(InteractivePrompt)
+    prompt.context = _build_prompt_context(bash_mode=True)
+
+    text = prompt._build_placeholder_text()
+
+    assert text == "尽管问msAgent"

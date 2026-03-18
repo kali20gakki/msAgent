@@ -201,12 +201,12 @@ class InteractivePrompt:
         self.bash_mode_toggle_callback = callback
 
     def _get_placeholder(self) -> HTML:
-        """Generate placeholder text with command and file hints."""
+        """Generate placeholder text shown inside the input box."""
         return HTML(f"<placeholder>{self._build_placeholder_text()}</placeholder>")
 
     def _build_placeholder_text(self) -> str:
         """Build placeholder copy shown inside the input box."""
-        return "\u5c3d\u7ba1\u95eemsAgent"
+        return "尽管问msAgent"
 
     def _get_bottom_toolbar(self) -> HTML:
         """Generate bottom toolbar text with version, working directory and approval mode."""
