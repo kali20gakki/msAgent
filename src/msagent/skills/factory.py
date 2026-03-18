@@ -25,6 +25,38 @@ class Skill(BaseModel):
             return ""
 
     @property
+    def root_dir(self) -> Path:
+        return self.path.parent
+
+    @property
+    def scripts_dir(self) -> Path:
+        return self.root_dir / "scripts"
+
+    def get_script_paths(self, limit: int = 20) -> list[Path]:
+        try:
+            if not self.scripts_dir.exists() or not self.scripts_dir.is_dir():
+                return []
+            files = [
+                p
+                for p in self.scripts_dir.rglob("*")
+                if p.is_file() and "__pycache__" not in p.parts
+            ]
+            files.sort()
+            return files[:limit]
+        except Exception:
+            return []
+
+    def get_script_relative_paths(self, limit: int = 20) -> list[str]:
+        rel_paths: list[str] = []
+        for p in self.get_script_paths(limit=limit):
+            try:
+                rel = p.relative_to(self.root_dir)
+            except Exception:
+                rel = p
+            rel_paths.append(rel.as_posix())
+        return rel_paths
+
+    @property
     def display_name(self) -> str:
         if self.category == DEFAULT_SKILL_CATEGORY:
             return self.name

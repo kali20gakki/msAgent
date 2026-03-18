@@ -7,6 +7,29 @@ from langchain_core.tools import ToolException
 from msagent.agents.context import AgentContext
 
 
+def _build_script_hints(skill_name: str, script_paths: list[str]) -> str:
+    if not script_paths:
+        return ""
+
+    lines = []
+    lines.append("")
+    lines.append("## Script Execution Hints (Auto-generated)")
+    lines.append(
+        f"For skill `{skill_name}`, prefer executing scripts below before writing custom logic:"
+    )
+    for rel_path in script_paths:
+        lines.append(f"- `{rel_path}`")
+    lines.append("")
+    lines.append("Command templates:")
+    lines.append("- Python: `python3 <absolute_script_path> [args]`")
+    lines.append("- Shell: `bash <absolute_script_path> [args]`")
+    lines.append("- PowerShell: `pwsh -File <absolute_script_path> [args]`")
+    lines.append(
+        "If script output conflicts with assumptions, trust script output and adjust your plan."
+    )
+    return "\n".join(lines)
+
+
 @tool
 async def fetch_skills(
     runtime: ToolRuntime[AgentContext], pattern: str | None = None
@@ -137,6 +160,9 @@ async def get_skill(
     if not content:
         raise ToolException(f"Failed to read skill '{skill.display_name}'")
 
+    hints = _build_script_hints(skill.display_name, skill.get_script_relative_paths())
+    if hints:
+        return f"{content}\n{hints}"
     return content
 
 

@@ -328,9 +328,22 @@ class AgentFactory:
             text += "Use `fetch_skills` to search for relevant skills or to browse all available skills. "
             text += "Check for applicable skills at the start of tasks - they can significantly improve your responses.\n"
         else:
-            text += "When users ask you to perform tasks, check if any of the available skills below can help complete the task more effectively.\n\n"
+            text += "When users ask you to perform tasks, check if any of the available skills below can help complete the task more effectively.\n"
+            text += "Mandatory skill workflow:\n"
+            text += "1. Always call `get_skill(name, category)` before applying a skill.\n"
+            text += "2. If the skill contains files under `scripts/`, prefer running those scripts over recreating logic manually.\n"
+            text += "3. Use script outputs as primary evidence when producing conclusions.\n\n"
             for skill in skills:
-                text += f"- **{skill.display_name}**: {skill.description}\n"
+                script_paths = skill.get_script_relative_paths(limit=8)
+                scripts_text = (
+                    ", ".join(f"`{p}`" for p in script_paths)
+                    if script_paths
+                    else "none"
+                )
+                text += (
+                    f"- **{skill.display_name}**: {skill.description} "
+                    f"(path: `{skill.root_dir.as_posix()}`, scripts: {scripts_text})\n"
+                )
 
         return text
 
