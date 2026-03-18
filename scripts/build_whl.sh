@@ -7,6 +7,7 @@ DIST_DIR="${DIST_DIR:-${REPO_ROOT}/dist}"
 SKILLS_SUBMODULE_PATH="resources/configs/default/skills"
 SKILLS_DIR="${REPO_ROOT}/${SKILLS_SUBMODULE_PATH}"
 VERIFY_WHEEL_INSTALL="${VERIFY_WHEEL_INSTALL:-0}"
+SYNC_SKILLS_REMOTE="${SYNC_SKILLS_REMOTE:-1}"
 
 log() {
   printf '[build_whl] %s\n' "$*"
@@ -58,9 +59,16 @@ sync_skills_submodule() {
 
   if git -C "${REPO_ROOT}" config --file .gitmodules --get-regexp '^submodule\..*\.path$' \
     | awk '{print $2}' | grep -qx "${SKILLS_SUBMODULE_PATH}"; then
-    log "Syncing ${SKILLS_SUBMODULE_PATH} submodule..."
+    local update_args=(submodule update --init --recursive --force --depth 1)
+    if [[ "${SYNC_SKILLS_REMOTE}" == "1" ]]; then
+      update_args+=(--remote)
+      log "Syncing ${SKILLS_SUBMODULE_PATH} submodule to latest upstream..."
+    else
+      log "Syncing ${SKILLS_SUBMODULE_PATH} submodule to the pinned repository commit..."
+    fi
+
     git -C "${REPO_ROOT}" submodule sync --recursive
-    git -C "${REPO_ROOT}" submodule update --init --recursive --force --depth 1 "${SKILLS_SUBMODULE_PATH}"
+    git -C "${REPO_ROOT}" "${update_args[@]}" "${SKILLS_SUBMODULE_PATH}"
   fi
 }
 

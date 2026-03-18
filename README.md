@@ -531,13 +531,14 @@ Windows（CMD）：
 
 ```cmd
 git submodule sync --recursive
-git submodule update --init --recursive --force --depth 1 resources/configs/default/skills
+git submodule update --init --recursive --remote --force --depth 1 resources/configs/default/skills
 uv build --wheel --out-dir dist .
 ```
 
 如果你的 Windows 环境安装了 Git Bash / WSL，也可以直接执行 `bash scripts/build_whl.sh`。
 
-构建脚本会自动执行 `git submodule update --init --recursive --force --depth 1 resources/configs/default/skills`，确保 `mindstudio-skills` 被打入 wheel 包。
+构建脚本会默认执行 `git submodule update --init --recursive --remote --force --depth 1 resources/configs/default/skills`，同步 `mindstudio-skills` 上游最新提交后再打入 wheel 包。
+如果你需要按主仓库里固定的 submodule 提交构建，可以临时设置 `SYNC_SKILLS_REMOTE=0`。
 
 打包完成后会在 `dist/` 目录生成 `mindstudio_agent-*.whl`，可直接安装：
 
