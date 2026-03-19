@@ -100,6 +100,24 @@ set OPENAI_API_KEY=your-key
 msagent config --llm-provider openai --llm-model "gpt-5-mini-2025-08-07"
 ```
 
+Custom 示例：
+
+Linux / macOS：
+
+```bash
+export CUSTOM_API_KEY="your-key"
+msagent config --llm-provider custom --llm-base-url "https://example.com/chat/completions" --llm-model "my-model"
+```
+
+Windows（CMD）：
+
+```cmd
+set CUSTOM_API_KEY=your-key
+msagent config --llm-provider custom --llm-base-url "https://example.com/chat/completions" --llm-model "my-model"
+```
+
+
+
 查看当前项目配置：
 
 ```bash
@@ -214,7 +232,7 @@ msagent config [--show] [--llm-provider PROVIDER] [--llm-api-key KEY] [--llm-api
 | `--show`, `-s` | 显示当前项目配置；如果未传任何更新参数，也会自动执行展示 |
 | `--llm-provider` | 只接受 `openai`、`anthropic`、`gemini`、`google`、`custom` |
 | `--llm-model`, `-m` | 设置默认 Provider 对应的原始模型名，例如 `gpt-5-mini-2025-08-07` |
-| `--llm-base-url` | 设置 OpenAI 兼容接口地址 |
+| `--llm-base-url` | 设置 Provider 地址；对于 `custom` 应填写完整请求 URL |
 | `--llm-max-tokens` | 设置最大输出 token；`0` 表示交给模型或服务端默认值 |
 | `--llm-api-key-env` | 设置读取 API Key 的环境变量名 |
 | `--llm-api-key` | 只给当前进程临时注入 API Key，不会明文写入配置文件 |
@@ -224,6 +242,9 @@ msagent config [--show] [--llm-provider PROVIDER] [--llm-api-key KEY] [--llm-api
 补充说明：
 
 - `gemini` 会被映射到内部 Provider `google`，默认读取的环境变量是 `GOOGLE_API_KEY`。
+- `custom` 会直接向你配置的 URL 发送普通 HTTP 请求；不是强依赖 OpenAI SDK 的兼容模式。
+- `custom` 默认读取 `CUSTOM_API_KEY`；如果配置了 `--llm-api-key-env`，则优先读取该环境变量。
+- `custom` 只有在 API Key 非空时才会附带 `Authorization: Bearer <key>` 请求头；如果你的接口无需鉴权，可以不填 Key。
 - `config` 会把结果写入 `<working-dir>/.msagent/config.llms.yml`，并让默认 Agent 指向其中的 `default` 模型别名。
 - 仓库里还内置了 `deepseek`、`zhipuai`、`ollama`、`lmstudio`、`bedrock` 等模型别名，但它们不是通过 `config --llm-provider` 暴露的；更适合用 `-m <alias>`、`/model` 或手动编辑 `.msagent/llms/*.yml`。
 
@@ -233,7 +254,8 @@ msagent config [--show] [--llm-provider PROVIDER] [--llm-api-key KEY] [--llm-api
 msagent config --show
 msagent config --llm-provider anthropic --llm-model "claude-sonnet-4-5"
 msagent config --llm-provider openai --llm-base-url "https://api.deepseek.com" --llm-model "deepseek-chat" --llm-max-tokens 0
-msagent config --llm-provider custom --llm-base-url "https://example.com/v1" --llm-model "my-model"
+msagent config --llm-provider custom --llm-base-url "https://example.com/chat/completions" --llm-model "my-model"
+msagent config --llm-provider custom --llm-api-key-env MY_CUSTOM_TOKEN --llm-base-url "https://example.com/chat/completions" --llm-model "my-model"
 ```
 
 ---
@@ -315,19 +337,20 @@ bash -c "<your-command>"
 | `OPENAI_API_KEY` | OpenAI Provider API Key |
 | `ANTHROPIC_API_KEY` | Anthropic Provider API Key |
 | `GOOGLE_API_KEY` | Google / Gemini Provider API Key |
-| `CUSTOM_API_KEY` | 自定义 OpenAI 兼容 Provider API Key |
+| `CUSTOM_API_KEY` | `custom` Provider 的 API Key；非空时会作为 `Authorization: Bearer <key>` 发送 |
 | `DEEPSEEK_API_KEY` | DeepSeek 内置别名所使用的 API Key |
 | `ZHIPUAI_API_KEY` | 智谱内置别名所使用的 API Key |
 | `AWS_ACCESS_KEY_ID` | Bedrock 鉴权 |
 | `AWS_SECRET_ACCESS_KEY` | Bedrock 鉴权 |
 | `AWS_SESSION_TOKEN` | Bedrock 临时凭证 |
-| `CUSTOM_BASE_URL` | `custom` Provider 的默认 Base URL |
+| `CUSTOM_BASE_URL` | `custom` Provider 的默认请求 URL，建议填写完整接口地址 |
 | `HTTP_PROXY` / `http_proxy` | HTTP 代理 |
 | `HTTPS_PROXY` / `https_proxy` | HTTPS 代理 |
 
 说明：
 
 - `msagent config --llm-provider gemini` 实际读取的是 `GOOGLE_API_KEY`。
+- `msagent config --llm-provider custom` 默认读取的是 `CUSTOM_API_KEY`；如果接口不需要鉴权，也可以不设置。
 - `--llm-api-key` 只会注入当前进程，不会保存到配置文件。
 - 配置文件不会明文保存 API Key。
 

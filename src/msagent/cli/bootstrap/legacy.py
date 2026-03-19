@@ -78,7 +78,10 @@ def create_legacy_parser() -> argparse.ArgumentParser:
         type=int,
         help="Max output tokens (0 means provider/model default)",
     )
-    config_parser.add_argument("--llm-base-url", help="Custom OpenAI-compatible base URL")
+    config_parser.add_argument(
+        "--llm-base-url",
+        help="Custom provider base URL, or full request URL for custom",
+    )
     config_parser.add_argument("--llm-model", "-m", help="Model name")
     config_parser.add_argument(
         "-w",

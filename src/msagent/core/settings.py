@@ -19,7 +19,7 @@ class LLMSettings(BaseModel):
     )
     custom_api_key: SecretStr = Field(
         default=SecretStr(os.getenv("CUSTOM_API_KEY", "")),
-        description="The custom OpenAI-compatible API key",
+        description="The custom LLM API key",
     )
     anthropic_api_key: SecretStr = Field(
         default=SecretStr("dummy"), description="The Anthropic API key"
@@ -41,7 +41,7 @@ class LLMSettings(BaseModel):
     )
     custom_base_url: str = Field(
         default=os.getenv("CUSTOM_BASE_URL", ""),
-        description="The custom OpenAI-compatible API base URL",
+        description="The custom LLM request URL",
     )
     aws_access_key_id: SecretStr = Field(
         default=SecretStr(os.getenv("AWS_ACCESS_KEY_ID", "")),

@@ -165,27 +165,30 @@ class LLMFactory:
 
             llm = ChatOpenAI(**kwargs)
         elif config.provider == LLMProvider.CUSTOM:
-            from langchain_openai import ChatOpenAI
+            from msagent.llms.wrappers.custom import ChatCustomHTTP
 
-            base_url = config.base_url or self.llm_settings.custom_base_url
-            http_client, http_async_client = self._get_http_clients(base_url)
+            url = config.base_url or self.llm_settings.custom_base_url
+            if not url:
+                raise ValueError(
+                    "CUSTOM provider requires base_url or CUSTOM_BASE_URL to be set"
+                )
+            http_client, http_async_client = self._get_http_clients(url)
             kwargs = {
+                "url": url,
                 "api_key": self._resolve_api_key(
                     config, self.llm_settings.custom_api_key, "CUSTOM_API_KEY"
                 ),
                 "model": config.model,
                 "temperature": config.temperature,
+                "max_tokens": config.max_tokens,
                 "streaming": config.streaming,
+                "disable_streaming": True,
                 "rate_limiter": limiter,
                 "http_client": http_client,
                 "http_async_client": http_async_client,
             }
-            self._add_optional_kwarg(kwargs, "base_url", base_url)
-            self._add_optional_kwarg(
-                kwargs, "max_completion_tokens", config.max_tokens
-            )
 
-            llm = ChatOpenAI(**kwargs)
+            llm = ChatCustomHTTP(**kwargs)
         elif config.provider == LLMProvider.ANTHROPIC:
             from langchain_anthropic import ChatAnthropic
 

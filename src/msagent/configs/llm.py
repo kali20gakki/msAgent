@@ -59,7 +59,10 @@ class LLMConfig(VersionedConfig):
         description="Optional environment variable name that stores the API key",
     )
     base_url: str | None = Field(
-        default=None, description="Optional custom base URL for OpenAI-compatible APIs"
+        default=None,
+        description=(
+            "Optional base URL for compatible providers or full request URL for custom"
+        ),
     )
     max_tokens: int = Field(description="The maximum number of tokens to generate")
     temperature: float = Field(description="The temperature to use")
