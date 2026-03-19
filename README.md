@@ -350,6 +350,15 @@ msagent --version
 
 ---
 
+## 联系我们
+
+欢迎加入飞书群交流：
+
+<a href="https://applink.feishu.cn/client/chat/chatter/add_by_link?link_token=854v5833-c03a-484e-8aac-0637f0303dc4&qr_code=true">
+  <img src="https://img.shields.io/badge/Feishu-3370FF?style=for-the-badge&logo=lark&logoColor=white" alt="Feishu Group"></a>
+
+---
+
 
 ## 🙏 引用与致谢
 
