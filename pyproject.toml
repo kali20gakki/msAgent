@@ -85,7 +85,6 @@ only-include = [
     ".python-version",
     ".gitmodules",
     "README.md",
-    "config.json",
     "pyproject.toml",
     "resources",
     "run.py",
