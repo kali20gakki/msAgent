@@ -4,10 +4,13 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import json
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from json_repair import loads as repair_loads
 from langchain_core.messages import (
     AIMessage,
     AIMessageChunk,
@@ -17,8 +20,10 @@ from langchain_core.messages import (
 )
 from langchain_core.runnables import RunnableConfig
 from langgraph.types import Command
-from rich.console import Group
-from rich.markup import render
+from rich.console import Group, RenderableType
+from rich.live import Live
+from rich.measure import Measurement
+from rich.spinner import Spinner
 from rich.text import Text
 
 from msagent.agents.context import AgentContext
@@ -31,9 +36,98 @@ from msagent.core.logging import get_logger
 from msagent.utils.compression import should_auto_compress
 
 if TYPE_CHECKING:
+    from rich.console import Console, ConsoleOptions, RenderResult
+
     from langgraph.types import Interrupt
 
 logger = get_logger(__name__)
+
+_TOOL_RUNNING_DOT = "●"
+_TOOL_ACTIVITY_CYCLE_S = 0.75
+_TOOL_DOT_ON_STYLE = "indicator"
+_TOOL_DOT_OFF_STYLE = "muted"
+_TOOL_SWEEP_WIDTH = 8
+_TOOL_SWEEP_EDGE_STYLE = "secondary"
+_TOOL_SWEEP_CORE_STYLE = "accent.secondary bold"
+_TOOL_PREFIX_STYLE = "accent"
+_TOOL_NAME_STYLE = "primary"
+_TOOL_ARG_KEY_STYLE = "muted"
+_TOOL_ARG_VALUE_STYLE = "primary"
+_TOOL_ARG_SEPARATOR_STYLE = "muted"
+_TOOL_LIVE_SUMMARY_VALUE_MAX = 72
+
+
+@dataclass(frozen=True, slots=True)
+class ToolActivityCall:
+    """Compact preview of a tool call for the live activity area."""
+
+    name: str
+    args: dict[str, Any]
+    call_id: str | None = None
+
+
+@dataclass
+class ToolActivityIndicator:
+    """A tool activity line with a blinking dot and looping sweep highlight."""
+
+    text: Text
+    details: Text | None = None
+    cycle_seconds: float = _TOOL_ACTIVITY_CYCLE_S
+    sweep_width: int = _TOOL_SWEEP_WIDTH
+    glyph: str = _TOOL_RUNNING_DOT
+    start_time: float | None = None
+
+    def __rich_console__(
+        self, console: Console, options: ConsoleOptions
+    ) -> RenderResult:
+        yield self.render(console.get_time())
+
+    def __rich_measure__(
+        self, console: Console, options: ConsoleOptions
+    ) -> Measurement:
+        return Measurement.get(console, options, self.render(0))
+
+    def render(self, time: float) -> RenderableType:
+        """Render the indicator at a given time."""
+        if self.start_time is None:
+            self.start_time = time
+
+        elapsed = time - self.start_time
+        phase = (elapsed % self.cycle_seconds) / self.cycle_seconds
+        dot_style = _TOOL_DOT_ON_STYLE if phase < 0.5 else _TOOL_DOT_OFF_STYLE
+        dot = Text(self.glyph, style=dot_style)
+
+        label = self.text.copy()
+        self._apply_sweep(label, phase)
+        header = Text.assemble(dot, " ", label)
+        if self.details:
+            return Group(header, self.details)
+        return header
+
+    def _apply_sweep(self, label: Text, phase: float) -> None:
+        """Apply a moving highlight band across the label text."""
+        plain = label.plain
+        content_start = len(plain) - len(plain.lstrip(" "))
+        content_length = len(plain) - content_start
+        if content_length <= 0:
+            return
+
+        travel = content_length + self.sweep_width
+        band_start = content_start + int(phase * travel) - self.sweep_width
+        band_end = band_start + self.sweep_width
+
+        highlight_start = max(content_start, band_start)
+        highlight_end = min(len(plain), band_end)
+        if highlight_start >= highlight_end:
+            return
+
+        label.stylize(_TOOL_SWEEP_EDGE_STYLE, highlight_start, highlight_end)
+
+        core_inset = max(1, self.sweep_width // 4)
+        core_start = max(content_start, band_start + core_inset)
+        core_end = min(len(plain), band_end - core_inset)
+        if core_start < core_end:
+            label.stylize(_TOOL_SWEEP_CORE_STYLE, core_start, core_end)
 
 
 class MessageDispatcher:
@@ -47,6 +141,7 @@ class MessageDispatcher:
         self.interrupt_handler = InterruptHandler(session=session)
         self.message_builder = MessageContentBuilder(Path(session.context.working_dir))
         self._pending_compression = False
+        self._pending_tool_headers: dict[str, tuple[dict[str, Any], int]] = {}
 
     async def dispatch(self, content: str) -> None:
         """Dispatch user message and get AI response."""
@@ -118,6 +213,8 @@ class MessageDispatcher:
         current_input: dict[str, Any] | Command = input_data
         rendered_messages: set[str] = set()
         streaming_states: dict[tuple, dict[str, Any]] = {}
+        active_tools: dict[tuple, list[ToolActivityCall]] = {}
+        thinking_previews: dict[tuple, list[str]] = {}
 
         self.session.current_stream_task = asyncio.current_task()
 
@@ -128,8 +225,11 @@ class MessageDispatcher:
                 status = None
 
                 try:
-                    with console.console.status(
-                        f"[{theme.spinner_color}]Thinking...[/{theme.spinner_color}]"
+                    with Live(
+                        self._build_activity_renderable(active_tools, thinking_previews),
+                        console=console.console,
+                        transient=True,
+                        refresh_per_second=24,
                     ) as status:
                         async for chunk in self.session.graph.astream(
                             current_input,
@@ -143,6 +243,8 @@ class MessageDispatcher:
                                 # Clear all active streaming states on interrupt
                                 for state in streaming_states.values():
                                     self._clear_preview(state)
+                                active_tools.clear()
+                                thinking_previews.clear()
                                 status.stop()
                                 resume_value = await self.interrupt_handler.handle(
                                     interrupts
@@ -170,6 +272,8 @@ class MessageDispatcher:
                                     streaming_states,
                                     status,
                                     rendered_messages,
+                                    active_tools,
+                                    thinking_previews,
                                 )
                             elif mode == "updates":
                                 self._finalize_streaming(
@@ -177,10 +281,16 @@ class MessageDispatcher:
                                     streaming_states,
                                     status,
                                     rendered_messages,
-                                    stop_status=False,
+                                    active_tools,
+                                    thinking_previews,
                                 )
                                 await self._process_update_chunk(
-                                    data, namespace, rendered_messages
+                                    data,
+                                    namespace,
+                                    rendered_messages,
+                                    status,
+                                    active_tools,
+                                    thinking_previews,
                                 )
 
                 except (asyncio.CancelledError, KeyboardInterrupt):
@@ -191,7 +301,8 @@ class MessageDispatcher:
                         streaming_states,
                         status,
                         rendered_messages,
-                        stop_status=True,
+                        active_tools,
+                        thinking_previews,
                     )
                     cancelled = True
 
@@ -203,7 +314,8 @@ class MessageDispatcher:
                         streaming_states,
                         status,
                         rendered_messages,
-                        stop_status=True,
+                        active_tools,
+                        thinking_previews,
                     )
                     break
 
@@ -412,16 +524,537 @@ class MessageDispatcher:
             }
         return streaming_states[namespace]
 
+    @staticmethod
+    def _extract_tool_name(tool_call: Any) -> str | None:
+        """Extract a tool name from a tool call payload or chunk."""
+        if isinstance(tool_call, dict):
+            name = tool_call.get("name")
+            if isinstance(name, str) and name.strip():
+                return name.strip()
+
+            function = tool_call.get("function")
+            if isinstance(function, dict):
+                function_name = function.get("name")
+                if isinstance(function_name, str) and function_name.strip():
+                    return function_name.strip()
+
+        name = getattr(tool_call, "name", None)
+        if isinstance(name, str) and name.strip():
+            return name.strip()
+
+        function = getattr(tool_call, "function", None)
+        if isinstance(function, dict):
+            function_name = function.get("name")
+            if isinstance(function_name, str) and function_name.strip():
+                return function_name.strip()
+        else:
+            function_name = getattr(function, "name", None)
+            if isinstance(function_name, str) and function_name.strip():
+                return function_name.strip()
+
+        return None
+
+    @staticmethod
+    def _extract_tool_args(tool_call: Any) -> dict[str, Any]:
+        """Extract normalized args from a tool call payload."""
+        args: Any = None
+        if isinstance(tool_call, dict):
+            args = tool_call.get("args")
+            if args is None:
+                function = tool_call.get("function")
+                if isinstance(function, dict):
+                    args = function.get("arguments")
+        else:
+            args = getattr(tool_call, "args", None)
+            if args is None:
+                function = getattr(tool_call, "function", None)
+                if isinstance(function, dict):
+                    args = function.get("arguments")
+                else:
+                    args = getattr(function, "arguments", None)
+
+        if isinstance(args, dict):
+            return args
+
+        if isinstance(args, str):
+            stripped = args.strip()
+            if not stripped:
+                return {}
+            try:
+                parsed = json.loads(stripped)
+            except json.JSONDecodeError:
+                try:
+                    parsed = repair_loads(stripped)
+                except Exception:
+                    return {}
+            return parsed if isinstance(parsed, dict) else {}
+
+        return {}
+
+    @staticmethod
+    def _extract_tool_call_id(tool_call: Any) -> str | None:
+        """Extract a stable tool call identifier when present."""
+        if isinstance(tool_call, dict):
+            call_id = tool_call.get("id")
+        else:
+            call_id = getattr(tool_call, "id", None)
+        return str(call_id) if call_id else None
+
+    @classmethod
+    def _extract_tool_call_preview(cls, tool_call: Any) -> ToolActivityCall | None:
+        """Build a live preview entry from a tool call payload."""
+        name = cls._extract_tool_name(tool_call)
+        if not name:
+            return None
+        return ToolActivityCall(
+            name=name,
+            args=cls._extract_tool_args(tool_call),
+            call_id=cls._extract_tool_call_id(tool_call),
+        )
+
+    @classmethod
+    def _extract_tool_call_names(cls, message: AIMessage | AIMessageChunk) -> list[str]:
+        """Collect tool names from streamed or final AI messages."""
+        return [preview.name for preview in cls._extract_tool_call_previews(message)]
+
+    @classmethod
+    def _extract_tool_call_previews(
+        cls, message: AIMessage | AIMessageChunk
+    ) -> list[ToolActivityCall]:
+        """Collect live previews for streamed or final tool calls."""
+        tool_calls = getattr(message, "tool_calls", None) or []
+        tool_call_chunks = getattr(message, "tool_call_chunks", None) or []
+
+        additional_kwargs = getattr(message, "additional_kwargs", {}) or {}
+        raw_tool_calls = additional_kwargs.get("tool_calls")
+        raw_tool_calls = raw_tool_calls if isinstance(raw_tool_calls, list) else []
+
+        previews: list[ToolActivityCall] = []
+        for source in (tool_calls, raw_tool_calls, tool_call_chunks):
+            for candidate in source:
+                preview = cls._extract_tool_call_preview(candidate)
+                if preview is None:
+                    continue
+                duplicate_index = next(
+                    (
+                        index
+                        for index, existing in enumerate(previews)
+                        if cls._tool_activity_calls_match(existing, preview)
+                    ),
+                    None,
+                )
+                if duplicate_index is None:
+                    previews.append(preview)
+                    continue
+
+                existing = previews[duplicate_index]
+                existing_score = (len(existing.args), bool(existing.call_id))
+                preview_score = (len(preview.args), bool(preview.call_id))
+                preferred = preview if preview_score > existing_score else existing
+                previews[duplicate_index] = ToolActivityCall(
+                    name=preferred.name,
+                    args=cls._merge_tool_args(existing.args, preview.args),
+                    call_id=preferred.call_id or existing.call_id or preview.call_id,
+                )
+
+        return previews
+
+    @staticmethod
+    def _summarize_tool_names(tool_names: list[str]) -> str:
+        """Compact tool call labels for the live activity line."""
+        if not tool_names:
+            return "Calling tool..."
+        if len(tool_names) == 1:
+            return tool_names[0]
+        return f"{tool_names[0]} +{len(tool_names) - 1}"
+
+    @classmethod
+    def _build_tool_activity_label(
+        cls, tool_call: ToolActivityCall, indent_level: int = 0
+    ) -> Text:
+        """Build the live tool label with a fixed action prefix."""
+        text = Text("  " * indent_level)
+        text.append("Use tool ", style=_TOOL_PREFIX_STYLE)
+        text.append(tool_call.name, style=_TOOL_NAME_STYLE)
+        return text
+
+    @staticmethod
+    def _sorted_activity_items(
+        activity: dict[tuple, Any]
+    ) -> list[tuple[tuple, Any]]:
+        """Sort per-namespace activity for stable live rendering."""
+        return sorted(
+            activity.items(),
+            key=lambda item: (len(item[0]), tuple(str(part) for part in item[0])),
+        )
+
+    @staticmethod
+    def _stringify_tool_arg(value: Any, max_length: int) -> str:
+        """Convert tool args to a compact single-line string."""
+        if isinstance(value, str):
+            value_str = value.replace("\n", "\\n")
+        elif isinstance(value, (dict, list)):
+            value_str = json.dumps(value, ensure_ascii=False)
+        else:
+            value_str = str(value)
+
+        if len(value_str) > max_length:
+            return value_str[:max_length] + "..."
+        return value_str
+
+    @classmethod
+    def _build_tool_arg_items(
+        cls, tool_args: dict[str, Any], *, max_value_length: int
+    ) -> list[tuple[str, str]]:
+        """Prepare compact key/value pairs for live tool arg rendering."""
+        return [
+            (str(key), cls._stringify_tool_arg(value, max_value_length))
+            for key, value in tool_args.items()
+        ]
+
+    @classmethod
+    def _build_tool_activity_args(
+        cls, tool_call: ToolActivityCall, indent_level: int = 0
+    ) -> Text | None:
+        """Build a Claude Code-like compact arg block for live tool activity."""
+        if not tool_call.args:
+            return None
+
+        arg_items = cls._build_tool_arg_items(
+            tool_call.args,
+            max_value_length=_TOOL_LIVE_SUMMARY_VALUE_MAX,
+        )
+
+        base_indent = "  " * indent_level
+        details = Text()
+        for line_index, (key, value) in enumerate(arg_items):
+            if line_index > 0:
+                details.append("\n")
+            details.append(f"{base_indent}  ")
+            details.append(key, style=_TOOL_ARG_KEY_STYLE)
+            details.append(": ", style=_TOOL_ARG_SEPARATOR_STYLE)
+            details.append(value, style=_TOOL_ARG_VALUE_STYLE)
+        return details
+
+    @staticmethod
+    def _merge_tool_args(
+        existing_args: dict[str, Any], incoming_args: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Merge partial tool args without clobbering richer existing values."""
+        merged = dict(existing_args)
+        for key, value in incoming_args.items():
+            if value in ("", None, [], {}) and key in merged:
+                continue
+            merged[key] = value
+        return merged
+
+    @staticmethod
+    def _tool_args_are_incremental(
+        left_args: dict[str, Any], right_args: dict[str, Any]
+    ) -> bool:
+        """Detect arg snapshots that look like progressive fills of one call."""
+        shared_keys = set(left_args) & set(right_args)
+        if any(
+            not MessageDispatcher._tool_arg_values_are_compatible(
+                left_args[key], right_args[key]
+            )
+            for key in shared_keys
+        ):
+            return False
+
+        left_keys = set(left_args)
+        right_keys = set(right_args)
+        return left_keys.issubset(right_keys) or right_keys.issubset(left_keys)
+
+    @staticmethod
+    def _tool_arg_values_are_compatible(left_value: Any, right_value: Any) -> bool:
+        """Treat streamed partial values as compatible with their fuller versions."""
+        if left_value in ("", None, [], {}):
+            return True
+        if right_value in ("", None, [], {}):
+            return True
+        if left_value == right_value:
+            return True
+
+        if isinstance(left_value, str) and isinstance(right_value, str):
+            return left_value.startswith(right_value) or right_value.startswith(left_value)
+
+        if isinstance(left_value, dict) and isinstance(right_value, dict):
+            shared_keys = set(left_value) & set(right_value)
+            return all(
+                MessageDispatcher._tool_arg_values_are_compatible(
+                    left_value[key], right_value[key]
+                )
+                for key in shared_keys
+            )
+
+        if isinstance(left_value, list) and isinstance(right_value, list):
+            shorter, longer = (
+                (left_value, right_value)
+                if len(left_value) <= len(right_value)
+                else (right_value, left_value)
+            )
+            return all(
+                MessageDispatcher._tool_arg_values_are_compatible(
+                    shorter[index], longer[index]
+                )
+                for index in range(len(shorter))
+            )
+
+        return False
+
+    @classmethod
+    def _tool_activity_calls_match(
+        cls,
+        left: ToolActivityCall,
+        right: ToolActivityCall,
+    ) -> bool:
+        """Heuristically decide whether two previews represent one tool call."""
+        if left.call_id and right.call_id and left.call_id == right.call_id:
+            return True
+
+        if left.name != right.name:
+            return False
+
+        if not left.call_id or not right.call_id:
+            return True
+
+        return cls._tool_args_are_incremental(left.args, right.args)
+
+    @classmethod
+    def _merge_tool_activity_calls(
+        cls,
+        existing_calls: list[ToolActivityCall],
+        incoming_calls: list[ToolActivityCall],
+    ) -> list[ToolActivityCall]:
+        """Merge streamed tool previews so args remain visible across chunks."""
+        merged = list(existing_calls)
+
+        for incoming in incoming_calls:
+            match_index = next(
+                (
+                    index
+                    for index, existing in enumerate(merged)
+                    if cls._tool_activity_calls_match(existing, incoming)
+                ),
+                None,
+            )
+
+            if match_index is None:
+                merged.append(incoming)
+                continue
+
+            existing = merged[match_index]
+            merged[match_index] = ToolActivityCall(
+                name=incoming.name or existing.name,
+                args=cls._merge_tool_args(existing.args, incoming.args),
+                call_id=existing.call_id or incoming.call_id,
+            )
+
+        return merged
+
+    @staticmethod
+    def _is_same_tool_activity_call(
+        left: ToolActivityCall, right: ToolActivityCall
+    ) -> bool:
+        """Check whether two live tool previews refer to the same tool call."""
+        return MessageDispatcher._tool_activity_calls_match(left, right)
+
+    @classmethod
+    def _dedupe_tool_activity_namespaces(
+        cls,
+        active_tools: dict[tuple, list[ToolActivityCall]],
+        target_namespace: tuple,
+    ) -> None:
+        """Keep each live tool call in only one namespace to avoid duplicate rows."""
+        target_calls = active_tools.get(target_namespace, [])
+        if not target_calls:
+            return
+
+        for namespace in list(active_tools):
+            if namespace == target_namespace:
+                continue
+
+            calls = active_tools.get(namespace, [])
+            if not calls:
+                continue
+
+            remaining_calls: list[ToolActivityCall] = []
+            merged_target_calls = target_calls
+            for call in calls:
+                matching_target = next(
+                    (
+                        target_call
+                        for target_call in merged_target_calls
+                        if cls._is_same_tool_activity_call(target_call, call)
+                    ),
+                    None,
+                )
+                if matching_target is None:
+                    remaining_calls.append(call)
+                    continue
+
+                merged_target_calls = cls._merge_tool_activity_calls(
+                    merged_target_calls,
+                    [call],
+                )
+
+            if remaining_calls:
+                active_tools[namespace] = remaining_calls
+            else:
+                active_tools.pop(namespace, None)
+
+            target_calls = merged_target_calls
+
+        active_tools[target_namespace] = target_calls
+
+    @classmethod
+    def _build_activity_renderable(
+        cls,
+        active_tools: dict[tuple, list[ToolActivityCall]],
+        thinking_previews: dict[tuple, list[str]],
+    ) -> RenderableType:
+        """Build the transient live activity area shown while streaming."""
+        renderables: list[RenderableType] = []
+
+        for namespace, tool_calls in cls._sorted_activity_items(active_tools):
+            for tool_call in tool_calls:
+                renderables.append(
+                    ToolActivityIndicator(
+                        cls._build_tool_activity_label(
+                            tool_call, indent_level=len(namespace)
+                        ),
+                        details=cls._build_tool_activity_args(
+                            tool_call, indent_level=len(namespace)
+                        ),
+                    )
+                )
+
+        for namespace, preview_lines in cls._sorted_activity_items(thinking_previews):
+            indent = "  " * len(namespace)
+            renderables.append(
+                Spinner(
+                    "dots",
+                    Text(f"{indent}Thinking...", style="indicator"),
+                    style="indicator",
+                )
+            )
+            preview_text = "\n".join(f"{indent}{line}" for line in preview_lines[-3:])
+            if preview_text:
+                renderables.append(Text(preview_text, style="dim"))
+
+        if not renderables:
+            renderables.append(
+                Spinner(
+                    "dots",
+                    Text("Thinking...", style="indicator"),
+                    style="indicator",
+                )
+            )
+
+        return Group(*renderables)
+
+    @classmethod
+    def _refresh_activity_live(
+        cls,
+        live: Live | None,
+        active_tools: dict[tuple, list[ToolActivityCall]],
+        thinking_previews: dict[tuple, list[str]],
+        *,
+        refresh: bool = False,
+    ) -> None:
+        """Refresh the live activity block with current tool/thinking state."""
+        if live is None:
+            return
+        live.update(
+            cls._build_activity_renderable(active_tools, thinking_previews),
+            refresh=refresh,
+        )
+
+    @classmethod
+    def _set_tool_activity(
+        cls,
+        live: Live | None,
+        active_tools: dict[tuple, list[ToolActivityCall]],
+        thinking_previews: dict[tuple, list[str]],
+        namespace: tuple,
+        tool_calls: list[ToolActivityCall],
+    ) -> None:
+        """Track an active tool call and refresh the live area."""
+        active_tools[namespace] = cls._merge_tool_activity_calls(
+            active_tools.get(namespace, []),
+            tool_calls,
+        )
+        cls._dedupe_tool_activity_namespaces(active_tools, namespace)
+        thinking_previews.pop(namespace, None)
+        cls._refresh_activity_live(live, active_tools, thinking_previews)
+
+    @classmethod
+    def _clear_tool_activity(
+        cls,
+        live: Live | None,
+        active_tools: dict[tuple, list[ToolActivityCall]],
+        thinking_previews: dict[tuple, list[str]],
+        namespace: tuple,
+        *,
+        refresh: bool = False,
+    ) -> None:
+        """Remove an active tool line and refresh the live area."""
+        if namespace in active_tools:
+            active_tools.pop(namespace, None)
+            cls._refresh_activity_live(
+                live,
+                active_tools,
+                thinking_previews,
+                refresh=refresh,
+            )
+
+    @classmethod
+    def _set_thinking_preview(
+        cls,
+        live: Live | None,
+        active_tools: dict[tuple, list[ToolActivityCall]],
+        thinking_previews: dict[tuple, list[str]],
+        namespace: tuple,
+        preview_lines: list[str],
+    ) -> None:
+        """Track the latest streaming preview for a namespace."""
+        active_tools.pop(namespace, None)
+        thinking_previews[namespace] = preview_lines[-3:]
+        cls._refresh_activity_live(live, active_tools, thinking_previews)
+
+    @classmethod
+    def _clear_thinking_preview(
+        cls,
+        live: Live | None,
+        active_tools: dict[tuple, list[ToolActivityCall]],
+        thinking_previews: dict[tuple, list[str]],
+        namespace: tuple,
+        *,
+        refresh: bool = False,
+    ) -> None:
+        """Remove preview text for a namespace and refresh the live area."""
+        if namespace in thinking_previews:
+            thinking_previews.pop(namespace, None)
+            cls._refresh_activity_live(
+                live,
+                active_tools,
+                thinking_previews,
+                refresh=refresh,
+            )
+
     async def _process_message_chunk(
         self,
         data: tuple[AnyMessage, dict],
         namespace: tuple,
         streaming_states: dict[tuple, dict[str, Any]],
-        status,
+        live: Live | None,
         rendered_messages: set[str],
+        active_tools: dict[tuple, list[ToolActivityCall]],
+        thinking_previews: dict[tuple, list[str]],
     ) -> None:
         """Process message chunk for token-by-token streaming preview."""
-        message_chunk, metadata = data
+        message_chunk, _metadata = data
 
         streaming_state = self._get_streaming_state(namespace, streaming_states)
 
@@ -435,9 +1068,10 @@ class MessageDispatcher:
                 self._finalize_streaming(
                     namespace,
                     streaming_states,
-                    None,
+                    live,
                     rendered_messages,
-                    stop_status=False,
+                    active_tools,
+                    thinking_previews,
                 )
                 streaming_state["active"] = True
                 streaming_state["message_id"] = message_id
@@ -445,6 +1079,17 @@ class MessageDispatcher:
                 streaming_state["chunks"] = []
 
             streaming_state["chunks"].append(message_chunk)
+
+            tool_previews = self._extract_tool_call_previews(message_chunk)
+            if tool_previews:
+                self._set_tool_activity(
+                    live,
+                    active_tools,
+                    thinking_previews,
+                    namespace,
+                    tool_previews,
+                )
+                return
 
             content = self._extract_chunk_content(message_chunk)
             if content:
@@ -460,19 +1105,22 @@ class MessageDispatcher:
                             "preview_lines"
                         ][-4:]
 
-                indent_level = len(namespace)
-                indent = "  " * indent_level
-
-                spinner_text = render(
-                    f"[{theme.spinner_color}]{indent}Thinking...[/{theme.spinner_color}]"
+                self._set_thinking_preview(
+                    live,
+                    active_tools,
+                    thinking_previews,
+                    namespace,
+                    streaming_state["preview_lines"],
                 )
-                preview_text = "\n".join(
-                    f"{indent}{line}" for line in streaming_state["preview_lines"][-3:]
-                )
-                status.update(Group(spinner_text, Text(preview_text, style="dim")))
 
     async def _process_update_chunk(
-        self, data: dict, namespace: tuple, rendered_messages: set[str]
+        self,
+        data: dict,
+        namespace: tuple,
+        rendered_messages: set[str],
+        live: Live | None,
+        active_tools: dict[tuple, list[ToolActivityCall]],
+        thinking_previews: dict[tuple, list[str]],
     ) -> None:
         """Process update chunk for tools/state (batch mode)."""
         for _node_name, node_data in data.items():
@@ -486,15 +1134,50 @@ class MessageDispatcher:
                 last_message: AnyMessage = messages[-1]
                 base_id = self._get_stable_message_id(last_message)
                 message_id = f"{base_id}_{last_message.type}"
+                indent_level = len(namespace)
+
+                if isinstance(last_message, AIMessage):
+                    tool_previews = self._extract_tool_call_previews(last_message)
+                    if tool_previews:
+                        self._set_tool_activity(
+                            live,
+                            active_tools,
+                            thinking_previews,
+                            namespace,
+                            tool_previews,
+                        )
+                elif isinstance(last_message, ToolMessage):
+                    self._clear_tool_activity(
+                        live,
+                        active_tools,
+                        thinking_previews,
+                        namespace,
+                        refresh=True,
+                    )
+                    self._clear_thinking_preview(
+                        live,
+                        active_tools,
+                        thinking_previews,
+                        namespace,
+                        refresh=True,
+                    )
 
                 if message_id in rendered_messages:
                     continue
 
                 rendered_messages.add(message_id)
 
-                if isinstance(last_message, (AIMessage, ToolMessage)):
-                    indent_level = len(namespace)
-                    self.session.renderer.render_message(
+                if isinstance(last_message, AIMessage):
+                    self._render_assistant_with_deferred_tools(
+                        last_message,
+                        indent_level=indent_level,
+                    )
+                elif isinstance(last_message, ToolMessage):
+                    self._render_pending_tool_header(
+                        last_message,
+                        indent_level=indent_level,
+                    )
+                    self.session.renderer.render_tool_message(
                         last_message, indent_level=indent_level
                     )
 
@@ -522,49 +1205,92 @@ class MessageDispatcher:
             streaming_state["preview_lines"] = [""]
             streaming_state["chunks"] = []
 
+    def _remember_tool_headers(self, message: AIMessage, indent_level: int) -> None:
+        """Cache tool call headers so they can be rendered with the tool result."""
+        for tool_call in message.tool_calls:
+            call_id = tool_call.get("id")
+            if not call_id:
+                continue
+            self._pending_tool_headers[str(call_id)] = (dict(tool_call), indent_level)
+
+    def _render_assistant_with_deferred_tools(
+        self, message: AIMessage, indent_level: int
+    ) -> None:
+        """Render assistant content now and defer tool call headers until results arrive."""
+        if message.tool_calls:
+            self._remember_tool_headers(message, indent_level)
+            self.session.renderer.render_assistant_message(
+                message,
+                indent_level=indent_level,
+                show_tool_calls=False,
+            )
+            return
+
+        self.session.renderer.render_assistant_message(
+            message,
+            indent_level=indent_level,
+        )
+
+    def _render_pending_tool_header(self, message: ToolMessage, indent_level: int) -> None:
+        """Render the deferred tool header immediately before its result."""
+        tool_call_id = getattr(message, "tool_call_id", None)
+        if not tool_call_id:
+            return
+
+        pending = self._pending_tool_headers.pop(str(tool_call_id), None)
+        if pending is None:
+            return
+
+        tool_call, stored_indent = pending
+        self.session.renderer.render_tool_call(tool_call, indent_level=stored_indent)
+
     def _finalize_streaming(
         self,
         namespace: tuple,
         streaming_states: dict[tuple, dict[str, Any]],
-        status,
+        live: Live | None,
         rendered_messages: set[str],
-        *,
-        stop_status: bool = True,
+        active_tools: dict[tuple, list[ToolActivityCall]],
+        thinking_previews: dict[tuple, list[str]],
     ) -> None:
         """Finalize active streaming message and render final version."""
         streaming_state = self._get_streaming_state(namespace, streaming_states)
 
         if streaming_state["active"]:
-            if stop_status and status:
-                status.stop()
-
             if streaming_state["chunks"]:
                 final_message = self._merge_chunks(streaming_state["chunks"])
                 indent_level = len(namespace)
-                self.session.renderer.render_assistant_message(
+                self._render_assistant_with_deferred_tools(
                     final_message, indent_level=indent_level
                 )
                 message_id = f"{streaming_state['message_id']}_{final_message.type}"
                 rendered_messages.add(message_id)
 
+            self._clear_thinking_preview(
+                live,
+                active_tools,
+                thinking_previews,
+                namespace,
+            )
             self._clear_preview(streaming_state)
 
     def _finalize_all_streaming(
         self,
         streaming_states: dict[tuple, dict[str, Any]],
-        status,
+        live: Live | None,
         rendered_messages: set[str],
-        *,
-        stop_status: bool = True,
+        active_tools: dict[tuple, list[ToolActivityCall]],
+        thinking_previews: dict[tuple, list[str]],
     ) -> None:
         """Finalize all active streaming messages."""
         for namespace in streaming_states:
             self._finalize_streaming(
                 namespace,
                 streaming_states,
-                status,
+                live,
                 rendered_messages,
-                stop_status=stop_status,
+                active_tools,
+                thinking_previews,
             )
 
     @staticmethod

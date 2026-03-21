@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast
@@ -32,6 +33,12 @@ WELCOME_TITLE = "✻ Welcome to msAgent"
 
 THINKING_STYLE = Style(italic=True, dim=True)
 LOW_PRIORITY_STYLE = console.console.get_style("muted") + Style(dim=True)
+TOOL_PREFIX_STYLE = "accent"
+TOOL_NAME_STYLE = "primary"
+TOOL_ARG_KEY_STYLE = "muted"
+TOOL_ARG_VALUE_STYLE = "primary"
+TOOL_ARG_SEPARATOR_STYLE = "muted"
+TOOL_SUMMARY_VALUE_MAX = 72
 
 
 def _fix_escaped_code_fences(content: str) -> str:
@@ -329,6 +336,58 @@ class Renderer:
         return texts, thinking_blocks
 
     @staticmethod
+    def _stringify_tool_arg(value: Any, max_length: int) -> str:
+        """Convert tool args to a compact single-line string."""
+        if isinstance(value, str):
+            value_str = value.replace("\n", "\\n")
+        elif isinstance(value, (dict, list)):
+            value_str = json.dumps(value, ensure_ascii=False)
+        else:
+            value_str = str(value)
+
+        if len(value_str) > max_length:
+            return value_str[:max_length] + "..."
+        return value_str
+
+    @staticmethod
+    def _append_tool_arg_block(
+        result: Text,
+        arg_items: list[tuple[str, str]],
+        base_indent: str,
+    ) -> None:
+        """Append a vertically stacked tool arg block."""
+        if not arg_items:
+            result.append("\n")
+            return
+
+        result.append("\n")
+        for index, (key, value) in enumerate(arg_items):
+            if index > 0:
+                result.append("\n")
+            result.append(f"{base_indent}  ")
+            result.append(key, style=TOOL_ARG_KEY_STYLE)
+            result.append(": ", style=TOOL_ARG_SEPARATOR_STYLE)
+            result.append(value, style=TOOL_ARG_VALUE_STYLE)
+        result.append("\n")
+
+    @staticmethod
+    def _strip_frontmatter_fences(content: str) -> str:
+        """Remove leading Markdown frontmatter fences while preserving metadata."""
+        stripped_leading = content.lstrip()
+        if not stripped_leading.startswith("---\n"):
+            return content
+
+        lines = stripped_leading.splitlines()
+        try:
+            closing_index = lines.index("---", 1)
+        except ValueError:
+            return "\n".join(lines[1:]).strip() or content
+
+        stripped_lines = lines[1:closing_index] + lines[closing_index + 1 :]
+        stripped = "\n".join(stripped_lines).strip()
+        return stripped or content
+
+    @staticmethod
     def _format_tool_call(tool_call: dict[str, Any], indent_level: int = 0) -> Text:
         """Format a single tool call with improved readability."""
         tool_name = tool_call.get("name", UNKNOWN)
@@ -339,31 +398,41 @@ class Renderer:
         # Build the text with formatting
         result = Text()
         result.append(base_indent)
-        result.append("⚙ ", style="indicator")
-        result.append(tool_name, style="bold")
-        result.append("\n")
+        result.append("● ", style="indicator")
+        result.append("Use tool ", style=TOOL_PREFIX_STYLE)
+        result.append(tool_name, style=TOOL_NAME_STYLE)
 
         if tool_args:
-            for k, v in tool_args.items():
-                # Format value with truncation if needed
-                value_str = str(v)
-                if len(value_str) > 200:
-                    value_str = value_str[:200] + "..."
-
-                result.append(f"{base_indent}  {k} : ")
-                result.append(value_str)
-                result.append("\n")
+            summary_arg_items = [
+                (
+                    str(key),
+                    Renderer._stringify_tool_arg(value, TOOL_SUMMARY_VALUE_MAX),
+                )
+                for key, value in tool_args.items()
+            ]
+            Renderer._append_tool_arg_block(
+                result,
+                summary_arg_items,
+                base_indent=base_indent,
+            )
+        else:
+            result.append("\n")
 
         return result
 
     @staticmethod
-    def render_assistant_message(message: AIMessage, indent_level: int = 0) -> None:
+    def render_assistant_message(
+        message: AIMessage,
+        indent_level: int = 0,
+        *,
+        show_tool_calls: bool = True,
+    ) -> None:
         """Render an assistant message with optional tool calls."""
         if not message.content and not message.tool_calls:
             return
 
         content: str | list[str | dict] = message.content
-        tool_calls = [dict(tc) for tc in message.tool_calls]
+        tool_calls = [dict(tc) for tc in message.tool_calls] if show_tool_calls else []
         is_error = getattr(message, "is_error", False)
 
         if not content:
@@ -451,6 +520,11 @@ class Renderer:
             console.print("")
 
     @staticmethod
+    def render_tool_call(tool_call: dict[str, Any], indent_level: int = 0) -> None:
+        """Render a single tool call header."""
+        console.print(Renderer._format_tool_call(tool_call, indent_level=indent_level))
+
+    @staticmethod
     def render_tool_message(message: ToolMessage, indent_level: int = 0) -> None:
         """Render a tool execution message with Rich markup support."""
         content = getattr(message, "short_content", None) or message.text
@@ -458,6 +532,9 @@ class Renderer:
         # Skip rendering if content is empty or None
         if not content or (isinstance(content, str) and not content.strip()):
             return
+
+        if isinstance(content, str):
+            content = Renderer._strip_frontmatter_fences(content)
 
         is_error = (
             getattr(message, "is_error", False)

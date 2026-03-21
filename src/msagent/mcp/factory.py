@@ -12,6 +12,7 @@ from msagent.core.logging import get_logger
 from msagent.core.settings import settings
 from msagent.mcp.client import MCPClient, RepairConfig, ServerMeta
 from msagent.mcp.oauth import create_oauth_provider
+from msagent.mcp.stdio import silence_mcp_stdio_stderr
 from msagent.sandboxes.backends.base import SandboxBinding
 from msagent.utils.patterns import matches_patterns, mcp_server_matcher
 
@@ -68,6 +69,8 @@ class MCPFactory:
         oauth_dir: Path | None = None,
         sandbox_bindings: list[SandboxBinding] | None = None,
     ) -> MCPClient:
+        silence_mcp_stdio_stderr()
+
         config_hash = self._get_config_hash(config, cache_dir)
         if self._client and self._config_hash == config_hash:
             return self._client

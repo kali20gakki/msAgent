@@ -71,3 +71,67 @@ def test_show_welcome_prefers_resolved_model_display(monkeypatch) -> None:
     output = capture.console.export_text()
 
     assert "Model: deepseek-chat (openai)" in output
+
+
+def test_format_tool_call_uses_dot_prefix() -> None:
+    text = renderer_module.Renderer._format_tool_call(
+        {"name": "run_command", "args": {"command": "ls"}}
+    )
+
+    assert text.plain.startswith("● Use tool run_command\n  command: ls\n")
+    assert "⚙" not in text.plain
+    assert [span.style for span in text.spans[:3]] == [
+        "indicator",
+        "accent",
+        "primary",
+    ]
+    assert "muted" in [span.style for span in text.spans]
+
+
+def test_format_tool_call_wraps_long_args_into_compact_second_line() -> None:
+    text = renderer_module.Renderer._format_tool_call(
+        {
+            "name": "run_command",
+            "args": {
+                "command": "python -c \"print('this is a very long command that should not stay inline')\"",
+                "cwd": "/tmp/project",
+            },
+        }
+    )
+
+    assert text.plain.startswith("● Use tool run_command\n")
+    assert "\n  command: " in text.plain
+    assert "\n  cwd: /tmp/project" in text.plain
+
+
+def test_strip_frontmatter_fences_removes_yaml_markers() -> None:
+    content = (
+        "---\n"
+        "name: cluster-fast-slow-rank-detector\n"
+        "description: profiler skill\n"
+        "---\n"
+        "\n"
+        "# Body\n"
+    )
+
+    stripped = renderer_module.Renderer._strip_frontmatter_fences(content)
+
+    assert stripped.startswith("name: cluster-fast-slow-rank-detector")
+    assert "\n---\n" not in stripped
+    assert "# Body" in stripped
+
+
+def test_strip_frontmatter_fences_removes_leading_opening_marker_without_closing_fence() -> None:
+    content = (
+        "\n"
+        "---\n"
+        "name: cluster-fast-slow-rank-detector\n"
+        "description: profiler skill\n"
+        "技能正文\n"
+    )
+
+    stripped = renderer_module.Renderer._strip_frontmatter_fences(content)
+
+    assert not stripped.startswith("---")
+    assert stripped.startswith("name: cluster-fast-slow-rank-detector")
+    assert "技能正文" in stripped
