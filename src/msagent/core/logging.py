@@ -4,8 +4,6 @@ import warnings
 from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
 
-from rich.logging import RichHandler
-
 from msagent.core.constants import CONFIG_LOG_DIR
 from msagent.core.settings import settings
 
@@ -19,7 +17,7 @@ def configure_logging(show_logs: bool = False, working_dir: Path = Path.cwd()) -
     """Configure application logging.
 
     Args:
-        show_logs: Enable verbose logging (console + file). If False, logs are hidden.
+        show_logs: Enable file logging and show log location hint.
         working_dir: Working directory for log file.
     """
     # Configure root logger
@@ -71,22 +69,13 @@ def configure_logging(show_logs: bool = False, working_dir: Path = Path.cwd()) -
     )
 
     if show_logs:
-        # Pretty console logging with RichHandler (shows file:line automatically)
-        console_handler = RichHandler(
-            show_time=True,
-            show_level=True,
-            show_path=True,
-            rich_tracebacks=True,
-            tracebacks_show_locals=False,
-        )
-        root_logger.addHandler(console_handler)
-
-        # File logging with daily rotation
+        # Enable file logging
         log_dir = working_dir / CONFIG_LOG_DIR
+        log_file_path = log_dir / "app.log"
         try:
             log_dir.mkdir(parents=True, exist_ok=True)
             file_handler = TimedRotatingFileHandler(
-                log_dir / "app.log",
+                log_file_path,
                 when="midnight",
                 interval=1,
                 backupCount=7,  # Keep 7 days of logs
@@ -97,7 +86,9 @@ def configure_logging(show_logs: bool = False, working_dir: Path = Path.cwd()) -
             file_handler.setFormatter(logging.Formatter(FILE_LOG_FORMAT))
             root_logger.addHandler(file_handler)
 
-            logging.getLogger(__name__).info("Logging initialized")
+            # Print log file location hint (using plain print, not logging)
+            abs_log_path = log_file_path.resolve()
+            print(f"📝 Logs written to: {abs_log_path}", flush=True)
         except (OSError, PermissionError):
             pass  # Sandbox may block file creation
 

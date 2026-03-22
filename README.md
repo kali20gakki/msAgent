@@ -87,7 +87,18 @@ msagent --version
 msagent -v
 ```
 
-启用后会同时输出控制台详细日志，并写入当前工作目录下的 `./.msagent/logs/app.log`。
+启用后日志会写入当前工作目录下的 `./.msagent/logs/app.log`，同时终端会提示日志文件位置。
+
+#### 日志级别环境变量
+
+通过 `MSAGENT_LOG_LEVEL` 环境变量可调整日志详细程度（默认 `INFO`）：
+
+```bash
+# 调试模式，记录最详细日志
+export MSAGENT_LOG_LEVEL=DEBUG
+msagent -v
+
+支持的级别（从低到高）：`DEBUG` < `INFO` < `WARNING` < `ERROR` < `CRITICAL`
 
 ### 3) 🔐 配置 LLM
 

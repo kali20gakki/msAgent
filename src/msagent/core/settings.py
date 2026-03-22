@@ -117,7 +117,11 @@ class ServerSettings(BaseModel):
 
 
 class Settings(BaseSettings):
-    log_level: str = Field(default="INFO", description="The log level")
+    log_level: str = Field(
+        default="INFO",
+        description="The log level",
+        validation_alias="MSAGENT_LOG_LEVEL",
+    )
     suppress_grpc_warnings: bool = Field(
         default=True, description="Suppress gRPC warnings"
     )
