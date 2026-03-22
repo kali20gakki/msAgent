@@ -138,7 +138,7 @@ class LLMFactory:
 
         limiter = self._create_limiter(config)
         llm: BaseChatModel
-
+        print(f"Creating LLM with config: {config}")
         if config.provider == LLMProvider.OPENAI:
             from langchain_openai import ChatOpenAI
 
@@ -203,8 +203,9 @@ class LLMFactory:
                 "timeout": None,
                 "stop": None,
             }
+            self._add_optional_kwarg(kwargs, "base_url", config.base_url)
             self._add_optional_kwarg(kwargs, "max_tokens_to_sample", config.max_tokens)
-
+            print(f"ANTHROPIC kwargs: {kwargs}")
             if config.extended_reasoning:
                 kwargs["thinking"] = config.extended_reasoning
 
@@ -282,7 +283,7 @@ class LLMFactory:
         elif config.provider == LLMProvider.DEEPSEEK:
             from langchain_deepseek import ChatDeepSeek
 
-            http_client, http_async_client = self._get_http_clients()
+            http_client, http_async_client = self._get_http_clients(config.base_url)
             kwargs = {
                 "api_key": self._resolve_api_key(
                     config, self.llm_settings.deepseek_api_key, "DEEPSEEK_API_KEY"
@@ -294,6 +295,7 @@ class LLMFactory:
                 "http_client": http_client,
                 "http_async_client": http_async_client,
             }
+            self._add_optional_kwarg(kwargs, "base_url", config.base_url)
             self._add_optional_kwarg(kwargs, "max_tokens", config.max_tokens)
             llm = ChatDeepSeek(**kwargs)
         elif config.provider == LLMProvider.ZHIPUAI:
@@ -308,6 +310,7 @@ class LLMFactory:
                 "streaming": config.streaming,
                 "rate_limiter": limiter,
             }
+            self._add_optional_kwarg(kwargs, "zhipuai_api_base", config.base_url)
             self._add_optional_kwarg(kwargs, "max_tokens", config.max_tokens)
 
             if config.extended_reasoning:

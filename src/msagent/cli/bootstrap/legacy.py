@@ -71,9 +71,6 @@ def create_legacy_parser() -> argparse.ArgumentParser:
     config_parser.add_argument("--llm-provider", help="LLM provider")
     config_parser.add_argument("--llm-api-key", help="LLM API key for this process only")
     config_parser.add_argument(
-        "--llm-api-key-env", help="Environment variable name used to resolve API key"
-    )
-    config_parser.add_argument(
         "--llm-max-tokens",
         type=int,
         help="Max output tokens (0 means provider/model default)",
@@ -193,7 +190,6 @@ async def _handle_config(args: argparse.Namespace) -> int:
         [
             args.llm_provider,
             args.llm_api_key,
-            args.llm_api_key_env,
             args.llm_max_tokens is not None,
             args.llm_base_url,
             args.llm_model,
@@ -214,14 +210,13 @@ async def _handle_config(args: argparse.Namespace) -> int:
 
     agent_config = await registry.get_agent(None)
     current_llm = agent_config.llm
+    effective_provider = provider or current_llm.provider
     llm_data = {
         "version": current_llm.version,
-        "provider": (provider or current_llm.provider).value,
+        "provider": effective_provider.value,
         "alias": "default",
         "model": args.llm_model or current_llm.model,
-        "api_key_env": args.llm_api_key_env
-        or current_llm.api_key_env
-        or DEFAULT_API_ENV_MAP.get(provider or current_llm.provider),
+        "api_key_env": DEFAULT_API_ENV_MAP.get(effective_provider),
         "base_url": args.llm_base_url if args.llm_base_url is not None else current_llm.base_url,
         "max_tokens": (
             args.llm_max_tokens
