@@ -56,9 +56,10 @@ async def test_reference_completer_suggests_nested_paths_for_manual_input(
 async def test_reference_completer_supports_absolute_root_prefix_completion() -> None:
     completer = ReferenceCompleter(Path.cwd(), max_suggestions=20)
 
-    completions = await _collect_texts(completer, "@/Us")
+    completions = await _collect_texts(completer, "@/us")
 
-    assert "/Users/" in completions
+    # /usr/ exists on both macOS and Linux, /Users/ only on macOS
+    assert "/usr/" in completions
 
 
 @pytest.mark.asyncio
