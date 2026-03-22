@@ -67,6 +67,9 @@ disable_error_code = ["assignment", "index", "typeddict-unknown-key", "arg-type"
 [tool.pytest.ini_options]
 pythonpath = [".", "src"]
 testpaths = ["tests"]
+markers = [
+    "integration: mark test as integration test with real HTTP connections",
+]
 filterwarnings = [
     "ignore:LangSmith now uses UUID v7:UserWarning:pydantic.v1.main",
     "ignore:Using fallback GPT-2 tokenizer.*:UserWarning",
