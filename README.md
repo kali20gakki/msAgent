@@ -99,7 +99,7 @@ export MSAGENT_LOG_LEVEL=DEBUG
 msagent -v
 
 支持的级别（从低到高）：`DEBUG` < `INFO` < `WARNING` < `ERROR` < `CRITICAL`
-
+```
 ### 3) 🔐 配置 LLM
 
 当前 `config` 子命令直接支持的 Provider 是：`openai`、`anthropic`、`gemini`、`google`、`custom`。
