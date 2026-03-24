@@ -97,6 +97,7 @@ msagent -v
 # 调试模式，记录最详细日志
 export MSAGENT_LOG_LEVEL=DEBUG
 msagent -v
+```
 
 支持的级别（从低到高）：`DEBUG` < `INFO` < `WARNING` < `ERROR` < `CRITICAL`
 
