@@ -6,7 +6,7 @@ prompt:
 llm: default
 checkpointer: sqlite
 default: true
-recursion_limit: 80
+recursion_limit: 200
 tools:
   patterns:
   - impl:file_system:*
