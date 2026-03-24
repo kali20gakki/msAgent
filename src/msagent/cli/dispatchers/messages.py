@@ -376,6 +376,7 @@ class MessageDispatcher:
             f"agent={self.session.context.agent}",
             f"model_alias={self.session.context.model}",
         ]
+        log_fields.extend(self._resolve_error_log_fields(error))
         log_fields.extend(await self._resolve_llm_log_fields())
         log_fields.extend(self._resolve_http_log_fields(error))
 
@@ -383,7 +384,29 @@ class MessageDispatcher:
         if exception_chain:
             log_fields.append(f"exception_chain={exception_chain}")
 
-        logger.exception("Message processing error [%s]", ", ".join(log_fields))
+        logger.error(
+            "Message processing error [%s]",
+            ", ".join(log_fields),
+            exc_info=error,
+        )
+
+    @classmethod
+    def _resolve_error_log_fields(cls, error: BaseException) -> list[str]:
+        """Extract message-specific error details for verbose logs."""
+        fields = [
+            f"console_error={cls._format_console_error(error)}",
+            f"exception_type={type(error).__name__}",
+        ]
+
+        message = (str(error) or type(error).__name__).strip()
+        if message:
+            fields.append(f"exception_message={cls._truncate_log_value(message)}")
+
+        error_repr = repr(error).strip()
+        if error_repr and error_repr != message:
+            fields.append(f"exception_repr={cls._truncate_log_value(error_repr)}")
+
+        return fields
 
     async def _resolve_llm_log_fields(self) -> list[str]:
         """Resolve the current model configuration for error logging."""

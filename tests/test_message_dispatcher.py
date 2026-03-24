@@ -15,6 +15,8 @@ from msagent.cli.dispatchers import messages as message_module
 from msagent.cli.dispatchers.messages import MessageDispatcher
 from msagent.cli.theme import theme
 from msagent.configs import ApprovalMode, LLMConfig, LLMProvider
+from msagent.core.constants import CONFIG_LOG_DIR
+from msagent.core.logging import configure_logging
 
 
 def _build_session(tmp_path: Path) -> SimpleNamespace:
@@ -51,16 +53,10 @@ def _build_session(tmp_path: Path) -> SimpleNamespace:
     return session
 
 
-@pytest.mark.asyncio
-async def test_dispatch_logs_detailed_connection_errors(
-    tmp_path: Path,
+def _patch_dispatch_to_raise_connection_error(
+    dispatcher: MessageDispatcher,
     monkeypatch: pytest.MonkeyPatch,
-    caplog: pytest.LogCaptureFixture,
 ) -> None:
-    session = _build_session(tmp_path)
-    dispatcher = MessageDispatcher(session)
-    printed_errors: list[str] = []
-
     monkeypatch.setattr(
         dispatcher.message_builder,
         "build",
@@ -90,13 +86,33 @@ async def test_dispatch_logs_detailed_connection_errors(
         except httpx.ConnectError as err:
             raise APIConnectionError(request=request) from err
 
-    monkeypatch.setattr(message_module.initializer, "load_user_memory", fake_load_user_memory)
-    monkeypatch.setattr(message_module.initializer, "load_llm_config", fake_load_llm_config)
+    monkeypatch.setattr(
+        message_module.initializer,
+        "load_user_memory",
+        fake_load_user_memory,
+    )
+    monkeypatch.setattr(
+        message_module.initializer,
+        "load_llm_config",
+        fake_load_llm_config,
+    )
     monkeypatch.setattr(
         dispatcher,
         "_invoke_without_stream",
         MethodType(fake_invoke_without_stream, dispatcher),
     )
+
+
+@pytest.mark.asyncio
+async def test_dispatch_logs_detailed_connection_errors(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    session = _build_session(tmp_path)
+    dispatcher = MessageDispatcher(session)
+    printed_errors: list[str] = []
+    _patch_dispatch_to_raise_connection_error(dispatcher, monkeypatch)
     monkeypatch.setattr(message_module.console, "print_error", printed_errors.append)
     monkeypatch.setattr(message_module.console, "print", lambda *args, **kwargs: None)
 
@@ -107,6 +123,13 @@ async def test_dispatch_logs_detailed_connection_errors(
         "Error processing message: Connection error. Cause: ConnectError: all connection attempts failed"
     ]
     assert "Message processing error [thread_id=thread-1" in caplog.text
+    assert (
+        "console_error=Connection error. Cause: ConnectError: all connection attempts failed"
+        in caplog.text
+    )
+    assert "exception_type=APIConnectionError" in caplog.text
+    assert "exception_message=Connection error." in caplog.text
+    assert "exception_repr=APIConnectionError('Connection error.')" in caplog.text
     assert "provider=openai" in caplog.text
     assert "resolved_model=deepseek-chat" in caplog.text
     assert "base_url=https://api.deepseek.com/v1" in caplog.text
@@ -115,6 +138,58 @@ async def test_dispatch_logs_detailed_connection_errors(
         "exception_chain=APIConnectionError: Connection error. <- "
         "ConnectError: all connection attempts failed"
     ) in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_dispatch_writes_detailed_processing_errors_to_verbose_log(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root_logger = logging.getLogger()
+    original_handlers = root_logger.handlers[:]
+    original_level = root_logger.level
+
+    try:
+        configure_logging(show_logs=True, working_dir=tmp_path)
+
+        session = _build_session(tmp_path)
+        dispatcher = MessageDispatcher(session)
+        _patch_dispatch_to_raise_connection_error(dispatcher, monkeypatch)
+        monkeypatch.setattr(message_module.console, "print_error", lambda *args: None)
+        monkeypatch.setattr(message_module.console, "print", lambda *args, **kwargs: None)
+
+        await dispatcher.dispatch("hello")
+
+        for handler in root_logger.handlers:
+            flush = getattr(handler, "flush", None)
+            if callable(flush):
+                flush()
+
+        log_path = tmp_path / CONFIG_LOG_DIR / "app.log"
+        assert log_path.exists()
+
+        log_text = log_path.read_text(encoding="utf-8")
+        assert "Message processing error [thread_id=thread-1" in log_text
+        assert (
+            "console_error=Connection error. Cause: ConnectError: "
+            "all connection attempts failed" in log_text
+        )
+        assert "exception_type=APIConnectionError" in log_text
+        assert "exception_message=Connection error." in log_text
+        assert (
+            "exception_chain=APIConnectionError: Connection error. <- "
+            "ConnectError: all connection attempts failed" in log_text
+        )
+        assert "Traceback (most recent call last):" in log_text
+    finally:
+        for handler in root_logger.handlers[:]:
+            root_logger.removeHandler(handler)
+            close = getattr(handler, "close", None)
+            if callable(close):
+                close()
+        for handler in original_handlers:
+            root_logger.addHandler(handler)
+        root_logger.setLevel(original_level)
 
 
 def test_extract_tool_call_names_handles_chunks_and_raw_payloads(tmp_path: Path) -> None:
