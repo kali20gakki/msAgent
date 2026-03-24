@@ -9,8 +9,11 @@ from msagent.middlewares import (
     CompressToolOutputMiddleware,
     PendingToolResultMiddleware,
     ReturnDirectMiddleware,
+    RetryConfig,
+    RetryMiddleware,
     SandboxMiddleware,
     TokenCostMiddleware,
+    ToolRetryConfig,
     create_dynamic_prompt_middleware,
 )
 from msagent.tools.internal.memory import read_memory_file
@@ -36,26 +39,56 @@ def create_react_agent(
     store: BaseStore | None = None,
     name: str | None = None,
     tool_sandbox_map: dict[str, SandboxBackend | None] | None = None,
+    retry_middleware: RetryMiddleware | None = None,
 ):
-    """Create a ReAct agent using LangChain's create_agent."""
+    """Create a ReAct agent using LangChain's create_agent.
+
+    Args:
+        model: The language model to use
+        tools: List of tools available to the agent
+        prompt: System prompt for the agent
+        state_schema: Optional custom state schema
+        context_schema: Optional custom context schema
+        checkpointer: Optional checkpoint saver for persistence
+        store: Optional store for memory
+        name: Optional agent name
+        tool_sandbox_map: Optional mapping of tools to sandbox backends
+        retry_middleware: Optional retry middleware for LLM/tool calls.
+            If not provided, a default RetryMiddleware is used.
+            Set to None explicitly to disable retry.
+
+    Returns:
+        Compiled state graph agent
+    """
     has_read_memory = read_memory_file in tools
+
+    # Use default retry middleware if not provided
+    # Set to None explicitly to disable
+    if retry_middleware is None:
+        retry_middleware = RetryMiddleware()
 
     # Middleware execution order:
     # - before_* hooks: First to last
     # - after_* hooks: Last to first (reverse)
     # - wrap_* hooks: Nested (first middleware wraps all others)
 
-    # Group 0: Dynamic prompt - Render template with runtime context
+    # Group 0: Retry - Outermost wrapper for model/tool calls
+    # Must be first to wrap all subsequent middleware
+    retry_group: list[AgentMiddleware[Any, Any]] = []
+    if retry_middleware:
+        retry_group.append(retry_middleware)
+
+    # Group 1: Dynamic prompt - Render template with runtime context
     dynamic_prompt: list[AgentMiddleware[Any, Any]] = [
         create_dynamic_prompt_middleware(prompt),
     ]
 
-    # Group 1: afterModel - After each model response
+    # Group 2: afterModel - After each model response
     after_model: list[AgentMiddleware[Any, Any]] = [
         TokenCostMiddleware(),  # Extract token usage for ctx/token display
     ]
 
-    # Group 2: wrapToolCall - Around each tool call
+    # Group 3: wrapToolCall - Around each tool call
     wrap_tool_call: list[AgentMiddleware[Any, Any]] = [
         ApprovalMiddleware(),  # Check approval before executing tools
     ]
@@ -67,19 +100,25 @@ def create_react_agent(
             CompressToolOutputMiddleware(model)  # Compress large tool outputs
         )
 
-    # Group 3: beforeAgent - Before each agent invocation
+    # Group 4: beforeAgent - Before each agent invocation
     before_agent: list[AgentMiddleware[Any, Any]] = [
         PendingToolResultMiddleware(),  # Repair missing tool results after interrupts
     ]
 
-    # Group 4: beforeModel - Before each model call
+    # Group 5: beforeModel - Before each model call
     before_model: list[AgentMiddleware[Any, Any]] = [
         ReturnDirectMiddleware(),  # Check for return_direct and terminate if needed
     ]
 
     # Combine all middleware
+    # Order matters: retry is outermost (first), then others
     middlewares: list[AgentMiddleware[Any, Any]] = (
-        dynamic_prompt + after_model + wrap_tool_call + before_agent + before_model
+        retry_group
+        + dynamic_prompt
+        + after_model
+        + wrap_tool_call
+        + before_agent
+        + before_model
     )
 
     return create_agent(

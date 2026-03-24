@@ -26,3 +26,13 @@ compression:
   llm: default
   prompt:
   - prompts/shared/general_compression.md
+retry:
+  enabled: true                    # 总开关
+  llm_max_retries: 5               # LLM 重试次数
+  llm_base_delay: 5.0              # 初始延迟（秒）
+  llm_max_delay: 60.0              # 最大延迟（秒）
+  tool_max_retries: 1              # Tool 重试次数
+  tool_timeout: 3600.0             # Tool 超时（秒）
+  enable_circuit_breaker: false    # 熔断器开关
+  circuit_breaker_threshold: 5     # 熔断阈值
+  circuit_breaker_recovery: 60.0   # 恢复时间（秒）

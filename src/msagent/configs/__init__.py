@@ -7,6 +7,7 @@ from msagent.configs.agent import (
     BatchAgentConfig,
     BatchSubAgentConfig,
     CompressionConfig,
+    RetryPolicyConfig,
     SkillsConfig,
     SubAgentConfig,
     ToolsConfig,
@@ -53,6 +54,7 @@ __all__ = [
     "CompressionConfig",
     "ToolsConfig",
     "SkillsConfig",
+    "RetryPolicyConfig",
     # MCP
     "MCPConfig",
     "MCPServerConfig",

@@ -517,6 +517,7 @@ class AgentFactory:
             subagents=resolved_subagents,
             model_provider=self.llm_factory.create,
             tool_sandbox_map=tool_sandbox_map,
+            retry_config=config.retry,
         )
         agent._llm_tools = llm_tools + internal_tools  # type: ignore
         agent._tools_in_catalog = tools_in_catalog  # type: ignore

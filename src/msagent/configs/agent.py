@@ -68,6 +68,42 @@ class ToolsConfig(BaseModel):
     )
 
 
+class RetryPolicyConfig(BaseModel):
+    """Retry configuration for LLM requests and tool calls."""
+
+    enabled: bool = Field(
+        default=True, description="Whether retry is enabled"
+    )
+    llm_max_retries: int = Field(
+        default=3, description="Maximum retry attempts for LLM requests", ge=0
+    )
+    llm_base_delay: float = Field(
+        default=1.0, description="Initial delay between LLM retries (seconds)", ge=0
+    )
+    llm_max_delay: float = Field(
+        default=60.0, description="Maximum delay for LLM retries (seconds)", ge=0
+    )
+    tool_max_retries: int = Field(
+        default=2, description="Maximum retry attempts for tool calls", ge=0
+    )
+    tool_timeout: float | None = Field(
+        default=None, description="Timeout for each tool call (seconds)", ge=0
+    )
+    enable_circuit_breaker: bool = Field(
+        default=False, description="Enable circuit breaker pattern"
+    )
+    circuit_breaker_threshold: int = Field(
+        default=5,
+        description="Consecutive failures before opening circuit",
+        ge=1,
+    )
+    circuit_breaker_recovery: float = Field(
+        default=60.0,
+        description="Seconds to wait before attempting recovery",
+        ge=0,
+    )
+
+
 class SkillsConfig(BaseModel):
     patterns: list[str] = Field(
         default_factory=list, description="Skill reference patterns"
@@ -225,6 +261,21 @@ class BaseAgentConfig(VersionedConfig):
         if from_ver < pkg_version.parse("2.2.1"):
             cls._copy_missing_sandbox_profiles()
 
+        # Migrate 2.2.1 -> 2.3.0: add retry configuration
+        if from_ver < pkg_version.parse("2.3.0"):
+            if "retry" not in data:
+                data["retry"] = {
+                    "enabled": True,
+                    "llm_max_retries": 3,
+                    "llm_base_delay": 1.0,
+                    "llm_max_delay": 60.0,
+                    "tool_max_retries": 2,
+                    "tool_timeout": None,
+                    "enable_circuit_breaker": False,
+                    "circuit_breaker_threshold": 5,
+                    "circuit_breaker_recovery": 60.0,
+                }
+
         return data
 
 
@@ -248,11 +299,18 @@ class AgentConfig(BaseAgentConfig):
     compression: CompressionConfig | None = Field(
         default=None, description="Compression configuration for context management"
     )
+    retry: RetryPolicyConfig | None = Field(
+        default=None, description="Retry configuration for LLM and tool calls"
+    )
 
 
 # Forward reference for AgentConfig.subagents
 class SubAgentConfig(BaseAgentConfig):
     """Configuration for subagents (no checkpointer, no default, no compression)."""
+
+    retry: RetryPolicyConfig | None = Field(
+        default=None, description="Retry configuration for LLM and tool calls"
+    )
 
 
 # Update forward reference
