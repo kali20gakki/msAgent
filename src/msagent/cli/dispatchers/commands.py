@@ -86,6 +86,14 @@ class CommandDispatcher:
             if command in self.commands:
                 await self.commands[command](args)
             else:
+                handled = await self.skills_handler.handle_shortcut(
+                    initializer.cached_agent_skills,
+                    command.removeprefix("/"),
+                    args,
+                    raw_input=command_line,
+                )
+                if handled:
+                    return
                 console.print_error(f"Unknown command: {command}")
                 console.print("")
                 await self.cmd_help([])
@@ -115,8 +123,8 @@ class CommandDispatcher:
         await self.tools_handler.handle(initializer.cached_llm_tools)
 
     async def cmd_skills(self, args: list[str]) -> None:
-        """Handle skills command with interactive selector."""
-        await self.skills_handler.handle(initializer.cached_agent_skills)
+        """Browse skills or run a specific skill via `/skills <skill> [task...]`."""
+        await self.skills_handler.handle(initializer.cached_agent_skills, args)
 
     async def cmd_mcp(self, args: list[str]) -> None:
         """Handle MCP management command."""
