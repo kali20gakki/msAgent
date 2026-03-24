@@ -11,6 +11,7 @@ from langchain_core.messages import AIMessage, AIMessageChunk
 from openai import APIConnectionError
 from rich.console import Console
 
+from msagent.agents.context import RetryNotice
 from msagent.cli.dispatchers import messages as message_module
 from msagent.cli.dispatchers.messages import MessageDispatcher
 from msagent.cli.theme import theme
@@ -227,6 +228,64 @@ def test_extract_tool_call_names_handles_chunks_and_raw_payloads(tmp_path: Path)
         args={"command": "ls", "cwd": "/tmp"},
         call_id="call-1",
     ) in previews
+
+
+def test_format_retry_notice_text_for_llm_and_tool(tmp_path: Path) -> None:
+    session = _build_session(tmp_path)
+    dispatcher = MessageDispatcher(session)
+
+    llm_notice = RetryNotice(
+        notice_id="llm:1",
+        scope="llm",
+        attempt=2,
+        max_retries=5,
+        delay=5.0,
+    )
+    tool_notice = RetryNotice(
+        notice_id="tool:1",
+        scope="tool",
+        attempt=1,
+        max_retries=1,
+        delay=0.5,
+        target_name="run_command",
+    )
+
+    assert dispatcher._format_retry_notice_text(llm_notice) == "LLM 重试 2/5，5s 后重试"
+    assert dispatcher._format_retry_notice_text(tool_notice) == (
+        "Tool run_command 重试 1/1，0.5s 后重试"
+    )
+
+
+def test_render_retry_notice_uses_warning_output_without_live(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session = _build_session(tmp_path)
+    dispatcher = MessageDispatcher(session)
+    printed: list[str] = []
+    monkeypatch.setattr(message_module.console, "print_warning", printed.append)
+
+    dispatcher._render_retry_notice(
+        RetryNotice(
+            notice_id="llm:1",
+            scope="llm",
+            attempt=1,
+            max_retries=3,
+            delay=2.0,
+        )
+    )
+    dispatcher._render_retry_notice(
+        RetryNotice(
+            notice_id="llm:1",
+            scope="llm",
+            attempt=1,
+            max_retries=3,
+            delay=2.0,
+            phase="cleared",
+        )
+    )
+
+    assert printed == ["LLM 重试 1/3，2s 后重试"]
 
 
 def test_extract_tool_call_previews_merges_same_tool_with_conflicting_source_ids(

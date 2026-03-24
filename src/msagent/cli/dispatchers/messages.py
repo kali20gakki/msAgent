@@ -27,7 +27,7 @@ from rich.measure import Measurement
 from rich.spinner import Spinner
 from rich.text import Text
 
-from msagent.agents.context import AgentContext
+from msagent.agents.context import AgentContext, RetryNotice
 from msagent.cli.bootstrap.initializer import initializer
 from msagent.cli.builders import MessageContentBuilder
 from msagent.cli.handlers import CompressionHandler, InterruptHandler
@@ -236,8 +236,13 @@ class MessageDispatcher:
         streaming_states: dict[tuple, dict[str, Any]] = {}
         active_tools: dict[tuple, list[ToolActivityCall]] = {}
         thinking_previews: dict[tuple, list[str]] = {}
+        status: Live | None = None
+
+        def handle_retry_notice(notice: RetryNotice) -> None:
+            self._render_retry_notice(notice, live=status)
 
         self.session.current_stream_task = asyncio.current_task()
+        context.retry_notice_handler = handle_retry_notice
 
         try:
             while True:
@@ -347,6 +352,7 @@ class MessageDispatcher:
                 except (asyncio.CancelledError, KeyboardInterrupt):
                     pass
         finally:
+            context.retry_notice_handler = None
             self.session.current_stream_task = None
 
     async def _invoke_without_stream(
@@ -356,7 +362,11 @@ class MessageDispatcher:
         context: AgentContext,
     ) -> None:
         """Run a request without token-by-token rendering."""
-        result = await self.session.graph.ainvoke(input_data, config, context=context)
+        context.retry_notice_handler = self._render_retry_notice
+        try:
+            result = await self.session.graph.ainvoke(input_data, config, context=context)
+        finally:
+            context.retry_notice_handler = None
 
         if not isinstance(result, dict):
             return
@@ -527,6 +537,47 @@ class MessageDispatcher:
         if len(normalized) <= max_length:
             return normalized
         return f"{normalized[: max_length - 3]}..."
+
+    @staticmethod
+    def _format_retry_delay(delay: float) -> str:
+        """Format retry delays for compact TUI feedback."""
+        rounded = round(delay, 1)
+        if rounded.is_integer():
+            return f"{int(rounded)}s"
+        return f"{rounded:.1f}s"
+
+    @classmethod
+    def _format_retry_notice_text(cls, notice: RetryNotice) -> str:
+        """Render a short human-friendly retry hint."""
+        delay_text = cls._format_retry_delay(notice.delay)
+        if notice.scope == "tool":
+            target_name = notice.target_name or "unknown"
+            return (
+                f"Tool {target_name} 重试 {notice.attempt}/{notice.max_retries}，"
+                f"{delay_text} 后重试"
+            )
+        return f"LLM 重试 {notice.attempt}/{notice.max_retries}，{delay_text} 后重试"
+
+    @classmethod
+    def _render_retry_notice(
+        cls,
+        notice: RetryNotice,
+        live: Live | None = None,
+    ) -> None:
+        """Show a visible retry prompt in the TUI."""
+        if notice.phase != "scheduled":
+            return
+
+        text = Text()
+        text.append("⚠︎", style="warning")
+        text.append(" ")
+        text.append(cls._format_retry_notice_text(notice), style="warning")
+
+        if live is not None:
+            live.console.print(text)
+            return
+
+        console.print_warning(cls._format_retry_notice_text(notice))
 
     @staticmethod
     def _extract_interrupts(chunk) -> list[Interrupt] | None:

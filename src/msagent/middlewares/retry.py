@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import random
-from collections.abc import Callable, Sequence
-from dataclasses import dataclass, field
+from collections.abc import Callable
+from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any, TypeVar
 
 from langchain.agents.middleware import AgentMiddleware
@@ -13,7 +14,7 @@ from langchain_core.messages import AIMessage, ToolMessage
 from langgraph.types import Command
 
 from msagent.agents import AgentState
-from msagent.agents.context import AgentContext
+from msagent.agents.context import AgentContext, RetryNotice
 from msagent.core.logging import get_logger
 
 if TYPE_CHECKING:
@@ -152,11 +153,31 @@ class RetryMiddleware(AgentMiddleware[AgentState, AgentContext]):
             return True
         return isinstance(exc, config.retryable_exceptions)
 
+    async def _emit_retry_notice(
+        self,
+        context: Any,
+        notice: RetryNotice,
+    ) -> None:
+        """Emit a runtime retry notice for UI feedback."""
+        handler = getattr(context, "retry_notice_handler", None)
+        if not callable(handler):
+            return
+
+        try:
+            result = handler(notice)
+            if inspect.isawaitable(result):
+                await result
+        except Exception:
+            logger.debug("Retry notice handler failed", exc_info=True)
+
     async def _retry_with_backoff(
         self,
         operation: Callable[[], T],
         config: RetryConfig,
         operation_name: str,
+        *,
+        runtime_context: Any = None,
+        notice_factory: Callable[[int, float], RetryNotice] | None = None,
     ) -> T:
         """Execute operation with retry logic.
 
@@ -199,6 +220,14 @@ class RetryMiddleware(AgentMiddleware[AgentState, AgentContext]):
                     f"Retrying in {delay:.2f}s..."
                 )
 
+                notice = (
+                    notice_factory(attempt + 1, delay)
+                    if notice_factory is not None
+                    else None
+                )
+                if notice is not None:
+                    await self._emit_retry_notice(runtime_context, notice)
+
                 # Call callback if provided
                 if config.on_retry:
                     try:
@@ -207,6 +236,11 @@ class RetryMiddleware(AgentMiddleware[AgentState, AgentContext]):
                         pass  # Ignore callback errors
 
                 await asyncio.sleep(delay)
+                if notice is not None:
+                    await self._emit_retry_notice(
+                        runtime_context,
+                        replace(notice, phase="cleared"),
+                    )
 
         # This should never be reached, but just in case
         if last_exception:
@@ -249,6 +283,14 @@ class RetryMiddleware(AgentMiddleware[AgentState, AgentContext]):
             _call_model,
             self.llm_config,
             "LLM request",
+            runtime_context=getattr(getattr(request, "runtime", None), "context", None),
+            notice_factory=lambda attempt, delay: RetryNotice(
+                notice_id=f"llm:{id(request)}",
+                scope="llm",
+                attempt=attempt,
+                max_retries=self.llm_config.max_retries,
+                delay=delay,
+            ),
         )
 
     async def awrap_tool_call(
@@ -328,6 +370,19 @@ class RetryMiddleware(AgentMiddleware[AgentState, AgentContext]):
             operation,
             tool_retry_config,
             f"Tool call '{tool_name}'",
+            runtime_context=getattr(getattr(request, "runtime", None), "context", None),
+            notice_factory=lambda attempt, delay: RetryNotice(
+                notice_id=(
+                    f"tool:{request.tool_call.get('id')}"
+                    if request.tool_call.get("id")
+                    else f"tool:{tool_name}:{id(request)}"
+                ),
+                scope="tool",
+                attempt=attempt,
+                max_retries=self.tool_config.max_retries,
+                delay=delay,
+                target_name=tool_name,
+            ),
         )
 
     async def abefore_model(

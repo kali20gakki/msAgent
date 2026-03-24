@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -202,7 +203,10 @@ class TestToolRetry:
             ToolMessage(content="success", tool_call_id="123"),
         ]
 
-        with patch("asyncio.wait_for", side_effect=lambda coro, timeout: coro):
+        async def passthrough_wait_for(coro, timeout):
+            return await coro
+
+        with patch("asyncio.wait_for", side_effect=passthrough_wait_for):
             with patch("asyncio.sleep", new_callable=AsyncMock):
                 result = await middleware.awrap_tool_call(mock_request, mock_handler)
 
@@ -376,6 +380,99 @@ class TestRetryCallback:
         assert len(callback_calls) == 2
         assert callback_calls[0][0] == 1
         assert callback_calls[1][0] == 2
+
+    @pytest.mark.asyncio
+    async def test_runtime_retry_notice_emitted_for_llm(self):
+        notices = []
+
+        def on_notice(notice) -> None:
+            notices.append(notice)
+
+        middleware = RetryMiddleware(
+            llm_config=RetryConfig(
+                max_retries=1,
+                base_delay=2.0,
+                jitter=False,
+            )
+        )
+
+        mock_handler = AsyncMock()
+        mock_handler.side_effect = [
+            TimeoutError("First"),
+            create_mock_ai_message(),
+        ]
+
+        mock_request = MagicMock()
+        mock_request.state = {"messages": []}
+        mock_request.runtime = SimpleNamespace(
+            context=SimpleNamespace(retry_notice_handler=on_notice)
+        )
+
+        with patch("asyncio.sleep"):
+            await middleware.awrap_model_call(mock_request, mock_handler)
+
+        assert [
+            (
+                notice.phase,
+                notice.scope,
+                notice.attempt,
+                notice.max_retries,
+                notice.delay,
+                notice.target_name,
+            )
+            for notice in notices
+        ] == [
+            ("scheduled", "llm", 1, 1, 2.0, None),
+            ("cleared", "llm", 1, 1, 2.0, None),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_runtime_retry_notice_emitted_for_tool(self):
+        notices = []
+
+        def on_notice(notice) -> None:
+            notices.append(notice)
+
+        middleware = RetryMiddleware(
+            enable_tool_retry=True,
+            tool_config=ToolRetryConfig(max_retries=1, timeout=5.0),
+        )
+
+        mock_request = MagicMock()
+        mock_request.tool_call = {"name": "test_tool", "id": "123"}
+        mock_request.runtime = SimpleNamespace(
+            context=SimpleNamespace(retry_notice_handler=on_notice)
+        )
+        mock_request.tool = None
+
+        mock_handler = AsyncMock()
+        mock_handler.side_effect = [
+            asyncio.TimeoutError("Tool timeout"),
+            ToolMessage(content="success", tool_call_id="123"),
+        ]
+
+        async def passthrough_wait_for(coro, timeout):
+            return await coro
+
+        with patch("msagent.middlewares.retry.random.uniform", return_value=1.0):
+            with patch("asyncio.wait_for", side_effect=passthrough_wait_for):
+                with patch("asyncio.sleep"):
+                    await middleware.awrap_tool_call(mock_request, mock_handler)
+
+        assert [
+            (
+                notice.phase,
+                notice.scope,
+                notice.attempt,
+                notice.max_retries,
+                notice.delay,
+                notice.target_name,
+            )
+            for notice in notices
+        ] == [
+            ("scheduled", "tool", 1, 1, 0.5, "test_tool"),
+            ("cleared", "tool", 1, 1, 0.5, "test_tool"),
+        ]
 
 
 if __name__ == "__main__":
