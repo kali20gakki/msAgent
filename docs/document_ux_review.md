@@ -48,4 +48,6 @@
 
 ## 🖼️ 实际效果
 
-可参考示例产物：[msmonitor-review-run.html](example/msmonitor-review-run.html)
+可参考示例产物：[msmonitor-review-run.html](example/msmonitor-review-run.html)。
+
+由于 GitHub 仓库页面不会直接渲染这类 HTML 报告，建议将该文件下载到本地后，用浏览器直接打开查看效果。
