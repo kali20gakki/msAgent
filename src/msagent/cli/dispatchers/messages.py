@@ -155,6 +155,9 @@ class MessageDispatcher:
     """Dispatch user message processing and AI response streaming."""
 
     _MAX_LOG_VALUE_LENGTH = 400
+    
+    # Tool names that should be hidden from activity display (shown via other means)
+    _HIDDEN_ACTIVITY_TOOLS: set[str] = {"write_todos"}
 
     def __init__(self, session) -> None:
         """Initialize with reference to CLI session."""
@@ -1017,6 +1020,9 @@ class MessageDispatcher:
 
         for namespace, tool_calls in cls._sorted_activity_items(active_tools):
             for tool_call in tool_calls:
+                # Skip hidden tools (e.g., write_todos shown via panel)
+                if tool_call.name in cls._HIDDEN_ACTIVITY_TOOLS:
+                    continue
                 renderables.append(
                     ToolActivityIndicator(
                         cls._build_tool_activity_label(
@@ -1309,6 +1315,12 @@ class MessageDispatcher:
             call_id = tool_call.get("id")
             if not call_id:
                 continue
+            
+            # Skip hidden tools (e.g., write_todos shown via panel)
+            tool_name = tool_call.get("name", "")
+            if tool_name in self._HIDDEN_ACTIVITY_TOOLS:
+                continue
+            
             self._pending_tool_headers[str(call_id)] = (
                 dict(tool_call),
                 indent_level,
@@ -1344,6 +1356,12 @@ class MessageDispatcher:
             return
 
         tool_call, stored_indent, start_time = pending
+        
+        # Skip hidden tools (e.g., write_todos shown via panel)
+        tool_name = tool_call.get("name", "")
+        if tool_name in self._HIDDEN_ACTIVITY_TOOLS:
+            return
+        
         duration = time.time() - start_time if start_time else None
         self.session.renderer.render_tool_call(
             tool_call, indent_level=stored_indent, duration=duration

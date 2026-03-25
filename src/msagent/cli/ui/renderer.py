@@ -24,6 +24,8 @@ from msagent.cli.theme import console
 from msagent.cli.ui.markdown import wrap_html_in_code_blocks
 from msagent.core.constants import UNKNOWN
 from msagent.core.settings import settings
+from msagent.tools.internal.todo import TODO_PANEL_MARKER, render_todos_panel
+from msagent.agents.state import Todo
 
 if TYPE_CHECKING:
     from langchain_core.runnables.graph import Graph
@@ -428,6 +430,14 @@ class Renderer:
         return result
 
     @staticmethod
+    def _should_skip_tool_call(tool_call: dict[str, Any]) -> bool:
+        """Check if tool call should be skipped from display.
+        
+        write_todos is handled specially via its ToolMessage short_content panel.
+        """
+        return tool_call.get("name") == "write_todos"
+
+    @staticmethod
     def render_assistant_message(
         message: AIMessage,
         indent_level: int = 0,
@@ -441,6 +451,9 @@ class Renderer:
         content: str | list[str | dict] = message.content
         tool_calls = [dict(tc) for tc in message.tool_calls] if show_tool_calls else []
         is_error = getattr(message, "is_error", False)
+
+        # Filter out write_todos tool calls (they are shown via ToolMessage panel)
+        tool_calls = [tc for tc in tool_calls if not Renderer._should_skip_tool_call(tc)]
 
         if not content:
             # Only tool calls, no content
@@ -544,6 +557,11 @@ class Renderer:
         if not content or (isinstance(content, str) and not content.strip()):
             return
 
+        # Check if this is a todo panel message
+        if isinstance(content, str) and content.startswith(TODO_PANEL_MARKER):
+            Renderer._render_todo_panel(content, indent_level)
+            return
+
         if isinstance(content, str):
             content = Renderer._strip_frontmatter_fences(content)
 
@@ -567,6 +585,66 @@ class Renderer:
         else:
             console.print(formatted_content, style=LOW_PRIORITY_STYLE)
 
+        console.print("")
+
+    @staticmethod
+    def _render_todo_panel(content: str, indent_level: int = 0) -> None:
+        """Render todo content with a box panel.
+        
+        Parses the todo content and renders it using render_todos_panel
+        for a nice bordered display with strikethrough for completed items.
+        """
+        import re
+        
+        # Remove the marker
+        content = content[len(TODO_PANEL_MARKER):]
+        
+        # Parse todos from the formatted content (stripping Rich markup)
+        todos: list[Todo] = []
+        for line in content.strip().split("\n"):
+            line = line.strip()
+            if not line or line.startswith("+"):
+                continue
+            
+            # Remove Rich markup like [#8be4e1], [/strike], [/] etc.
+            # Use a more careful pattern to handle nested brackets
+            clean_line = re.sub(r'\[/?[^\]]*?\]', '', line).strip()
+            
+            # Parse icon and content
+            if clean_line.startswith("✓"):
+                status = "completed"
+                todo_content = clean_line[1:].strip()
+            elif clean_line.startswith("◔"):
+                status = "in_progress"
+                todo_content = clean_line[1:].strip()
+            elif clean_line.startswith("○"):
+                status = "pending"
+                todo_content = clean_line[1:].strip()
+            else:
+                # Debug: print what we couldn't parse
+                continue
+            
+            if todo_content:
+                todos.append({"content": todo_content, "status": status})
+        
+        if not todos:
+            return
+        
+        # Render with panel (show all todos, no hidden indicator)
+        panel = render_todos_panel(
+            todos,
+            max_items=50,
+            max_completed=50,
+            show_completed_indicator=False,
+        )
+        
+        # For todo panels, print without the ㄴ prefix but with proper indentation
+        base_indent = "  " * indent_level
+        if indent_level > 0:
+            # Print base indent and then the panel
+            console.print(base_indent, end="")
+        console.console.print(panel)
+        
         console.print("")
 
     @staticmethod
