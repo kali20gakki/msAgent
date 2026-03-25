@@ -24,6 +24,7 @@
 - 🖼️ 具体示例提示词和效果截图可参考下文的 [使用效果展示](#使用效果展示)
 - 🔌 支持 MCP 扩展，默认随 PyPI 包安装启用 [`msprof-mcp`](https://github.com/kali20gakki/msprof-mcp)
 - 🧠 支持 Skills 扩展；源码仓库中的内置 Skills 由 [`mindstudio-skills`](https://github.com/kali20gakki/mindstudio-skills) 子模块提供
+- 📝 内置 [`document-ux-review`](docs/document_ux_review.md) skill，可按真实 README / 安装文档步骤执行并输出文档上手体验审查报告
 ---
 
 ## ⚡ 快速上手
@@ -387,6 +388,7 @@ pip install -i https://test.pypi.org/simple/ --extra-index-url https://pypi.org/
 - 支持 OpenAI 兼容 API 与 `custom` HTTP 接口配置，可按项目写入默认模型
 - 支持 MCP 扩展，默认随安装启用 `msprof-mcp`
 - 支持 Skills 扩展；源码仓库中的内置 Skills 由 [`mindstudio-skills`](https://github.com/kali20gakki/mindstudio-skills) 子模块提供
+- 内置 [`document-ux-review`](docs/document_ux_review.md) skill，可按 README 和安装文档真实步骤执行，并输出结构化的文档上手体验审查报告
 
 可通过以下命令查看本地安装版本：
 
