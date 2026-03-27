@@ -17,6 +17,13 @@ def _load_default_msprof_server() -> dict:
     return config["mcpServers"]["msprof-mcp"]
 
 
+def _load_default_msagent_config() -> dict:
+    config_path = files("resources")
+    for part in ("configs", "default", "agents", "msagent.yml"):
+        config_path = config_path.joinpath(part)
+    return yaml.safe_load(config_path.read_text(encoding="utf-8"))
+
+
 def test_default_msprof_server_uses_packaged_executable() -> None:
     default_msprof_server = _load_default_msprof_server()
 
@@ -59,8 +66,8 @@ async def test_config_registry_bootstraps_default_layout(tmp_path: Path) -> None
     )
 
     msagent = yaml.safe_load((config_dir / "agents" / "msagent.yml").read_text())
-    assert "impl:file_system:*" in msagent["tools"]["patterns"]
-    assert "mcp:*:*" in msagent["tools"]["patterns"]
+    default_msagent = _load_default_msagent_config()
+    assert msagent["tools"]["patterns"] == default_msagent["tools"]["patterns"]
 
 
 @pytest.mark.asyncio
