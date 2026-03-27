@@ -432,6 +432,17 @@ def test_merge_tool_activity_calls_keeps_args_visible_across_chunks(tmp_path: Pa
     ]
 
 
+def test_live_tool_activity_arg_keeps_full_long_value(
+    tmp_path: Path,
+) -> None:
+    session = _build_session(tmp_path)
+    dispatcher = MessageDispatcher(session)
+
+    displayed = dispatcher._stringify_tool_arg("a" * 80, 72)
+
+    assert displayed == "a" * 80
+
+
 def test_set_tool_activity_dedupes_same_call_across_namespaces(tmp_path: Path) -> None:
     session = _build_session(tmp_path)
     dispatcher = MessageDispatcher(session)

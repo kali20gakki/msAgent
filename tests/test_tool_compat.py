@@ -5,6 +5,7 @@ import pytest
 
 from msagent.tools.factory import ToolFactory
 from msagent.tools.impl.file_system import glob, ls
+from msagent.utils.render import create_tool_message
 
 
 def test_tool_factory_exposes_deepagents_compatible_aliases() -> None:
@@ -51,3 +52,16 @@ async def test_glob_tool_matches_files(tmp_path: Path) -> None:
 
     assert "src/one.py" in result.content
     assert "two.txt" not in result.content
+
+
+def test_create_tool_message_truncates_result_with_original_length_note() -> None:
+    result = create_tool_message(
+        result="x" * 240,
+        tool_name="run_command",
+        tool_call_id="call-1",
+    )
+
+    assert result.text == "x" * 240
+    assert getattr(result, "short_content") == (
+        ("x" * 200) + "... (truncated, original length: 240)"
+    )

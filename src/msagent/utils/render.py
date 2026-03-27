@@ -89,10 +89,12 @@ def truncate_text(text: str, max_length: int) -> str:
     Returns:
         Truncated text
     """
+    if max_length <= 0:
+        return f"... (truncated, original length: {len(text)})" if text else ""
     if len(text) <= max_length:
         return text
 
-    return text[:max_length] + "..."
+    return f"{text[:max_length]}... (truncated, original length: {len(text)})"
 
 
 def create_tool_message(

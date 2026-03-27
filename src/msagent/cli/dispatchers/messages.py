@@ -793,15 +793,11 @@ class MessageDispatcher:
     def _stringify_tool_arg(value: Any, max_length: int) -> str:
         """Convert tool args to a compact single-line string."""
         if isinstance(value, str):
-            value_str = value.replace("\n", "\\n")
+            return value.replace("\n", "\\n")
         elif isinstance(value, (dict, list)):
-            value_str = json.dumps(value, ensure_ascii=False)
+            return json.dumps(value, ensure_ascii=False)
         else:
-            value_str = str(value)
-
-        if len(value_str) > max_length:
-            return value_str[:max_length] + "..."
-        return value_str
+            return str(value)
 
     @classmethod
     def _build_tool_arg_items(

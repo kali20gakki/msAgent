@@ -111,8 +111,6 @@ def _truncate_middle(text: str, max_length: int) -> str:
     head = (max_length - 3) // 2
     tail = max_length - 3 - head
     return f"{text[:head]}...{text[-tail:]}"
-
-
 def create_bottom_toolbar(
     context,
     working_dir: str,

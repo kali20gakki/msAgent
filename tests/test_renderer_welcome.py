@@ -104,6 +104,15 @@ def test_format_tool_call_wraps_long_args_into_compact_second_line() -> None:
     assert "\n  cwd: /tmp/project" in text.plain
 
 
+def test_format_tool_call_keeps_full_long_args() -> None:
+    text = renderer_module.Renderer._format_tool_call(
+        {"name": "read_file", "args": {"range": "a" * 80}}
+    )
+
+    assert f"range: {'a' * 80}" in text.plain
+    assert "original length" not in text.plain
+
+
 def test_strip_frontmatter_fences_removes_yaml_markers() -> None:
     content = (
         "---\n"
