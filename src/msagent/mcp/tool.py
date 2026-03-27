@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from collections.abc import Awaitable, Callable
 from typing import Any
 
@@ -97,11 +98,23 @@ class MCPTool(BaseTool):
     async def _invoke(self, tool: BaseTool, payload: Any) -> Any:
         timeout = (self.metadata or {}).get("timeout")
         if timeout is None:
-            return await tool.ainvoke(payload)
+            result = await tool.ainvoke(payload)
+        else:
+            try:
+                result = await asyncio.wait_for(
+                    tool.ainvoke(payload), timeout=timeout
+                )
+            except TimeoutError as e:
+                raise ToolException(
+                    f"Tool {self.name} timed out after {timeout}s"
+                ) from e
+        # Format result as pretty JSON if possible
         try:
-            return await asyncio.wait_for(tool.ainvoke(payload), timeout=timeout)
-        except TimeoutError as e:
-            raise ToolException(f"Tool {self.name} timed out after {timeout}s") from e
+            result_str = json.dumps(result, indent=2, ensure_ascii=False)
+        except (TypeError, ValueError):
+            result_str = str(result)
+        logger.debug("MCP tool [%s] result:\n%s", self.name, result_str)
+        return result
 
     def _run(
         self,

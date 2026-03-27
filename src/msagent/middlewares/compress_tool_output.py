@@ -113,7 +113,6 @@ class CompressToolOutputMiddleware(AgentMiddleware[AgentState, AgentContext]):
 
         # If handler returned a Command, pass it through (tool already updated state)
         if isinstance(result, Command):
-
             return result
 
         # If handler returned ToolMessage, check if compression needed
@@ -121,5 +120,4 @@ class CompressToolOutputMiddleware(AgentMiddleware[AgentState, AgentContext]):
             return self._compress_if_needed(result, request)
 
         # Handler returned something else (shouldn't happen), pass through
-
         return result

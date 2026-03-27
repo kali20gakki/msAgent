@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 from collections.abc import Callable
 from pathlib import Path
@@ -282,6 +283,18 @@ class ApprovalMiddleware(AgentMiddleware[AgentState, AgentContext]):
                 result = await handler(request)
                 if isinstance(result, Command):
                     return result
+
+                # Log tool call result for debugging
+                try:
+                    result_str = json.dumps(result, indent=2, ensure_ascii=False)
+                except (TypeError, ValueError):
+                    result_str = str(result)
+                logger.debug(
+                    "Tool call result [%s] (id: %s):\n%s",
+                    tool_name,
+                    tool_call_id,
+                    result_str,
+                )
 
                 tool_msg = create_tool_message(
                     result=result,
