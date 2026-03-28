@@ -60,6 +60,7 @@ class Session:
         self.current_stream_task: asyncio.Task | None = None
         self._sigint_registered = False
         self._previous_sigint: SignalHandler = None
+        self._sigint_handler: SignalHandler = None
 
     async def start(
         self, show_welcome: bool = True, resume_thread_id: str | None = None
@@ -221,8 +222,12 @@ class Session:
         prompt's double-press-to-quit logic). One-shot and interactive paths
         share this handler to keep behavior consistent.
         """
-        if self._sigint_registered:
-            return
+        if self._sigint_registered and self._sigint_handler is not None:
+            try:
+                if signal.getsignal(signal.SIGINT) == self._sigint_handler:
+                    return
+            except Exception:
+                return
 
         try:
             self._previous_sigint = signal.getsignal(signal.SIGINT)
@@ -241,6 +246,9 @@ class Session:
                     loop.call_soon_threadsafe(self.current_stream_task.cancel)
                     return
 
+                if self.prompt.handle_external_sigint():
+                    return
+
                 if callable(self._previous_sigint):
                     self._previous_sigint(signum, frame)
                     return
@@ -250,7 +258,8 @@ class Session:
 
                 raise KeyboardInterrupt()
 
-            signal.signal(signal.SIGINT, _handle_sigint)
+            self._sigint_handler = _handle_sigint
+            signal.signal(signal.SIGINT, self._sigint_handler)
             self._sigint_registered = True
         except Exception as e:
             logger.exception("Failed to register SIGINT handler", exc_info=e)
@@ -260,13 +269,13 @@ class Session:
         if not self._sigint_registered:
             return
 
-        # TODO: Verify SIGINT restoration logic where handlers may differ.
-        # if self._previous_sigint is not None:
-        #     try:
-        #         signal.signal(signal.SIGINT, self._previous_sigint)
-        #     except Exception:
-        #         pass
         try:
+            if (
+                self._sigint_handler is not None
+                and signal.getsignal(signal.SIGINT) != self._sigint_handler
+            ):
+                return
+
             signal.signal(
                 signal.SIGINT,
                 (
@@ -277,6 +286,10 @@ class Session:
             )
         except Exception:
             pass
+        finally:
+            self._sigint_registered = False
+            self._previous_sigint = None
+            self._sigint_handler = None
 
     async def _check_updates_background(self) -> None:
         """Check for updates in background without blocking prompt."""
@@ -291,4 +304,3 @@ class Session:
                     console.print("")
         except Exception:
             pass
-        self._sigint_registered = False

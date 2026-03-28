@@ -101,27 +101,7 @@ class InteractivePrompt:
         @kb.add(Keys.ControlC)
         def _(event):
             """Ctrl-C: Clear input if text exists, or quit on double-press."""
-            buffer = event.current_buffer
-            current_time = time.time()
-
-            if buffer.text.strip():
-                buffer.text = ""
-                self._reset_ctrl_c_state()
-                return
-
-            if self._last_ctrl_c_time is not None:
-                time_since_last = current_time - self._last_ctrl_c_time
-                # If the quit banner is showing, treat the next Ctrl+C as quit even
-                # if the nominal timeout has elapsed; _show_quit_message keeps the
-                # window open until the scheduled hide runs.
-                if time_since_last < self._ctrl_c_timeout or self._show_quit_message:
-                    self._reset_ctrl_c_state()
-                    event.app.exit(exception=EOFError())
-                    return
-
-            self._last_ctrl_c_time = current_time
-            self._show_quit_message = True
-            self._schedule_hide_message(event.app)
+            self._handle_ctrl_c(event.app, event.current_buffer)
 
         @kb.add(Keys.ControlJ)
         def _(event):
@@ -192,6 +172,45 @@ class InteractivePrompt:
 
         return kb
 
+    def _handle_ctrl_c(self, app, buffer) -> None:
+        """Apply Ctrl+C behavior consistently for key bindings and SIGINT."""
+        current_time = time.time()
+
+        if buffer.text.strip():
+            buffer.text = ""
+            self._reset_ctrl_c_state()
+            app.invalidate()
+            return
+
+        if self._last_ctrl_c_time is not None:
+            time_since_last = current_time - self._last_ctrl_c_time
+            # If the quit banner is showing, treat the next Ctrl+C as quit even
+            # if the nominal timeout has elapsed; _show_quit_message keeps the
+            # window open until the scheduled hide runs.
+            if time_since_last < self._ctrl_c_timeout or self._show_quit_message:
+                self._reset_ctrl_c_state()
+                app.exit(exception=EOFError())
+                return
+
+        self._last_ctrl_c_time = current_time
+        self._show_quit_message = True
+        self._schedule_hide_message(app)
+        app.invalidate()
+
+    def handle_external_sigint(self) -> bool:
+        """Handle SIGINT while prompt-toolkit is idle and waiting for input."""
+        prompt_session = getattr(self, "prompt_session", None)
+        if prompt_session is None:
+            return False
+
+        app = getattr(prompt_session, "app", None)
+        buffer = getattr(app, "current_buffer", None) if app is not None else None
+        if app is None or buffer is None or not getattr(app, "is_running", False):
+            return False
+
+        self._handle_ctrl_c(app, buffer)
+        return True
+
     def set_mode_change_callback(self, callback):
         """Set callback for mode change events."""
         self.mode_change_callback = callback
@@ -252,7 +271,11 @@ class InteractivePrompt:
                 self.session.prefilled_text = None
 
             result = await self.prompt_session.prompt_async(
-                prompt_text, default=default_text
+                prompt_text,
+                default=default_text,
+                # Let our Ctrl+C key binding handle clear/quit behavior instead of
+                # prompt_toolkit turning it into an immediate KeyboardInterrupt.
+                handle_sigint=False,
             )  # type: ignore
             print()
 

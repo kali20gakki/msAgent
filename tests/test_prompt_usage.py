@@ -1,5 +1,7 @@
 from pathlib import Path
+from types import SimpleNamespace
 
+import pytest
 from prompt_toolkit.formatted_text import to_formatted_text
 from prompt_toolkit.formatted_text.utils import fragment_list_to_text
 
@@ -63,3 +65,63 @@ def test_placeholder_text_stays_consistent_in_bash_mode() -> None:
     text = prompt._build_placeholder_text()
 
     assert text == "尽管问msAgent，@ 引用文件，/ 使用命令"
+
+
+@pytest.mark.asyncio
+async def test_get_input_disables_prompt_toolkit_sigint_handling() -> None:
+    prompt = InteractivePrompt.__new__(InteractivePrompt)
+    prompt.commands = ["/help"]
+    prompt.session = SimpleNamespace(prefilled_text=None)
+
+    captured: dict[str, object] = {}
+
+    class FakePromptSession:
+        async def prompt_async(self, *args, **kwargs):
+            captured["args"] = args
+            captured["kwargs"] = kwargs
+            return "/help"
+
+    prompt.prompt_session = FakePromptSession()
+
+    content, is_command = await prompt.get_input()
+
+    assert content == "/help"
+    assert is_command is True
+    assert captured["kwargs"]["handle_sigint"] is False
+
+
+def test_handle_external_sigint_shows_quit_hint_when_prompt_is_running() -> None:
+    prompt = InteractivePrompt.__new__(InteractivePrompt)
+    prompt._last_ctrl_c_time = None
+    prompt._ctrl_c_timeout = 0.30
+    prompt._show_quit_message = False
+    scheduled = {}
+
+    class FakeBuffer:
+        text = ""
+
+    class FakeApp:
+        is_running = True
+        current_buffer = FakeBuffer()
+
+        class loop:
+            @staticmethod
+            def call_later(delay, callback):
+                scheduled["delay"] = delay
+                scheduled["callback"] = callback
+
+        def invalidate(self):
+            scheduled["invalidated"] = True
+
+        def exit(self, exception=None):
+            scheduled["exit_exception"] = exception
+
+    prompt.prompt_session = SimpleNamespace(app=FakeApp())
+
+    handled = prompt.handle_external_sigint()
+
+    assert handled is True
+    assert prompt._show_quit_message is True
+    assert scheduled["delay"] == 0.30
+    assert scheduled["invalidated"] is True
+    assert "exit_exception" not in scheduled
