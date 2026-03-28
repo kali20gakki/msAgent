@@ -9,6 +9,8 @@ from typing import TYPE_CHECKING, Any, cast
 
 import mdformat
 from langchain_core.messages import AIMessage, AnyMessage, HumanMessage, ToolMessage
+from rich.align import Align
+from rich import box
 from rich.cells import cell_len
 from rich.console import Console, ConsoleOptions, Group, NewLine, RenderableType
 from rich.markdown import CodeBlock, Markdown
@@ -30,7 +32,84 @@ from msagent.agents.state import Todo
 if TYPE_CHECKING:
     from langchain_core.runnables.graph import Graph
 
-WELCOME_TITLE = "✻ Welcome to msAgent"
+try:
+    from pyfiglet import Figlet
+except ImportError:  # pragma: no cover - graceful fallback when dependency isn't installed yet
+    Figlet = None
+
+WELCOME_TITLE = "* Welcome to msAgent"
+WELCOME_ASCII_FONT = "ansi_shadow"
+WELCOME_ASCII_PALETTE = [
+    "#0b1f5e",
+    "#123b8d",
+    "#1d4ed8",
+    "#2563eb",
+    "#3b82f6",
+    "#4f8ff7",
+    "#6ea8fb",
+    "#8bb8f8",
+]
+
+
+def _render_welcome_ascii(
+    text: str = "msAgent",
+    font: str = WELCOME_ASCII_FONT,
+    gradient: str = "dark_to_light",
+) -> Text:
+    """Render ASCII art welcome text in the langchain-code style."""
+
+    def _hex_to_rgb(h: str) -> tuple[int, int, int]:
+        h = h.lstrip("#")
+        return (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
+
+    def _lerp(a: int, b: int, t: float) -> int:
+        return int(a + (b - a) * t)
+
+    def _interpolate_palette(palette: list[str], width: int) -> list[str]:
+        if width <= 1:
+            return [palette[0]]
+        out: list[str] = []
+        steps_total = width - 1
+        for x in range(width):
+            pos = x / steps_total
+            seg = min(int(pos * (len(palette) - 1)), len(palette) - 2)
+            seg_start = seg / (len(palette) - 1)
+            seg_end = (seg + 1) / (len(palette) - 1)
+            local_t = (pos - seg_start) / (seg_end - seg_start + 1e-9)
+            c1 = _hex_to_rgb(palette[seg])
+            c2 = _hex_to_rgb(palette[seg + 1])
+            rgb = tuple(_lerp(a, b, local_t) for a, b in zip(c1, c2))
+            out.append("#{:02x}{:02x}{:02x}".format(*rgb))
+        return out
+
+    if Figlet is None:
+        return Text(text, style="accent")
+
+    try:
+        lines = Figlet(font=font).renderText(text).rstrip("\n").splitlines()
+    except Exception:  # pragma: no cover - invalid font or partial install should not break startup
+        return Text(text, style="accent")
+
+    while lines and not lines[-1].strip():
+        lines.pop()
+
+    palette = WELCOME_ASCII_PALETTE
+    if gradient == "light_to_dark":
+        palette = list(reversed(palette))
+
+    width = max(len(line) for line in lines) if lines else 0
+    ramp = _interpolate_palette(palette, width)
+
+    result = Text()
+    for line in lines:
+        padded = line.ljust(width)
+        for j, ch in enumerate(padded):
+            if ch == " ":
+                result.append(ch)
+            else:
+                result.append(ch, Style(color=ramp[j], bold=True))
+        result.append("\n")
+    return result
 
 
 THINKING_STYLE = Style(italic=True, dim=True)
@@ -215,10 +294,29 @@ class ChatWelcomeBanner:
         line.append(value, style="secondary")
         return line
 
+    @staticmethod
+    def _summarize_items(
+        items: list[str] | None,
+        *,
+        max_items: int,
+        empty_label: str = "none",
+    ) -> str:
+        normalized = [item for item in items or [] if item]
+        if not normalized:
+            return empty_label
+        if len(normalized) <= max_items:
+            return ", ".join(normalized)
+
+        preview = ", ".join(normalized[:max_items])
+        remaining = len(normalized) - max_items
+        return f"{preview} +{remaining} more"
+
     def compose(self) -> list[RenderableType]:
-        servers = ", ".join(self.mcp_servers or []) or "none"
-        skills = ", ".join(self.loaded_skills or []) or "none"
+        servers = self._summarize_items(self.mcp_servers, max_items=2)
+        skills = self._summarize_items(self.loaded_skills, max_items=20)
         model_label = self.model_label or UNKNOWN
+
+        ascii_art = _render_welcome_ascii()
 
         welcome = Text()
         welcome.append("msAgent", style="accent")
@@ -228,6 +326,7 @@ class ChatWelcomeBanner:
         )
 
         return [
+            Align.center(ascii_art),
             welcome,
             self._meta_line("Model", model_label),
             self._meta_line("MCP", servers),
@@ -240,6 +339,8 @@ class ChatWelcomeBanner:
             title=f"[accent]{WELCOME_TITLE}[/accent]",
             border_style="border",
             padding=(1, 2),
+            box=box.ROUNDED,
+            expand=False,
         )
 
 
@@ -428,7 +529,7 @@ class Renderer:
     @staticmethod
     def _should_skip_tool_call(tool_call: dict[str, Any]) -> bool:
         """Check if tool call should be skipped from display.
-        
+
         write_todos is handled specially via its ToolMessage short_content panel.
         """
         return tool_call.get("name") == "write_todos"
@@ -449,7 +550,9 @@ class Renderer:
         is_error = getattr(message, "is_error", False)
 
         # Filter out write_todos tool calls (they are shown via ToolMessage panel)
-        tool_calls = [tc for tc in tool_calls if not Renderer._should_skip_tool_call(tc)]
+        tool_calls = [
+            tc for tc in tool_calls if not Renderer._should_skip_tool_call(tc)
+        ]
 
         if not content:
             # Only tool calls, no content
@@ -541,7 +644,9 @@ class Renderer:
     ) -> None:
         """Render a single tool call header."""
         console.print(
-            Renderer._format_tool_call(tool_call, indent_level=indent_level, duration=duration)
+            Renderer._format_tool_call(
+                tool_call, indent_level=indent_level, duration=duration
+            )
         )
 
     @staticmethod
@@ -586,26 +691,26 @@ class Renderer:
     @staticmethod
     def _render_todo_panel(content: str, indent_level: int = 0) -> None:
         """Render todo content with a box panel.
-        
+
         Parses the todo content and renders it using render_todos_panel
         for a nice bordered display with strikethrough for completed items.
         """
         import re
-        
+
         # Remove the marker
-        content = content[len(TODO_PANEL_MARKER):]
-        
+        content = content[len(TODO_PANEL_MARKER) :]
+
         # Parse todos from the formatted content (stripping Rich markup)
         todos: list[Todo] = []
         for line in content.strip().split("\n"):
             line = line.strip()
             if not line or line.startswith("+"):
                 continue
-            
+
             # Remove Rich markup like [#8be4e1], [/strike], [/] etc.
             # Use a more careful pattern to handle nested brackets
-            clean_line = re.sub(r'\[/?[^\]]*?\]', '', line).strip()
-            
+            clean_line = re.sub(r"\[/?[^\]]*?\]", "", line).strip()
+
             # Parse icon and content
             if clean_line.startswith("✓"):
                 status = "completed"
@@ -619,13 +724,13 @@ class Renderer:
             else:
                 # Debug: print what we couldn't parse
                 continue
-            
+
             if todo_content:
                 todos.append({"content": todo_content, "status": status})
-        
+
         if not todos:
             return
-        
+
         # Render with panel (show all todos, no hidden indicator)
         panel = render_todos_panel(
             todos,
@@ -633,14 +738,14 @@ class Renderer:
             max_completed=50,
             show_completed_indicator=False,
         )
-        
+
         # For todo panels, print without the ㄴ prefix but with proper indentation
         base_indent = "  " * indent_level
         if indent_level > 0:
             # Print base indent and then the panel
             console.print(base_indent, end="")
         console.console.print(panel)
-        
+
         console.print("")
 
     @staticmethod

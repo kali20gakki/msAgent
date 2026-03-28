@@ -53,7 +53,7 @@ def test_placeholder_text_uses_msagent_prompt() -> None:
 
     text = prompt._build_placeholder_text()
 
-    assert text == "尽管问msAgent"
+    assert text == "尽管问msAgent，@ 引用文件，/ 使用命令"
 
 
 def test_placeholder_text_stays_consistent_in_bash_mode() -> None:
@@ -62,4 +62,4 @@ def test_placeholder_text_stays_consistent_in_bash_mode() -> None:
 
     text = prompt._build_placeholder_text()
 
-    assert text == "尽管问msAgent"
+    assert text == "尽管问msAgent，@ 引用文件，/ 使用命令"

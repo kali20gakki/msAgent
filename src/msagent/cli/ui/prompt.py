@@ -206,7 +206,7 @@ class InteractivePrompt:
 
     def _build_placeholder_text(self) -> str:
         """Build placeholder copy shown inside the input box."""
-        return "尽管问msAgent"
+        return "尽管问msAgent，@ 引用文件，/ 使用命令"
 
     def _get_bottom_toolbar(self) -> HTML:
         """Generate bottom toolbar text with version, working directory and approval mode."""

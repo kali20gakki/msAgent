@@ -33,7 +33,7 @@ def create_prompt_style(context, *, bash_mode: bool = False) -> Style:
     return Style.from_dict(
         {
             # Prompt styling - dynamic based on approval mode
-            "prompt": f"{prompt_color} bold",
+            "prompt": f"{prompt_color} nobold",
             "prompt.muted": f"{prompt_color} nobold",
             "prompt.arg": f"{theme.accent_color}",
             # Input styling

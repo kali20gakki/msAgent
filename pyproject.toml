@@ -35,6 +35,7 @@ dependencies = [
     "prompt-toolkit~=3.0.52",
     "pydantic~=2.12.5",
     "pydantic-settings>=2.12,<2.14",
+    "pyfiglet>=0.8",
     "pygments-cache~=0.1.3",
     "python-dotenv~=1.2.1",
     "python-multipart~=0.0.21",

@@ -94,7 +94,7 @@ class CLISettings(BaseModel):
     theme: str | None = Field(
         default=None, description="UI theme (auto-detect if None)"
     )
-    prompt_style: str = Field(default="❯ ", description="Prompt style")
+    prompt_style: str = Field(default="> ", description="Prompt style")
 
     # Behavior settings
     enable_word_wrap: bool = Field(default=True, description="Enable word wrap")
