@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -11,6 +12,7 @@ from typing import TYPE_CHECKING
 from langchain.agents.middleware import AgentMiddleware
 from langgraph.errors import GraphInterrupt
 from langgraph.types import Command, interrupt
+from langchain_core.tools import ToolException
 from pydantic import BaseModel
 
 from msagent.agents import AgentState
@@ -18,7 +20,10 @@ from msagent.agents.context import AgentContext
 from msagent.configs import ApprovalMode, ToolApprovalConfig, ToolApprovalRule
 from msagent.core.constants import CONFIG_APPROVAL_FILE_NAME
 from msagent.core.logging import get_logger
-from msagent.utils.render import create_tool_message
+from msagent.utils.render import (
+    TOOL_TIMING_RESPONSE_METADATA_KEY,
+    create_tool_message,
+)
 
 if TYPE_CHECKING:
     from langchain.tools.tool_node import ToolCallRequest
@@ -30,6 +35,22 @@ ALLOW = "allow"
 ALWAYS_ALLOW = "always allow"
 DENY = "deny"
 ALWAYS_DENY = "always deny"
+
+
+def _build_tool_timing_metadata(
+    started_at: float,
+    started_perf_counter: float,
+) -> dict[str, dict[str, float]]:
+    """Build ToolMessage response metadata for exact tool runtime display."""
+    finished_at = time.time()
+    duration_seconds = max(time.perf_counter() - started_perf_counter, 0.0)
+    return {
+        TOOL_TIMING_RESPONSE_METADATA_KEY: {
+            "started_at": started_at,
+            "finished_at": finished_at,
+            "duration_seconds": duration_seconds,
+        }
+    }
 
 
 class InterruptPayload(BaseModel):
@@ -267,6 +288,8 @@ class ApprovalMiddleware(AgentMiddleware[AgentState, AgentContext]):
         self, request: ToolCallRequest, handler: Callable
     ) -> ToolMessage | Command:
         """Async tool call interception for approval."""
+        started_at: float | None = None
+        started_perf_counter: float | None = None
         try:
             tool_call_id = str(request.tool_call["id"])
             tool_name = request.tool_call["name"]
@@ -280,6 +303,8 @@ class ApprovalMiddleware(AgentMiddleware[AgentState, AgentContext]):
             user_response = self._handle_approval(request)
 
             if user_response in (ALLOW, ALWAYS_ALLOW):
+                started_at = time.time()
+                started_perf_counter = time.perf_counter()
                 result = await handler(request)
                 if isinstance(result, Command):
                     return result
@@ -300,6 +325,10 @@ class ApprovalMiddleware(AgentMiddleware[AgentState, AgentContext]):
                     result=result,
                     tool_name=tool_name,
                     tool_call_id=tool_call_id,
+                    response_metadata=_build_tool_timing_metadata(
+                        started_at,
+                        started_perf_counter,
+                    ),
                 )
 
                 # Cache the decision
@@ -320,11 +349,20 @@ class ApprovalMiddleware(AgentMiddleware[AgentState, AgentContext]):
         except GraphInterrupt:
             raise
         except Exception as e:
+            error_result = (
+                str(e) if isinstance(e, ToolException) else f"Failed to execute tool: {str(e)}"
+            )
+            response_metadata = (
+                _build_tool_timing_metadata(started_at, started_perf_counter)
+                if started_at is not None and started_perf_counter is not None
+                else None
+            )
             return create_tool_message(
-                result=f"Failed to execute tool: {str(e)}",
+                result=error_result,
                 tool_name=request.tool_call["name"],
                 tool_call_id=str(request.tool_call["id"]),
                 is_error=True,
+                response_metadata=response_metadata,
             )
 
 

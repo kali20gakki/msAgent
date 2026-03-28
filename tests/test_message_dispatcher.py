@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from types import MethodType, SimpleNamespace
 from pathlib import Path
 from typing import Any
@@ -18,6 +19,7 @@ from msagent.cli.theme import theme
 from msagent.configs import ApprovalMode, LLMConfig, LLMProvider
 from msagent.core.constants import CONFIG_LOG_DIR
 from msagent.core.logging import configure_logging
+from msagent.utils.render import TOOL_TIMING_RESPONSE_METADATA_KEY
 
 
 def _build_session(tmp_path: Path) -> SimpleNamespace:
@@ -432,6 +434,35 @@ def test_merge_tool_activity_calls_keeps_args_visible_across_chunks(tmp_path: Pa
     ]
 
 
+def test_merge_tool_activity_calls_refreshes_start_time_for_latest_preview(
+    tmp_path: Path,
+) -> None:
+    session = _build_session(tmp_path)
+    dispatcher = MessageDispatcher(session)
+
+    existing = [
+        message_module.ToolActivityCall(
+            name="run_command",
+            args={"command": "ls"},
+            call_id="call-1",
+            start_time=10.0,
+        )
+    ]
+    incoming = [
+        message_module.ToolActivityCall(
+            name="run_command",
+            args={"command": "ls -la"},
+            call_id="call-1",
+            start_time=25.0,
+        )
+    ]
+
+    merged = dispatcher._merge_tool_activity_calls(existing, incoming)
+
+    assert len(merged) == 1
+    assert merged[0].start_time == 25.0
+
+
 def test_live_tool_activity_arg_keeps_full_long_value(
     tmp_path: Path,
 ) -> None:
@@ -671,6 +702,47 @@ def test_render_pending_tool_header_uses_deferred_header_before_result(tmp_path:
     assert dispatcher._pending_tool_headers == {}
 
 
+def test_render_pending_tool_header_prefers_exact_tool_runtime_metadata(
+    tmp_path: Path,
+) -> None:
+    session = _build_session(tmp_path)
+    rendered: list[tuple[str, Any]] = []
+    session.renderer = SimpleNamespace(
+        render_assistant_message=lambda *args, **kwargs: None,
+        render_tool_call=lambda tool_call, indent_level=0, duration=None: rendered.append(
+            ("tool_call", indent_level, tool_call, duration)
+        ),
+        render_tool_message=lambda *args, **kwargs: None,
+    )
+    dispatcher = MessageDispatcher(session)
+    dispatcher._pending_tool_headers["call-1"] = (
+        {
+            "name": "run_command",
+            "args": {"command": "sleep 60"},
+            "id": "call-1",
+            "type": "tool_call",
+        },
+        1,
+        10.0,
+    )
+
+    tool_message = message_module.ToolMessage(
+        content="Command timed out after 30s",
+        tool_call_id="call-1",
+        name="run_command",
+        response_metadata={
+            TOOL_TIMING_RESPONSE_METADATA_KEY: {"duration_seconds": 30.0}
+        },
+    )
+
+    dispatcher._render_pending_tool_header(tool_message, indent_level=0)
+
+    assert len(rendered) == 1
+    assert rendered[0][0] == "tool_call"
+    assert rendered[0][1] == 1
+    assert rendered[0][3] == pytest.approx(30.0)
+
+
 def test_merge_chunks_preserves_usage_metadata() -> None:
     merged = MessageDispatcher._merge_chunks(
         [
@@ -817,6 +889,66 @@ def test_build_activity_renderable_keeps_tool_line_separate(tmp_path: Path) -> N
     assert "\n    cwd: /tmp" in output
     assert "Thinking..." in output
     assert "preview line" in output
+
+
+def test_tool_activity_call_defaults_to_monotonic_clock() -> None:
+    started = time.monotonic()
+    call = message_module.ToolActivityCall(name="run_command", args={})
+    finished = time.monotonic()
+
+    assert started <= call.start_time <= finished
+
+
+def test_build_activity_renderable_passes_tool_start_time(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session = _build_session(tmp_path)
+    dispatcher = MessageDispatcher(session)
+    captured_start_times: list[float | None] = []
+
+    class SpyIndicator:
+        def __init__(
+            self,
+            text,
+            details=None,
+            cycle_seconds=0.75,
+            sweep_width=8,
+            glyph="●",
+            start_time=None,
+        ) -> None:
+            captured_start_times.append(start_time)
+
+    monkeypatch.setattr(message_module, "ToolActivityIndicator", SpyIndicator)
+
+    dispatcher._build_activity_renderable(
+        {
+            (): [
+                message_module.ToolActivityCall(
+                    name="run_command",
+                    args={"command": "ls"},
+                    start_time=42.0,
+                )
+            ]
+        },
+        {},
+    )
+
+    assert captured_start_times == [42.0]
+
+
+def test_tool_activity_indicator_clamps_elapsed_when_time_source_moves_backwards() -> None:
+    indicator = message_module.ToolActivityIndicator(
+        message_module.MessageDispatcher._build_tool_activity_label(
+            message_module.ToolActivityCall(name="run_command", args={})
+        ),
+        start_time=100.0,
+    )
+
+    rendered = indicator.render(0.0)
+
+    assert "(-" not in rendered.plain
+    assert "(0.0s)" in rendered.plain
 
 
 def test_tool_activity_indicator_blinks_dot_and_moves_sweep() -> None:

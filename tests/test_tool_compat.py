@@ -2,10 +2,14 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from langchain_core.messages import ToolMessage
 
 from msagent.tools.factory import ToolFactory
 from msagent.tools.impl.file_system import glob, ls
-from msagent.utils.render import create_tool_message
+from msagent.utils.render import (
+    TOOL_TIMING_RESPONSE_METADATA_KEY,
+    create_tool_message,
+)
 
 
 def test_tool_factory_exposes_deepagents_compatible_aliases() -> None:
@@ -65,3 +69,23 @@ def test_create_tool_message_truncates_result_with_original_length_note() -> Non
     assert getattr(result, "short_content") == (
         ("x" * 200) + "... (truncated, original length: 240)"
     )
+
+
+def test_create_tool_message_preserves_and_merges_response_metadata() -> None:
+    result = create_tool_message(
+        result=ToolMessage(
+            content="ok",
+            tool_call_id="call-1",
+            response_metadata={"existing": "value"},
+        ),
+        tool_name="run_command",
+        tool_call_id="call-1",
+        response_metadata={
+            TOOL_TIMING_RESPONSE_METADATA_KEY: {"duration_seconds": 12.5}
+        },
+    )
+
+    assert result.response_metadata["existing"] == "value"
+    assert result.response_metadata[TOOL_TIMING_RESPONSE_METADATA_KEY] == {
+        "duration_seconds": 12.5
+    }

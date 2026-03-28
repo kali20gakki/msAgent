@@ -12,6 +12,8 @@ from msagent.cli.theme import theme
 
 TemplateData: TypeAlias = dict[str, "TemplateData"] | list["TemplateData"] | str | Any
 
+TOOL_TIMING_RESPONSE_METADATA_KEY = "msagent_tool_timing"
+
 
 def render_templates(
     data: TemplateData, context: dict[str, Any] | None
@@ -104,6 +106,8 @@ def create_tool_message(
     is_error: bool | None = None,
     return_direct: bool | None = None,
     short_content: str | None = None,
+    additional_kwargs: dict[str, Any] | None = None,
+    response_metadata: dict[str, Any] | None = None,
 ) -> ToolMessage:
     """Create a ToolMessage from a tool execution result with proper formatting.
 
@@ -116,6 +120,8 @@ def create_tool_message(
         is_error: Override is_error flag (if None, extracted from result via getattr)
         return_direct: Override return_direct flag (if None, extracted from result via getattr)
         short_content: Override short_content (if None, generated from result)
+        additional_kwargs: Extra ToolMessage additional_kwargs to merge into the result
+        response_metadata: Extra ToolMessage response_metadata to merge into the result
 
     Returns:
         Properly formatted ToolMessage with content and short_content
@@ -143,6 +149,14 @@ def create_tool_message(
         # For errors, use full content; otherwise truncate
         final_short_content = content if final_is_error else truncate_text(content, 200)
 
+    base_additional_kwargs = getattr(result, "additional_kwargs", None)
+    if not isinstance(base_additional_kwargs, dict):
+        base_additional_kwargs = {}
+
+    base_response_metadata = getattr(result, "response_metadata", None)
+    if not isinstance(base_response_metadata, dict):
+        base_response_metadata = {}
+
     return ToolMessage(
         id=str(uuid.uuid4()),
         name=tool_name,
@@ -151,6 +165,8 @@ def create_tool_message(
         short_content=final_short_content,
         is_error=final_is_error,
         return_direct=final_return_direct,
+        additional_kwargs={**base_additional_kwargs, **(additional_kwargs or {})},
+        response_metadata={**base_response_metadata, **(response_metadata or {})},
     )
 
 

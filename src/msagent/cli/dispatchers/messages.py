@@ -36,6 +36,7 @@ from msagent.core.constants import OS_VERSION, PLATFORM
 from msagent.core.logging import get_logger
 from msagent.middlewares.token_cost import extract_usage_counts
 from msagent.utils.compression import should_auto_compress
+from msagent.utils.render import TOOL_TIMING_RESPONSE_METADATA_KEY
 
 if TYPE_CHECKING:
     from rich.console import Console, ConsoleOptions, RenderResult
@@ -66,7 +67,7 @@ class ToolActivityCall:
     name: str
     args: dict[str, Any]
     call_id: str | None = None
-    start_time: float = field(default_factory=time.time)
+    start_time: float = field(default_factory=time.monotonic)
 
     def __eq__(self, other: object) -> bool:
         """Compare ToolActivityCall instances, ignoring start_time."""
@@ -102,14 +103,14 @@ class ToolActivityIndicator:
     def __rich_measure__(
         self, console: Console, options: ConsoleOptions
     ) -> Measurement:
-        return Measurement.get(console, options, self.render(0))
+        return Measurement.get(console, options, self.render(console.get_time()))
 
     def render(self, time: float) -> RenderableType:
         """Render the indicator at a given time."""
         if self.start_time is None:
             self.start_time = time
 
-        elapsed = time - self.start_time
+        elapsed = max(time - self.start_time, 0.0)
         phase = (elapsed % self.cycle_seconds) / self.cycle_seconds
         dot_style = _TOOL_DOT_ON_STYLE if phase < 0.5 else _TOOL_DOT_OFF_STYLE
         dot = Text(self.glyph, style=dot_style)
@@ -710,7 +711,7 @@ class MessageDispatcher:
             name=name,
             args=cls._extract_tool_args(tool_call),
             call_id=cls._extract_tool_call_id(tool_call),
-            start_time=start_time if start_time is not None else time.time(),
+            start_time=start_time if start_time is not None else time.monotonic(),
         )
 
     @classmethod
@@ -756,6 +757,7 @@ class MessageDispatcher:
                     name=preferred.name,
                     args=cls._merge_tool_args(existing.args, preview.args),
                     call_id=preferred.call_id or existing.call_id or preview.call_id,
+                    start_time=max(existing.start_time, preview.start_time),
                 )
 
         return previews
@@ -946,6 +948,7 @@ class MessageDispatcher:
                 name=incoming.name or existing.name,
                 args=cls._merge_tool_args(existing.args, incoming.args),
                 call_id=existing.call_id or incoming.call_id,
+                start_time=max(existing.start_time, incoming.start_time),
             )
 
         return merged
@@ -1027,6 +1030,7 @@ class MessageDispatcher:
                         details=cls._build_tool_activity_args(
                             tool_call, indent_level=len(namespace)
                         ),
+                        start_time=tool_call.start_time,
                     )
                 )
 
@@ -1305,6 +1309,20 @@ class MessageDispatcher:
             streaming_state["preview_lines"] = [""]
             streaming_state["chunks"] = []
 
+    @staticmethod
+    def _extract_tool_execution_duration(message: ToolMessage) -> float | None:
+        """Prefer exact wrapped tool runtime when present on the ToolMessage."""
+        response_metadata = getattr(message, "response_metadata", {}) or {}
+        timing = response_metadata.get(TOOL_TIMING_RESPONSE_METADATA_KEY)
+        if not isinstance(timing, dict):
+            return None
+
+        duration = timing.get("duration_seconds")
+        if not isinstance(duration, (int, float)):
+            return None
+
+        return max(float(duration), 0.0)
+
     def _remember_tool_headers(self, message: AIMessage, indent_level: int) -> None:
         """Cache tool call headers so they can be rendered with the tool result."""
         for tool_call in message.tool_calls:
@@ -1358,7 +1376,9 @@ class MessageDispatcher:
         if tool_name in self._HIDDEN_ACTIVITY_TOOLS:
             return
         
-        duration = time.time() - start_time if start_time else None
+        duration = self._extract_tool_execution_duration(message)
+        if duration is None:
+            duration = time.time() - start_time if start_time else None
         self.session.renderer.render_tool_call(
             tool_call, indent_level=stored_indent, duration=duration
         )

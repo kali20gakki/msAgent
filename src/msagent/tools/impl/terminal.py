@@ -1,9 +1,11 @@
 import re
 import shlex
+from typing import Annotated
 
 from langchain.tools import ToolRuntime, tool
 from langchain_core.messages import ToolMessage
 from langchain_core.tools import ToolException
+from pydantic import Field
 
 from msagent.agents.context import AgentContext
 from msagent.cli.theme import theme
@@ -13,6 +15,10 @@ from msagent.utils.bash import execute_bash_command
 from msagent.utils.path import resolve_path
 
 logger = get_logger(__name__)
+
+DEFAULT_COMMAND_TIMEOUT_SECONDS = 1800
+COMMAND_TIMEOUT_SENTINEL = "Command timed out"
+TIMEOUT_OUTPUT_TAIL_LINES = 50
 
 
 _CHAIN_OPS = re.compile(r"\s*(&&|\|\||;|\|)\s*")
@@ -52,30 +58,114 @@ def _transform_command_for_approval(command: str) -> str:
 def _render_command_args(args: dict, config: dict) -> str:
     """Render command arguments with syntax highlighting."""
     command = args.get("command", "")
-    return f"[{theme.indicator_color}]{command}[/{theme.indicator_color}]"
+    timeout_seconds = args.get("timeout_seconds", DEFAULT_COMMAND_TIMEOUT_SECONDS)
+
+    rendered = f"[{theme.indicator_color}]{command}[/{theme.indicator_color}]"
+    if timeout_seconds != DEFAULT_COMMAND_TIMEOUT_SECONDS:
+        rendered += (
+            f"\n[{theme.muted_text}]timeout_seconds={timeout_seconds}[/{theme.muted_text}]"
+        )
+    return rendered
+
+
+def _build_timeout_error_message(
+    timeout_seconds: int,
+    stdout: str,
+    stderr: str,
+) -> str:
+    """Format a timeout error with any output captured before the process was killed."""
+    partial_sections: list[str] = []
+
+    stdout_section = _format_timeout_output_section("stdout", stdout)
+    if stdout_section is not None:
+        partial_sections.append(stdout_section)
+
+    stderr_detail = stderr.strip()
+    if stderr_detail.startswith(COMMAND_TIMEOUT_SENTINEL):
+        stderr_detail = stderr_detail[len(COMMAND_TIMEOUT_SENTINEL) :].strip()
+
+    stderr_section = _format_timeout_output_section("stderr", stderr_detail)
+    if stderr_section is not None:
+        partial_sections.append(stderr_section)
+
+    message = f"Command timed out after {timeout_seconds}s"
+    if partial_sections:
+        message += "\n\nPartial output before timeout:\n" + "\n\n".join(partial_sections)
+
+    return message
+
+
+def _tail_output_lines(text: str, max_lines: int = TIMEOUT_OUTPUT_TAIL_LINES) -> tuple[str, int]:
+    """Keep only the last max_lines of output and report how many lines were omitted."""
+    stripped = text.strip()
+    if not stripped:
+        return "", 0
+
+    lines = stripped.splitlines()
+    if len(lines) <= max_lines:
+        return "\n".join(lines), 0
+
+    tail_lines = lines[-max_lines:]
+    return "\n".join(tail_lines), len(lines) - max_lines
+
+
+def _format_timeout_output_section(label: str, text: str) -> str | None:
+    """Format timeout output for one stream, keeping only the most recent lines."""
+    tailed_text, omitted_lines = _tail_output_lines(text)
+    if not tailed_text:
+        return None
+
+    header = f"[{label}]"
+    if omitted_lines > 0:
+        header += (
+            f" last {TIMEOUT_OUTPUT_TAIL_LINES} lines "
+            f"(omitted {omitted_lines} earlier lines)"
+        )
+
+    return f"{header}\n{tailed_text}"
 
 
 @tool
 async def run_command(
     command: str,
     runtime: ToolRuntime[AgentContext],
+    timeout_seconds: Annotated[
+        int,
+        Field(
+            ge=1,
+            description=(
+                "Timeout in seconds for the command. Defaults to 1800 seconds. "
+                "Increase this for long-running tasks such as builds, test suites, "
+                "downloads, or data processing jobs."
+            ),
+        ),
+    ] = DEFAULT_COMMAND_TIMEOUT_SECONDS,
 ) -> str:
     """
     Use this tool to execute terminal commands. Project files should be checked first to understand
     available commands and project structure before running unfamiliar operations.
+    For long-running tasks, increase timeout_seconds instead of assuming the command hung.
 
     Args:
         command: The command to execute
+        timeout_seconds: Maximum runtime in seconds. Increase this for long-running tasks.
     """
     context: AgentContext = runtime.context
     status, stdout, stderr = await execute_bash_command(
-        ["bash", "-c", command], cwd=str(context.working_dir)
+        ["bash", "-c", command],
+        cwd=str(context.working_dir),
+        timeout=timeout_seconds,
     )
     if status != 0:
+        timed_out = status == -1 and stderr.strip().startswith(COMMAND_TIMEOUT_SENTINEL)
         error_msg = (
-            stderr.strip()
-            if stderr.strip()
-            else f"Command failed with exit code {status}"
+            _build_timeout_error_message(timeout_seconds, stdout, stderr)
+            if timed_out
+            else (
+                stderr.strip()
+                if stderr.strip()
+                else f"Command failed with exit code {status}"
+            )
         )
         raise ToolException(error_msg)
 
