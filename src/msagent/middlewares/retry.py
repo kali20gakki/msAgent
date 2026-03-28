@@ -83,13 +83,11 @@ class ToolRetryConfig:
 
     Attributes:
         max_retries: Maximum number of retry attempts for tool calls
-        timeout: Timeout for each tool call attempt (seconds)
         retryable_tools: List of tool names that should be retried (empty = all)
         exclude_tools: List of tool names that should never be retried
     """
 
     max_retries: int = 2
-    timeout: float | None = None
     retryable_tools: list[str] = field(default_factory=list)
     exclude_tools: list[str] = field(default_factory=list)
 
@@ -107,7 +105,7 @@ class RetryMiddleware(AgentMiddleware[AgentState, AgentContext]):
         ...     base_delay=2.0,
         ...     retryable_exceptions=(TimeoutError, ConnectionError)
         ... )
-        >>> tool_retry = ToolRetryConfig(max_retries=3, timeout=30.0)
+        >>> tool_retry = ToolRetryConfig(max_retries=3)
         >>> retry_middleware = RetryMiddleware(
         ...     llm_config=llm_retry,
         ...     tool_config=tool_retry
@@ -298,11 +296,9 @@ class RetryMiddleware(AgentMiddleware[AgentState, AgentContext]):
         request: ToolCallRequest,
         handler: Callable[[ToolCallRequest], Any],
     ) -> ToolMessage | Command:
-        """Wrap tool call with retry logic and timeout.
+        """Wrap tool call with retry logic.
 
-        This intercepts tool invocations and applies:
-        - Timeout control
-        - Retry for transient failures
+        This intercepts tool invocations and applies retry for transient failures.
         """
         if not self.enable_tool_retry:
             return await handler(request)
@@ -335,24 +331,6 @@ class RetryMiddleware(AgentMiddleware[AgentState, AgentContext]):
 
             return result
 
-        # Apply timeout if configured
-        if self.tool_config.timeout:
-
-            async def _call_with_timeout() -> ToolMessage | Command:
-                try:
-                    return await asyncio.wait_for(
-                        _call_tool(),
-                        timeout=self.tool_config.timeout,
-                    )
-                except asyncio.TimeoutError:
-                    raise RetryableError(
-                        f"Tool {tool_name} timed out after {self.tool_config.timeout}s"
-                    )
-
-            operation = _call_with_timeout
-        else:
-            operation = _call_tool
-
         # Create tool-specific retry config (fewer retries than LLM)
         tool_retry_config = RetryConfig(
             max_retries=self.tool_config.max_retries,
@@ -367,7 +345,7 @@ class RetryMiddleware(AgentMiddleware[AgentState, AgentContext]):
         )
 
         return await self._retry_with_backoff(
-            operation,
+            _call_tool,
             tool_retry_config,
             f"Tool call '{tool_name}'",
             runtime_context=getattr(getattr(request, "runtime", None), "context", None),
@@ -521,7 +499,6 @@ def create_retry_middleware(
     max_llm_retries: int = 3,
     max_tool_retries: int = 2,
     llm_timeout: float | None = None,
-    tool_timeout: float | None = None,
     enable_circuit_breaker: bool = False,
 ) -> RetryMiddleware:
     """Factory function to create a retry middleware with common settings.
@@ -530,7 +507,6 @@ def create_retry_middleware(
         max_llm_retries: Maximum retries for LLM requests
         max_tool_retries: Maximum retries for tool calls
         llm_timeout: Timeout for LLM requests (None = no timeout)
-        tool_timeout: Timeout for tool calls (None = no timeout)
         enable_circuit_breaker: Whether to enable circuit breaker pattern
 
     Returns:
@@ -544,7 +520,6 @@ def create_retry_middleware(
 
     tool_config = ToolRetryConfig(
         max_retries=max_tool_retries,
-        timeout=tool_timeout,
     )
 
     if enable_circuit_breaker:

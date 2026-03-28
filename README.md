@@ -251,6 +251,15 @@ msagent
 - `repair_command` / `repair_timeout`
 - `timeout` / `sse_read_timeout` / `invoke_timeout`
 
+超时字段说明：
+
+- `repair_command`：可选的“自动补救命令”。它不是正常的 MCP 启动命令，而是在 MCP 服务初始化失败时，额外执行的一条补救指令。
+- 可以把它理解成“兜底修复步骤”。例如首次启动失败后，先执行一次安装依赖、拉起前置服务或修复环境的命令，然后再重新尝试连接 MCP。
+- `repair_timeout`：上面这条补救命令的最长允许执行时间，单位秒。它只约束 `repair_command` 本身，不影响正常 tool 调用。
+- `invoke_timeout`：每次 MCP tool 调用的超时时间，单位秒。这个才是日常最常用的 tool 调用超时控制。
+- 如果没有配置 `repair_command`，那么 `repair_timeout` 不会实际触发，可以理解为一个暂未使用的预留字段。
+- 对于 `msprof-mcp` 这类本地 `stdio` MCP，通常主要关注 `invoke_timeout`；只有你确实设计了“启动失败后自动修一下再重试”的流程时，才需要关心 `repair_command` / `repair_timeout`。
+
 对于像 `msprof-mcp` 这类本地 `stdio` MCP，默认更推荐：
 
 - `stateful: true`，避免每次工具调用都重新拉起服务进程

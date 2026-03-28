@@ -95,7 +95,7 @@ class TestLLMRetryE2E:
 class TestToolRetryE2E:
     """End-to-end tests for tool retry mechanism."""
 
-    async def test_tool_timeout_with_retry(self):
+    async def test_tool_retry_on_timeout_error(self):
         """ST-003: Tool call times out and is retried successfully."""
         from langchain.tools.tool_node import ToolCallRequest
         
@@ -112,7 +112,6 @@ class TestToolRetryE2E:
             llm_config=RetryConfig(max_retries=1),
             tool_config=ToolRetryConfig(
                 max_retries=2,
-                timeout=None,
             ),
             enable_tool_retry=True,
         )
@@ -140,7 +139,6 @@ class TestToolRetryE2E:
         retry_middleware = RetryMiddleware(
             tool_config=ToolRetryConfig(
                 max_retries=3,
-                timeout=None,
                 exclude_tools=["critical_tool"],
             ),
             enable_tool_retry=True,
@@ -199,18 +197,17 @@ class TestCircuitBreakerE2E:
 class TestTimeoutAccuracyE2E:
     """Tests for timeout accuracy and timing."""
 
-    async def test_tool_timeout_accuracy(self):
-        """ST-006: Tool timeout is enforced accurately."""
+    async def test_tool_call_does_not_enforce_local_timeout(self):
+        """ST-006: Tool calls are no longer wrapped with msagent-local timeouts."""
         from langchain.tools.tool_node import ToolCallRequest
         
         async def slow_handler(request: ToolCallRequest) -> ToolMessage:
-            await asyncio.sleep(2.0)
-            return ToolMessage(content="Should not reach here", tool_call_id="call_1")
+            await asyncio.sleep(0.2)
+            return ToolMessage(content="Success", tool_call_id="call_1")
         
         retry_middleware = RetryMiddleware(
             tool_config=ToolRetryConfig(
                 max_retries=0,
-                timeout=0.5,  # 500ms timeout
             ),
             enable_tool_retry=True,
         )
@@ -220,11 +217,17 @@ class TestTimeoutAccuracyE2E:
         mock_request.tool = None
 
         start_time = time.time()
-        with pytest.raises(Exception):
-            await retry_middleware.awrap_tool_call(mock_request, slow_handler)
+        with patch(
+            "msagent.middlewares.retry.asyncio.wait_for", new_callable=AsyncMock
+        ) as mock_wait_for:
+            result = await retry_middleware.awrap_tool_call(mock_request, slow_handler)
         elapsed = time.time() - start_time
 
-        assert 0.4 <= elapsed <= 0.9, f"Expected timeout ~0.5s, took {elapsed:.2f}s"
+        assert isinstance(result, ToolMessage)
+        assert (
+            elapsed >= 0.15
+        ), f"Expected real handler runtime to be preserved, took {elapsed:.2f}s"
+        assert mock_wait_for.await_count == 0
 
 
 @pytest.mark.asyncio
@@ -235,7 +238,7 @@ class TestIntegrationE2E:
         """ST-007: Full workflow with LLM and tool failures."""
         retry_middleware = RetryMiddleware(
             llm_config=RetryConfig(max_retries=2, base_delay=0.1),
-            tool_config=ToolRetryConfig(max_retries=2, timeout=5.0),
+            tool_config=ToolRetryConfig(max_retries=2),
             enable_llm_retry=True,
             enable_tool_retry=True,
         )

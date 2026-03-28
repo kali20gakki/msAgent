@@ -83,12 +83,6 @@ class RetryPolicyConfig(BaseModel):
     llm_max_delay: float = Field(
         default=60.0, description="Maximum delay for LLM retries (seconds)", ge=0
     )
-    tool_max_retries: int = Field(
-        default=2, description="Maximum retry attempts for tool calls", ge=0
-    )
-    tool_timeout: float | None = Field(
-        default=None, description="Timeout for each tool call (seconds)", ge=0
-    )
     enable_circuit_breaker: bool = Field(
         default=False, description="Enable circuit breaker pattern"
     )
@@ -269,8 +263,6 @@ class BaseAgentConfig(VersionedConfig):
                     "llm_max_retries": 3,
                     "llm_base_delay": 1.0,
                     "llm_max_delay": 60.0,
-                    "tool_max_retries": 2,
-                    "tool_timeout": None,
                     "enable_circuit_breaker": False,
                     "circuit_breaker_threshold": 5,
                     "circuit_breaker_recovery": 60.0,

@@ -8,7 +8,6 @@ from msagent.middlewares import (
     CircuitBreakerRetryMiddleware,
     RetryConfig,
     RetryMiddleware,
-    ToolRetryConfig,
 )
 from msagent.tools.subagents.task import SubAgent, create_task_tool
 
@@ -48,26 +47,19 @@ def _create_retry_middleware(
         max_delay=retry_config.llm_max_delay,
     )
 
-    tool_config = ToolRetryConfig(
-        max_retries=retry_config.tool_max_retries,
-        timeout=retry_config.tool_timeout,
-    )
-
     if retry_config.enable_circuit_breaker:
         return CircuitBreakerRetryMiddleware(
             llm_config=llm_config,
-            tool_config=tool_config,
             enable_llm_retry=True,
-            enable_tool_retry=retry_config.tool_max_retries > 0,
+            enable_tool_retry=False,
             failure_threshold=retry_config.circuit_breaker_threshold,
             recovery_timeout=retry_config.circuit_breaker_recovery,
         )
 
     return RetryMiddleware(
         llm_config=llm_config,
-        tool_config=tool_config,
         enable_llm_retry=True,
-        enable_tool_retry=retry_config.tool_max_retries > 0,
+        enable_tool_retry=False,
     )
 
 

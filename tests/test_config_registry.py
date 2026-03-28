@@ -29,6 +29,8 @@ def test_default_msprof_server_uses_packaged_executable() -> None:
 
     assert default_msprof_server["command"] == "msprof-mcp"
     assert default_msprof_server["args"] == []
+    assert default_msprof_server["repair_timeout"] == 30
+    assert default_msprof_server["invoke_timeout"] == 60.0
 
 
 @pytest.mark.asyncio

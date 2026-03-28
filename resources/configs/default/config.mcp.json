@@ -8,7 +8,9 @@
       "include": [],
       "exclude": [],
       "enabled": true,
-      "stateful": true
+      "stateful": true,
+      "repair_timeout": 30,
+      "invoke_timeout": 3600.0
     }
   }
 }

@@ -173,7 +173,7 @@ class TestToolRetry:
     def middleware(self):
         return RetryMiddleware(
             enable_tool_retry=True,
-            tool_config=ToolRetryConfig(max_retries=2, timeout=5.0),
+            tool_config=ToolRetryConfig(max_retries=2),
         )
 
     @pytest.fixture
@@ -195,22 +195,24 @@ class TestToolRetry:
         assert mock_handler.call_count == 1
 
     @pytest.mark.asyncio
-    async def test_tool_timeout(self, middleware, mock_request):
-        """Test tool call timeout triggers retry."""
+    async def test_tool_retry_on_timeout_error_without_local_wait_for(
+        self, middleware, mock_request
+    ):
+        """Test tool timeout errors retry without msagent-enforced timeout."""
         mock_handler = AsyncMock()
         mock_handler.side_effect = [
             asyncio.TimeoutError("Tool timeout"),
             ToolMessage(content="success", tool_call_id="123"),
         ]
 
-        async def passthrough_wait_for(coro, timeout):
-            return await coro
-
-        with patch("asyncio.wait_for", side_effect=passthrough_wait_for):
+        with patch(
+            "msagent.middlewares.retry.asyncio.wait_for", new_callable=AsyncMock
+        ) as mock_wait_for:
             with patch("asyncio.sleep", new_callable=AsyncMock):
                 result = await middleware.awrap_tool_call(mock_request, mock_handler)
 
         assert result is not None
+        assert mock_wait_for.await_count == 0
 
     @pytest.mark.asyncio
     async def test_excluded_tools_not_retried(self, mock_request):
@@ -336,11 +338,9 @@ class TestFactoryFunction:
         middleware = create_retry_middleware(
             max_llm_retries=5,
             max_tool_retries=3,
-            tool_timeout=60.0,
         )
         assert middleware.llm_config.max_retries == 5
         assert middleware.tool_config.max_retries == 3
-        assert middleware.tool_config.timeout == 60.0
 
 
 class TestRetryCallback:
@@ -435,7 +435,7 @@ class TestRetryCallback:
 
         middleware = RetryMiddleware(
             enable_tool_retry=True,
-            tool_config=ToolRetryConfig(max_retries=1, timeout=5.0),
+            tool_config=ToolRetryConfig(max_retries=1),
         )
 
         mock_request = MagicMock()
@@ -451,13 +451,9 @@ class TestRetryCallback:
             ToolMessage(content="success", tool_call_id="123"),
         ]
 
-        async def passthrough_wait_for(coro, timeout):
-            return await coro
-
         with patch("msagent.middlewares.retry.random.uniform", return_value=1.0):
-            with patch("asyncio.wait_for", side_effect=passthrough_wait_for):
-                with patch("asyncio.sleep"):
-                    await middleware.awrap_tool_call(mock_request, mock_handler)
+            with patch("asyncio.sleep"):
+                await middleware.awrap_tool_call(mock_request, mock_handler)
 
         assert [
             (
