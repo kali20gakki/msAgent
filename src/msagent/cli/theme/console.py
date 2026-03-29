@@ -20,15 +20,15 @@ class ThemedConsole:
 
     def print_error(self, content: str):
         """Print error message."""
-        self.console.print(f"[error]✗[/error] {content}")
+        self.console.print(f"[error]\u274c[/error] {content}")
 
     def print_warning(self, content: str):
         """Print warning message."""
-        self.console.print(f"[warning]⚠︎[/warning] {content}")
+        self.console.print(f"[warning]\u26a0\ufe0f[/warning] {content}")
 
     def print_success(self, content: str):
         """Print success message."""
-        self.console.print(f"[success]✓[/success] {content}")
+        self.console.print(f"[success]\u2705[/success] {content}")
 
     def clear(self):
         """Clear the console."""

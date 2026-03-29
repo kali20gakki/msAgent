@@ -7,16 +7,12 @@ from collections.abc import Callable
 from msagent.cli.bootstrap.initializer import initializer
 from msagent.cli.handlers import (
     AgentHandler,
-    ApproveHandler,
     CompressionHandler,
-    GraphHandler,
     MCPHandler,
-    MemoryHandler,
     ModelHandler,
-    ReplayHandler,
-    ResumeHandler,
     SkillsHandler,
-    TodoHandler,
+    ToolOutputHandler,
+    ThreadsHandler,
     ToolsHandler,
 )
 from msagent.cli.theme import console
@@ -32,18 +28,14 @@ class CommandDispatcher:
         """Initialize with reference to CLI session."""
         self.session = session
         self.commands = self._register_commands()
-        self.resume_handler = ResumeHandler(session)
         self.agent_handler = AgentHandler(session)
         self.model_handler = ModelHandler(session)
         self.mcp_handler = MCPHandler(session)
-        self.memory_handler = MemoryHandler(session)
         self.tools_handler = ToolsHandler(session)
         self.skills_handler = SkillsHandler(session)
-        self.replay_handler = ReplayHandler(session)
+        self.threads_handler = ThreadsHandler(session)
         self.compression_handler = CompressionHandler(session)
-        self.graph_handler = GraphHandler(session)
-        self.todo_handler = TodoHandler(session)
-        self.approve_handler = ApproveHandler(session)
+        self.tool_output_handler = ToolOutputHandler(session)
 
     def _register_commands(self) -> dict[str, Callable]:
         """Register all available commands."""
@@ -52,18 +44,14 @@ class CommandDispatcher:
             "/hotkeys": self.cmd_hotkeys,
             "/agents": self.cmd_agents,
             "/model": self.cmd_model,
+            "/threads": self.cmd_threads,
             "/tools": self.cmd_tools,
             "/skills": self.cmd_skills,
             "/mcp": self.cmd_mcp,
-            "/memory": self.cmd_memory,
-            "/graph": self.cmd_graph,
+            "/offload": self.cmd_offload,
+            "/tool-output": self.cmd_tool_output,
             "/clear": self.cmd_clear,
             "/exit": self.cmd_exit,
-            "/resume": self.cmd_resume,
-            "/replay": self.cmd_replay,
-            "/compress": self.cmd_compress,
-            "/todo": self.cmd_todo,
-            "/approve": self.cmd_approve,
         }
 
     async def dispatch(self, command_line: str) -> None:
@@ -118,6 +106,10 @@ class CommandDispatcher:
         """Handle model command with interactive selector."""
         await self.model_handler.handle()
 
+    async def cmd_threads(self, args: list[str]) -> None:
+        """Browse and restore previous conversation threads."""
+        await self.threads_handler.handle()
+
     async def cmd_tools(self, args: list[str]) -> None:
         """Handle tools command with interactive selector."""
         await self.tools_handler.handle(initializer.cached_llm_tools)
@@ -130,9 +122,13 @@ class CommandDispatcher:
         """Handle MCP management command."""
         await self.mcp_handler.handle()
 
-    async def cmd_memory(self, args: list[str]) -> None:
-        """Open memory file for editing user preferences and context."""
-        await self.memory_handler.handle()
+    async def cmd_offload(self, args: list[str]) -> None:
+        """Summarize older messages and offload raw history to backend storage."""
+        await self.compression_handler.handle()
+
+    async def cmd_tool_output(self, args: list[str]) -> None:
+        """Expand or collapse the latest tool output in an interactive viewer."""
+        await self.tool_output_handler.handle()
 
     async def cmd_clear(self, args: list[str]) -> None:
         """Clear the screen and start a new thread."""
@@ -142,48 +138,10 @@ class CommandDispatcher:
             current_input_tokens=None,
             current_output_tokens=None,
         )
+        self.session.clear_tool_output()
         logger.info(f"Thread ID: {new_thread_id}")
         console.clear()
 
     async def cmd_exit(self, args: list[str]) -> None:
         """Exit the application."""
         self.session.running = False
-
-    async def cmd_resume(self, args: list[str]) -> None:
-        """Resume conversation thread with interactive selector."""
-        await self.resume_handler.handle()
-
-    async def cmd_replay(self, args: list[str]) -> None:
-        """Replay conversation from a previous human message."""
-        await self.replay_handler.handle()
-
-    async def cmd_compress(self, args: list[str]) -> None:
-        """Compress conversation history to a new thread."""
-        await self.compression_handler.handle()
-
-    async def cmd_graph(self, args: list[str]) -> None:
-        """Render and display the current agent graph (use --browser to open in browser)."""
-        # Validate and parse arguments
-        if invalid_args := [arg for arg in args if arg != "--browser"]:
-            console.print_error(f"Invalid argument(s): {', '.join(invalid_args)}")
-            console.print("[muted]Usage: /graph [--browser][/muted]", markup=True)
-            console.print("")
-            return
-
-        await self.graph_handler.handle(open_browser="--browser" in args)
-
-    async def cmd_todo(self, args: list[str]) -> None:
-        """Show current todo list."""
-        max_items = 10
-        if args:
-            try:
-                max_items = int(args[0])
-            except ValueError:
-                console.print_error(f"Invalid number: {args[0]}")
-                console.print("")
-                return
-        await self.todo_handler.handle(max_items)
-
-    async def cmd_approve(self, args: list[str]) -> None:
-        """Manage tool approval rules (always_allow, always_deny, always_ask)."""
-        await self.approve_handler.handle()

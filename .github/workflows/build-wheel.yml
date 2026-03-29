@@ -13,6 +13,7 @@ on:
       - "pyproject.toml"
       - "uv.lock"
       - "scripts/build_whl.sh"
+      - "scripts/install.sh"
       - "resources/**"
       - "src/**"
       - "tests/**"
@@ -24,6 +25,7 @@ on:
       - "pyproject.toml"
       - "uv.lock"
       - "scripts/build_whl.sh"
+      - "scripts/install.sh"
       - "resources/**"
       - "src/**"
       - "tests/**"
@@ -184,3 +186,39 @@ jobs:
           assert shutil.which("msprof-mcp"), "msprof-mcp executable is not on PATH"
           print("cross-platform install smoke test passed")
           PY
+
+  smoke-install-script:
+    name: smoke-install-script-${{ matrix.os }}
+    needs: build-wheel
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Download wheel artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: wheel
+          path: ${{ runner.temp }}/dist
+
+      - name: Smoke test curl installer with local wheel
+        shell: bash
+        env:
+          UV_CACHE_DIR: ${{ runner.temp }}/uv-cache
+          UV_TOOL_BIN_DIR: ${{ runner.temp }}/bin
+          UV_TOOL_DIR: ${{ runner.temp }}/tools
+        run: |
+          set -euo pipefail
+          WHEEL_PATH="$(find "${RUNNER_TEMP}/dist" -maxdepth 1 -type f -name '*.whl' | head -n 1)"
+          test -n "${WHEEL_PATH}"
+          MSAGENT_PACKAGE_SPEC="${WHEEL_PATH}" bash scripts/install.sh
+          "${UV_TOOL_BIN_DIR}/msagent" --version
+          test -x "${UV_TOOL_BIN_DIR}/msprof-mcp"

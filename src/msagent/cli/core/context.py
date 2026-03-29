@@ -17,6 +17,7 @@ class Context(BaseModel):
     """Runtime CLI context."""
 
     agent: str
+    agent_description: str | None = None
     model: str
     model_display: str | None = None
     thread_id: str
@@ -40,9 +41,6 @@ class Context(BaseModel):
         provider_value = getattr(provider, "value", provider)
         provider_labels = {
             LLMProvider.GOOGLE.value: "Gemini",
-            LLMProvider.LMSTUDIO.value: "LM Studio",
-            LLMProvider.ZHIPUAI.value: "ZhipuAI",
-            LLMProvider.DEEPSEEK.value: "DeepSeek",
         }
         return provider_labels.get(str(provider_value), str(provider_value))
 
@@ -62,7 +60,6 @@ class Context(BaseModel):
         agent: str | None,
         model: str | None,
         approval_mode: ApprovalMode | None,
-        resume: bool,
         working_dir: Path,
         stream_output: bool = True,
     ) -> "Context":
@@ -70,15 +67,7 @@ class Context(BaseModel):
         with timer("Load agent config"):
             agent_config = await initializer.load_agent_config(agent, working_dir)
 
-        # Get thread_id: resume last thread or create new one
-        if resume:
-            with timer("Get threads"):
-                threads = await initializer.get_threads(
-                    agent or agent_config.name, working_dir
-                )
-            thread_id = threads[0]["thread_id"] if threads else str(uuid.uuid4())
-        else:
-            thread_id = str(uuid.uuid4())
+        thread_id = str(uuid.uuid4())
 
         if model:
             with timer("Load LLM config"):
@@ -104,6 +93,7 @@ class Context(BaseModel):
 
         return cls(
             agent=resolved_agent,
+            agent_description=agent_config.description or None,
             model=resolved_model,
             model_display=resolved_model_display,
             thread_id=thread_id,

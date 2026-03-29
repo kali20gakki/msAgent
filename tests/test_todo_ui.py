@@ -6,20 +6,30 @@ and related UI features.
 
 import pytest
 from langchain_core.messages import AIMessage, ToolMessage
+from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from msagent.agents.state import Todo
 from msagent.cli.dispatchers.messages import MessageDispatcher
+from msagent.cli.theme import theme
+from msagent.cli.ui import renderer as renderer_module
 from msagent.cli.ui.renderer import Renderer
 from msagent.tools.internal.todo import (
     TODO_PANEL_MARKER,
     _coerce_sequential_todos,
     _build_todos_table,
     format_todos,
+    parse_todos_for_panel,
     render_todos_panel,
-    write_todos,
 )
+
+
+class _CaptureConsole:
+    def __init__(self) -> None:
+        self.console = Console(record=True, width=120, theme=theme.rich_theme)
+
+    def print(self, *args, **kwargs) -> None:
+        self.console.print(*args, **kwargs)
 
 
 class TestTodoCoerce:
@@ -77,7 +87,7 @@ class TestBuildTodosTable:
     def test_max_items_limit(self):
         """Test that max_items limits the output."""
         todos = [{"content": f"Task {i}", "status": "pending"} for i in range(10)]
-        table = _build_todos_table(todos, max_items=5, max_completed=0)
+        _build_todos_table(todos, max_items=5, max_completed=0)
         # Table should have limited rows
 
     def test_completed_indicator_hidden(self):
@@ -87,7 +97,7 @@ class TestBuildTodosTable:
             {"content": "Task 2", "status": "completed"},
             {"content": "Task 3", "status": "completed"},
         ]
-        table = _build_todos_table(
+        _build_todos_table(
             todos, max_items=10, max_completed=1, show_completed_indicator=False
         )
         # Should not show "+X more completed" row
@@ -123,6 +133,14 @@ class TestRenderTodosPanel:
         )
         assert isinstance(panel, Panel)
 
+    def test_panel_uses_single_visual_border(self):
+        """Test that inner todo table is borderless (no nested frame)."""
+        panel = render_todos_panel([{"content": "Task", "status": "pending"}])
+        table = panel.renderable
+        assert isinstance(table, Table)
+        assert table.show_edge is False
+        assert table.box is None
+
 
 class TestFormatTodos:
     """Test format_todos function."""
@@ -140,9 +158,9 @@ class TestFormatTodos:
             {"content": "Pending", "status": "pending"},
         ]
         result = format_todos(todos, max_items=50, max_completed=50, show_completed_indicator=False)
-        assert "✓" in result
-        assert "◔" in result
-        assert "○" in result
+        assert "Completed" in result
+        assert "In Progress" in result
+        assert "Pending" in result
 
     def test_strike_for_completed(self):
         """Test that completed items have strike markup."""
@@ -151,30 +169,48 @@ class TestFormatTodos:
         assert "[strike]" in result
 
 
-class TestWriteTodosTool:
-    """Test write_todos tool functionality."""
-
-    def test_tool_metadata(self):
-        """Test that write_todos has correct metadata."""
-        assert write_todos.name == "write_todos"
-        assert hasattr(write_todos, 'metadata')
-        # Should have always_approve config
-        assert write_todos.metadata.get("approval_config", {}).get("always_approve") is True
+class TestWriteTodosPayload:
+    """Test write_todos payload parsing compatibility."""
 
     def test_format_todos_includes_marker(self):
         """Test that format_todos output can be combined with marker."""
         todos = [{"content": "Task", "status": "pending"}]
-        
+
         formatted = format_todos(
             todos, max_items=50, max_completed=50, show_completed_indicator=False
         )
-        
-        # This is how write_todos combines marker with formatted content
+
+        # Legacy panel format still uses marker + formatted body
         marked_content = f"{TODO_PANEL_MARKER}{formatted}"
-        
+
         assert TODO_PANEL_MARKER in marked_content
         assert "Task" in marked_content
-        assert "○" in marked_content
+
+    def test_parse_deepagents_write_todos_payload(self):
+        """Test parsing deepagents default write_todos response text."""
+        payload = (
+            "Updated todo list to "
+            "[{'content': 'Task 1', 'status': 'completed'}, "
+            "{'content': 'Task 2', 'status': 'in_progress'}]"
+        )
+        parsed = parse_todos_for_panel(payload)
+        assert parsed is not None
+        assert len(parsed) == 2
+        assert parsed[0]["content"] == "Task 1"
+        assert parsed[0]["status"] == "completed"
+        assert parsed[1]["status"] == "in_progress"
+
+    def test_parse_legacy_marker_payload(self):
+        """Test parsing legacy marker-based payload."""
+        formatted = format_todos(
+            [{"content": "Task", "status": "pending"}],
+            max_items=50,
+            max_completed=50,
+            show_completed_indicator=False,
+        )
+        parsed = parse_todos_for_panel(f"{TODO_PANEL_MARKER}{formatted}")
+        assert parsed is not None
+        assert parsed[0]["content"] == "Task"
 
 
 class TestRendererSkipToolCall:
@@ -280,6 +316,31 @@ class TestTodoPanelIntegration:
         result = format_todos(todos, max_items=50, max_completed=50, show_completed_indicator=False)
         # Should not raise and should contain the task content
         assert "brackets" in result
+
+    def test_render_tool_message_keeps_todo_panel_in_subagent_flow(self, monkeypatch):
+        capture = _CaptureConsole()
+        monkeypatch.setattr(renderer_module, "console", capture)
+
+        todos = [
+            {"content": "Read skill", "status": "completed"},
+            {"content": "Analyze advisor output", "status": "in_progress"},
+        ]
+        formatted = format_todos(
+            todos, max_items=50, max_completed=50, show_completed_indicator=False
+        )
+        message = ToolMessage(
+            name="write_todos",
+            content='[{"content":"Read skill","status":"completed"}]',
+            tool_call_id="call-todo-1",
+        )
+        setattr(message, "short_content", f"{TODO_PANEL_MARKER}{formatted}")
+
+        Renderer.render_tool_message(message, indent_level=1)
+
+        output = capture.console.export_text()
+        assert "[Subagent] Update TODOs" in output
+        assert "TODOs" in output
+        assert "Analyze advisor output" in output
 
 
 if __name__ == "__main__":

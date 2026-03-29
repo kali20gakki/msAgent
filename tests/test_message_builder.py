@@ -37,3 +37,15 @@ def test_build_supports_plain_at_image_reference(tmp_path: Path) -> None:
     assert content[1]["mime_type"] == "image/png"
     assert reference_mapping == {"diagram.png": str(image_path)}
 
+
+def test_build_supports_standalone_absolute_file_reference(tmp_path: Path) -> None:
+    file_path = tmp_path / "report.txt"
+    file_path.write_text("ok", encoding="utf-8")
+
+    builder = MessageContentBuilder(tmp_path)
+
+    content, reference_mapping = builder.build(f"read {file_path}")
+
+    assert content == f"read {file_path}"
+    assert reference_mapping == {str(file_path): str(file_path)}
+

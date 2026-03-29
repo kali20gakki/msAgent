@@ -1,525 +1,599 @@
+"""Agent factory using deepagents runtime primitives."""
+
 from __future__ import annotations
 
-import asyncio
-from dataclasses import dataclass
+import logging
+import tempfile
+from fnmatch import fnmatch
+from importlib import import_module
 from pathlib import Path
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, Callable
 
-from msagent.agents.deep_agent import create_deep_agent
-from msagent.configs import LLMConfig
-from msagent.core.constants import (
-    TOOL_CATEGORY_IMPL,
-    TOOL_CATEGORY_INTERNAL,
-    TOOL_CATEGORY_MCP,
-)
-from msagent.core.logging import get_logger
-from msagent.sandboxes.backends.base import SandboxBinding
-from msagent.tools.catalog.skills import get_skill
-from msagent.tools.subagents.task import SubAgent, think
-from msagent.utils.patterns import (
-    matches_patterns,
-    three_part_matcher,
-    two_part_matcher,
-)
+from deepagents import create_deep_agent
+from deepagents.backends import CompositeBackend, LocalShellBackend
+from deepagents.backends.filesystem import FilesystemBackend
+from deepagents.middleware import MemoryMiddleware, SkillsMiddleware
+from langchain.agents.middleware import ToolRetryMiddleware
+from langchain.agents.middleware.types import AgentMiddleware
+
+from msagent.agents.local_context import ensure_local_context_prompt
+from msagent.core.constants import CONFIG_CONVERSATION_HISTORY_DIR
+from msagent.llms.factory import LLMFactory
+from msagent.middlewares.tool_result_eviction import ToolResultEvictionMiddleware
+from msagent.tools.catalog import fetch_skills, fetch_tools, get_skill, get_tool, run_tool
+from msagent.tools.factory import ToolFactory
+from msagent.tools.web_search import web_search
+from msagent.utils.deepagents_compat import patch_deepagents_windows_absolute_paths
 
 if TYPE_CHECKING:
     from langchain_core.tools import BaseTool
     from langgraph.checkpoint.base import BaseCheckpointSaver
     from langgraph.graph.state import CompiledStateGraph
 
-    from msagent.agents import ContextSchemaType, StateSchemaType
-    from msagent.configs import (
-        AgentConfig,
-        SkillsConfig,
-        SubAgentConfig,
-        ToolsConfig,
-    )
-    from msagent.llms.factory import LLMFactory
-    from msagent.mcp.client import MCPClient
-    from msagent.sandboxes import SandboxBackend
-    from msagent.skills.factory import Skill, SkillFactory
-    from msagent.tools.factory import ToolFactory
-
-logger = get_logger(__name__)
+    from msagent.configs import AgentConfig, LLMConfig
 
 
-@dataclass
-class ToolResources:
-    impl: dict[str, BaseTool]
-    mcp: dict[str, BaseTool]
-    internal: dict[str, BaseTool]
-    impl_module_map: dict[str, str]
-    mcp_module_map: dict[str, str]
-    internal_module_map: dict[str, str]
+logger = logging.getLogger(__name__)
 
 
-@dataclass
-class SkillResources:
-    skill_dict: dict[str, Skill]
-    module_map: dict[str, str]
+class _ToolPatternFilterMiddleware(AgentMiddleware[Any, Any, Any]):
+    """Filter tool list at model-call time so deepagents defaults are constrained too."""
 
+    def __init__(
+        self,
+        *,
+        filter_tools: Callable[[list[Any]], list[Any]],
+    ) -> None:
+        self._filter_tools = filter_tools
 
-@dataclass
-class ToolSelection:
-    llm_tools: list[BaseTool]
-    internal_tools: list[BaseTool]
-    tools_in_catalog: list[BaseTool]
+    def wrap_model_call(self, request, handler):
+        filtered_tools = self._filter_tools(list(getattr(request, "tools", []) or []))
+        request = request.override(tools=filtered_tools)
+        return handler(request)
 
-
-@dataclass
-class SkillSelection:
-    skills: list[Skill]
-    prompt_suffix: str
-    tools: list[BaseTool]
+    async def awrap_model_call(self, request, handler):
+        filtered_tools = self._filter_tools(list(getattr(request, "tools", []) or []))
+        request = request.override(tools=filtered_tools)
+        return await handler(request)
 
 
 class AgentFactory:
+    """Factory for creating deepagents-based graphs."""
+
     def __init__(
         self,
-        tool_factory: ToolFactory,
-        llm_factory: LLMFactory,
-        skill_factory: SkillFactory,
-    ):
-        self.tool_factory = tool_factory
-        self.llm_factory = llm_factory
-        self.skill_factory = skill_factory
-
-    @staticmethod
-    def _parse_tool_references(
-        tool_refs: list[str] | None,
-    ) -> tuple[list[str] | None, list[str] | None, list[str] | None]:
-        if not tool_refs:
-            return None, None, None
-
-        impl_patterns = []
-        mcp_patterns = []
-        internal_patterns = []
-
-        for ref in tool_refs:
-            is_negative = ref.startswith("!")
-            clean_ref = ref[1:] if is_negative else ref
-
-            parts = clean_ref.split(":")
-            if len(parts) != 3:
-                logger.warning(f"Invalid tool reference format: {ref}")
-                continue
-
-            tool_type, module_pattern, tool_pattern = parts
-            pattern = f"{module_pattern}:{tool_pattern}"
-            if is_negative:
-                pattern = f"!{pattern}"
-
-            if tool_type == TOOL_CATEGORY_IMPL:
-                impl_patterns.append(pattern)
-            elif tool_type == TOOL_CATEGORY_MCP:
-                mcp_patterns.append(pattern)
-            elif tool_type == TOOL_CATEGORY_INTERNAL:
-                internal_patterns.append(pattern)
-            else:
-                logger.warning(f"Unknown tool type: {tool_type}")
-
-        return (
-            impl_patterns or None,
-            mcp_patterns or None,
-            internal_patterns or None,
-        )
-
-    @staticmethod
-    def _build_tool_dict(tools: list[BaseTool]) -> dict[str, BaseTool]:
-        return {tool.name: tool for tool in tools}
-
-    def _resolve_tools(
-        self,
-        tools_config: ToolsConfig | None,
-        tool_resources: ToolResources,
-        extra_llm_tools: list[BaseTool] | None = None,
         *,
-        impl_first: bool = False,
-    ) -> ToolSelection:
-        tool_patterns = tools_config.patterns if tools_config else None
-        use_catalog = tools_config.use_catalog if tools_config else False
-
-        impl_patterns, mcp_patterns, internal_patterns = self._parse_tool_references(
-            tool_patterns
-        )
-
-        ordered_llm_tools = (
-            [
-                *self._filter_tools(
-                    tool_resources.impl, impl_patterns, tool_resources.impl_module_map
-                ),
-                *self._filter_mcp_tools(
-                    tool_resources.mcp, mcp_patterns, tool_resources.mcp_module_map
-                ),
-            ]
-            if impl_first
-            else [
-                *self._filter_mcp_tools(
-                    tool_resources.mcp, mcp_patterns, tool_resources.mcp_module_map
-                ),
-                *self._filter_tools(
-                    tool_resources.impl, impl_patterns, tool_resources.impl_module_map
-                ),
-            ]
-        )
-
-        llm_tools = ordered_llm_tools
-        tools_in_catalog: list[BaseTool] = []
-        if use_catalog:
-            tools_in_catalog = llm_tools
-            llm_tools = [*self.tool_factory.get_catalog_tools()]
-
-        if extra_llm_tools:
-            llm_tools = [*llm_tools, *extra_llm_tools]
-
-        internal_tools = self._filter_tools(
-            tool_resources.internal,
-            internal_patterns,
-            tool_resources.internal_module_map,
-        )
-
-        return ToolSelection(
-            llm_tools=llm_tools,
-            internal_tools=internal_tools,
-            tools_in_catalog=tools_in_catalog,
-        )
-
-    @staticmethod
-    def _filter_tools(
-        tool_dict: dict[str, BaseTool],
-        patterns: list[str] | None,
-        module_map: dict[str, str],
-    ) -> list[BaseTool]:
-        """Filter tools by pattern with wildcard and negative pattern support."""
-        if not patterns:
-            return []
-
-        return [
-            tool
-            for name, tool in tool_dict.items()
-            if matches_patterns(
-                patterns, two_part_matcher(name, module_map.get(name, ""))
-            )
-        ]
-
-    @staticmethod
-    def _filter_mcp_tools(
-        tool_dict: dict[str, BaseTool],
-        patterns: list[str] | None,
-        module_map: dict[str, str],
-    ) -> list[BaseTool]:
-        """Filter MCP tools by pattern. Handles server:name prefixed format."""
-        if not patterns:
-            return []
-
-        def get_original_name(prefixed_name: str) -> str:
-            """Extract original tool name from server__name format."""
-            parts = prefixed_name.split("__", 1)
-            return parts[1] if len(parts) == 2 else prefixed_name
-
-        return [
-            tool
-            for name, tool in tool_dict.items()
-            if matches_patterns(
-                patterns,
-                two_part_matcher(get_original_name(name), module_map.get(name, "")),
-            )
-        ]
-
-    @staticmethod
-    def _parse_skill_references(skill_refs: list[str] | None) -> list[str] | None:
-        if not skill_refs:
-            return None
-
-        skill_patterns = []
-        for ref in skill_refs:
-            parts = ref.split(":")
-            if len(parts) != 2:
-                logger.warning(f"Invalid skill reference format: {ref}")
-                continue
-
-            category_pattern, skill_pattern = parts
-            skill_patterns.append(f"{category_pattern}:{skill_pattern}")
-
-        return skill_patterns or None
-
-    @staticmethod
-    def _build_skill_dict(
-        skills: dict[str, dict[str, Skill]],
-    ) -> dict[str, Skill]:
-        skill_dict = {}
-        for category, category_skills in skills.items():
-            for name, skill in category_skills.items():
-                # Use composite key to handle same skill name in different categories
-                composite_key = f"{category}:{name}"
-                skill_dict[composite_key] = skill
-        return skill_dict
-
-    @staticmethod
-    def _filter_skills(
-        skill_dict: dict[str, Skill],
-        patterns: list[str] | None,
-        module_map: dict[str, str],
-    ) -> list[Skill]:
-        """Filter skills by pattern with wildcard and negative pattern support."""
-        if not patterns:
-            return []
-
-        def get_skill_name(key: str) -> str:
-            return key.split(":", 1)[1] if ":" in key else key
-
-        return [
-            skill
-            for key, skill in skill_dict.items()
-            if matches_patterns(
-                patterns, two_part_matcher(get_skill_name(key), module_map.get(key, ""))
-            )
-        ]
-
-    @staticmethod
-    def _matches_any_pattern(
-        tool_name: str, module_name: str, category: str, patterns: list[str]
-    ) -> bool:
-        """Check if tool matches patterns with negative pattern support."""
-
-        def warn_invalid(p: str) -> None:
-            logger.warning(
-                f"Invalid pattern '{p}': expected format 'category:module:name'"
-            )
-
-        return matches_patterns(
-            patterns, three_part_matcher(tool_name, module_name, category, warn_invalid)
-        )
-
-    def _resolve_skills(
-        self,
-        skills_config: SkillsConfig | None,
-        skill_resources: SkillResources,
-    ) -> SkillSelection:
-        skill_patterns = skills_config.patterns if skills_config else None
-        use_catalog = skills_config.use_catalog if skills_config else False
-
-        parsed_patterns = self._parse_skill_references(skill_patterns)
-        skills = self._filter_skills(
-            skill_resources.skill_dict, parsed_patterns, skill_resources.module_map
-        )
-
-        prompt_suffix = ""
-        tools: list[BaseTool] = []
-        if skills:
-            prompt_suffix = self._build_skills_text(skills, use_catalog)
-            tools = self._get_skill_tools(use_catalog)
-
-        return SkillSelection(skills=skills, prompt_suffix=prompt_suffix, tools=tools)
-
-    def _get_skill_tools(self, use_catalog: bool) -> list[BaseTool]:
-        """Get skill-related tools based on catalog mode."""
-        if use_catalog:
-            return self.tool_factory.get_skill_catalog_tools()
-        return [get_skill]
-
-    @staticmethod
-    def _build_skills_text(skills: list[Skill], use_catalog: bool = False) -> str:
-        """Build skills documentation text for prompt injection."""
-        text = "\n\n# Available Skills\n\n"
-
-        if use_catalog:
-            text += "Skills are available to help with many types of tasks including coding, debugging, testing, documentation, analysis, and more. "
-            text += "Use `fetch_skills` to search for relevant skills or to browse all available skills. "
-            text += "Check for applicable skills at the start of tasks - they can significantly improve your responses.\n"
-        else:
-            text += "When users ask you to perform tasks, check if any of the available skills below can help complete the task more effectively.\n"
-            text += "Mandatory skill workflow:\n"
-            text += "1. Always call `get_skill(name, category)` before applying a skill.\n"
-            text += "2. If the skill contains files under `scripts/`, prefer running those scripts over recreating logic manually.\n"
-            text += "3. Use script outputs as primary evidence when producing conclusions.\n\n"
-            for skill in skills:
-                script_paths = skill.get_script_relative_paths(limit=8)
-                scripts_text = (
-                    ", ".join(f"`{p}`" for p in script_paths)
-                    if script_paths
-                    else "none"
-                )
-                text += (
-                    f"- **{skill.display_name}**: {skill.description} "
-                    f"(path: `{skill.root_dir.as_posix()}`, scripts: {scripts_text})\n"
-                )
-
-        return text
-
-    def _create_subagent(
-        self,
-        subagent_config: SubAgentConfig,
-        tool_resources: ToolResources,
-        skill_resources: SkillResources,
-    ) -> SubAgent:
-        tool_selection = self._resolve_tools(
-            subagent_config.tools,
-            tool_resources,
-            extra_llm_tools=[think],
-            impl_first=True,
-        )
-
-        skill_selection = self._resolve_skills(
-            subagent_config.skills,
-            skill_resources,
-        )
-
-        sub_prompt_template = cast(str, subagent_config.prompt)
-        if skill_selection.prompt_suffix:
-            sub_prompt_template = (
-                f"{sub_prompt_template}{skill_selection.prompt_suffix}"
-            )
-
-        sub_llm_tools = [*tool_selection.llm_tools, *skill_selection.tools]
-
-        return SubAgent(
-            config=subagent_config,
-            prompt=sub_prompt_template,
-            tools=sub_llm_tools,
-            internal_tools=tool_selection.internal_tools,
-            tools_in_catalog=tool_selection.tools_in_catalog,
-            skills=skill_selection.skills,
-        )
+        llm_factory: LLMFactory | None = None,
+        tool_factory: ToolFactory | None = None,
+    ) -> None:
+        self.llm_factory = llm_factory or LLMFactory()
+        self.tool_factory = tool_factory or ToolFactory()
 
     async def create(
         self,
         config: AgentConfig,
-        state_schema: StateSchemaType,
-        context_schema: ContextSchemaType | None,
-        mcp_client: MCPClient,
-        skills_dir: Path | list[Path],
+        working_dir: Path | None = None,
+        context_schema: type[Any] | None = None,
+        mcp_client: Any | None = None,
+        skills_dir: Path | list[Path] | None = None,
         checkpointer: BaseCheckpointSaver | None = None,
         llm_config: LLMConfig | None = None,
-        sandbox_bindings: list[SandboxBinding] | None = None,
+        sandbox_bindings: list[Any] | None = None,
+        interrupt_on: dict[str, bool | dict[str, Any]] | None = None,
     ) -> CompiledStateGraph:
-        """Create a compiled graph with optional checkpointer support.
+        del sandbox_bindings
 
-        Args:
-            config: Agent configuration including checkpointer settings
-            state_schema: State schema for the graph
-            context_schema: Optional context schema for the graph
-            mcp_client: MCP client for tool loading
-            skills_dir: Skills directory path
-            checkpointer: Optional checkpoint saver
-            llm_config: Optional LLM configuration to override the one in config
-            sandbox_bindings: Optional sandbox pattern bindings
+        patch_deepagents_windows_absolute_paths()
+        working_dir = (working_dir or Path.cwd()).resolve()
+        resolved_llm = llm_config or config.llm
+        retry_cfg = getattr(config, "retry", None)
+        model_retry_cfg = getattr(retry_cfg, "model", None) if retry_cfg is not None else None
+        tool_retry_cfg = getattr(retry_cfg, "tool", None) if retry_cfg is not None else None
+        llm_max_retries: int | None = None
+        llm_timeout_seconds: float | None = None
+        if retry_cfg is not None and retry_cfg.enabled:
+            model_enabled = (
+                getattr(model_retry_cfg, "enabled", True)
+                if model_retry_cfg is not None
+                else True
+            )
+            if model_enabled:
+                llm_max_retries = int(getattr(model_retry_cfg, "max_retries", 0))
+                llm_timeout_seconds = (
+                    float(getattr(model_retry_cfg, "timeout"))
+                    if model_retry_cfg is not None
+                    and getattr(model_retry_cfg, "timeout", None) is not None
+                    else None
+                )
+            else:
+                llm_max_retries = 0
+        elif retry_cfg is not None and not retry_cfg.enabled:
+            llm_max_retries = 0
 
-        Returns:
-            CompiledStateGraph: The state graph
-        """
-
-        tool_resources = ToolResources(
-            impl=self._build_tool_dict(self.tool_factory.get_impl_tools()),
-            mcp=self._build_tool_dict(await mcp_client.tools()),
-            internal=self._build_tool_dict(self.tool_factory.get_internal_tools()),
-            impl_module_map=self.tool_factory.get_impl_module_map(),
-            mcp_module_map=mcp_client.module_map,
-            internal_module_map=self.tool_factory.get_internal_module_map(),
+        model = self.llm_factory.create(
+            resolved_llm,
+            max_retries=llm_max_retries,
+            timeout_seconds=llm_timeout_seconds,
         )
 
-        skills = await self.skill_factory.load_skills(skills_dir)
+        runtime_tools: list[BaseTool] = [
+            fetch_tools,
+            get_tool,
+            run_tool,
+            fetch_skills,
+            get_skill,
+            web_search,
+        ]
+        mcp_tools: list[BaseTool] = []
+        mcp_module_map: dict[str, str] = {}
+        if mcp_client is not None:
+            loaded = await mcp_client.tools()
+            mcp_tools = list(loaded or [])
+            mcp_module_map = dict(getattr(mcp_client, "module_map", {}) or {})
 
-        skill_resources = SkillResources(
-            skill_dict=self._build_skill_dict(skills),
-            module_map=self.skill_factory.get_module_map(),
+        tool_patterns = list(config.tools.patterns or []) if config.tools is not None else []
+        mcp_servers = self._collect_mcp_servers(mcp_client, mcp_module_map)
+        positive_patterns, negative_patterns = self._compile_tool_patterns(tool_patterns)
+
+        if config.tools is not None:
+            runtime_tools, mcp_tools = self._filter_tools_by_patterns(
+                runtime_tools=runtime_tools,
+                mcp_tools=mcp_tools,
+                positive_patterns=positive_patterns,
+                negative_patterns=negative_patterns,
+                mcp_module_map=mcp_module_map,
+                mcp_servers=mcp_servers,
+            )
+
+        tool_timeout = None
+        if config.tools is not None:
+            tool_timeout = config.tools.execution_timeout_seconds
+        if tool_timeout:
+            mcp_tools = self.tool_factory.wrap_tools_with_timeout(
+                mcp_tools,
+                timeout_seconds=float(tool_timeout),
+                source="agent",
+            )
+            runtime_tools = self.tool_factory.wrap_tools_with_timeout(
+                runtime_tools,
+                timeout_seconds=float(tool_timeout),
+                source="agent",
+            )
+
+        all_tools = [*runtime_tools, *mcp_tools]
+
+        skills_sources = self._resolve_existing_paths(skills_dir)
+        memory_sources = self._ensure_memory_file(working_dir)
+        enable_skills_middleware = self._should_enable_skills_middleware(
+            config=config,
+            skills_sources=skills_sources,
         )
 
-        tool_selection = self._resolve_tools(config.tools, tool_resources)
-        skill_selection = self._resolve_skills(config.skills, skill_resources)
+        def _filter_request_tools(tools: list[BaseTool]) -> list[BaseTool]:
+            return self._filter_tool_objects_by_patterns(
+                tools=tools,
+                positive_patterns=positive_patterns,
+                negative_patterns=negative_patterns,
+                mcp_module_map=mcp_module_map,
+                mcp_servers=mcp_servers,
+            )
 
-        # Build tool sandbox map from bindings
-        tool_sandbox_map: dict[str, SandboxBackend | None] = {}
-        if sandbox_bindings:
-            # Match impl and internal tools against patterns
-            impl_and_internal = {
-                **{
-                    name: tool_resources.impl_module_map.get(name, "")
-                    for name in tool_resources.impl.keys()
-                },
-                **{
-                    name: tool_resources.internal_module_map.get(name, "")
-                    for name in tool_resources.internal.keys()
-                },
+        middleware: list[AgentMiddleware[Any, Any, Any]] = []
+        agent_backend = self._build_composite_backend(working_dir)
+        metadata_backend = FilesystemBackend(virtual_mode=False)
+        if memory_sources:
+            middleware.append(
+                MemoryMiddleware(
+                    backend=metadata_backend,
+                    sources=memory_sources,
+                )
+            )
+        if enable_skills_middleware:
+            middleware.append(
+                SkillsMiddleware(
+                    backend=metadata_backend,
+                    sources=skills_sources,
+                )
+            )
+        tool_output_max_tokens = (
+            int(getattr(config.tools, "output_max_tokens", 0))
+            if config.tools is not None
+            and getattr(config.tools, "output_max_tokens", None) is not None
+            else None
+        )
+        if tool_output_max_tokens is not None and tool_output_max_tokens > 0:
+            middleware.append(
+                ToolResultEvictionMiddleware(
+                    backend=agent_backend,
+                    tool_token_limit_before_evict=tool_output_max_tokens,
+                )
+            )
+
+        raw_system_prompt = config.prompt
+        if isinstance(raw_system_prompt, list):
+            raw_system_prompt = "\n\n".join(str(item) for item in raw_system_prompt)
+        else:
+            raw_system_prompt = str(raw_system_prompt)
+        system_prompt = ensure_local_context_prompt(raw_system_prompt)
+        kwargs: dict[str, Any] = {
+            "model": model,
+            "tools": all_tools,
+            "system_prompt": system_prompt,
+            "backend": agent_backend,
+            "checkpointer": checkpointer,
+            "name": config.name,
+            "middleware": middleware,
+        }
+        if interrupt_on:
+            kwargs["interrupt_on"] = interrupt_on
+        if (
+            retry_cfg is not None
+            and retry_cfg.enabled
+            and (getattr(tool_retry_cfg, "enabled", True) if tool_retry_cfg is not None else True)
+            and int(getattr(tool_retry_cfg, "max_retries", 0)) > 0
+        ):
+            tool_names = (
+                list(getattr(tool_retry_cfg, "tools"))
+                if tool_retry_cfg is not None
+                and getattr(tool_retry_cfg, "tools", None) is not None
+                else None
+            )
+            retry_on = self._resolve_retry_on_exceptions(
+                list(getattr(tool_retry_cfg, "retry_on"))
+                if tool_retry_cfg is not None
+                and getattr(tool_retry_cfg, "retry_on", None) is not None
+                else []
+            )
+            tool_retry_kwargs: dict[str, Any] = {
+                "max_retries": int(getattr(tool_retry_cfg, "max_retries")),
+                "tools": tool_names,
+                "on_failure": getattr(tool_retry_cfg, "on_failure", "continue"),
+                "backoff_factor": float(
+                    getattr(tool_retry_cfg, "backoff_factor", 2.0)
+                ),
+                "initial_delay": float(getattr(tool_retry_cfg, "initial_delay", 1.0)),
+                "max_delay": float(getattr(tool_retry_cfg, "max_delay", 60.0)),
+                "jitter": bool(getattr(tool_retry_cfg, "jitter", True)),
             }
+            if retry_on is not None:
+                tool_retry_kwargs["retry_on"] = retry_on
+            middleware.append(
+                ToolRetryMiddleware(**tool_retry_kwargs)
+            )
 
-            for tool_name, module in impl_and_internal.items():
-                matched_backends: list[SandboxBackend] = []
-                has_bypass = False
-                category = (
-                    TOOL_CATEGORY_IMPL
-                    if tool_name in tool_resources.impl
-                    else TOOL_CATEGORY_INTERNAL
-                )
+        middleware.append(_ToolPatternFilterMiddleware(filter_tools=_filter_request_tools))
+        if context_schema is not None:
+            kwargs["context_schema"] = context_schema
 
-                for binding in sandbox_bindings:
-                    if self._matches_any_pattern(
-                        tool_name, module, category, binding.patterns
-                    ):
-                        if binding.backend is None:
-                            has_bypass = True
-                            break
-                        matched_backends.append(binding.backend)
+        graph = create_deep_agent(**kwargs)
 
-                if has_bypass:
-                    tool_sandbox_map[tool_name] = None
-                elif len(matched_backends) == 1:
-                    tool_sandbox_map[tool_name] = matched_backends[0]
-                elif len(matched_backends) > 1:
-                    logger.warning(
-                        f"Tool '{tool_name}' matches multiple sandbox profiles, blocking"
-                    )
-                    # Don't add to map = blocked
+        # Keep CLI-compatible metadata caches for /tools and runtime context.
+        setattr(graph, "_agent_backend", agent_backend)
+        setattr(graph, "_llm_tools", all_tools)
+        setattr(graph, "_tools_in_catalog", list(all_tools))
+        return graph
 
-            # MCP tools: None (already sandboxed at MCP factory level)
-            for tool_name in tool_resources.mcp.keys():
-                tool_sandbox_map[tool_name] = None
+    def _filter_tools_by_patterns(
+        self,
+        *,
+        runtime_tools: list[BaseTool],
+        mcp_tools: list[BaseTool],
+        positive_patterns: list[tuple[str, str, str]],
+        negative_patterns: list[tuple[str, str, str]],
+        mcp_module_map: dict[str, str],
+        mcp_servers: set[str],
+    ) -> tuple[list[BaseTool], list[BaseTool]]:
+        filtered_runtime: list[BaseTool] = []
+        for tool in runtime_tools:
+            tool_name = self._tool_name(tool)
+            modules = self._runtime_modules_for_tool(tool_name)
+            names = self._runtime_names_for_tool(tool_name)
+            if self._tool_matches_patterns(
+                positive_patterns=positive_patterns,
+                negative_patterns=negative_patterns,
+                category="impl",
+                modules=modules,
+                names=names,
+            ):
+                filtered_runtime.append(tool)
 
-            # Catalog/skill tools: None (meta-tools, bypass)
-            for tool in self.tool_factory.get_catalog_tools():
-                tool_sandbox_map[tool.name] = None
-            for tool in self.tool_factory.get_skill_catalog_tools():
-                tool_sandbox_map[tool.name] = None
+        filtered_mcp: list[BaseTool] = []
+        for tool in mcp_tools:
+            tool_name = self._tool_name(tool)
+            module, raw_name = self._resolve_mcp_tool_identity(
+                tool_name=tool_name,
+                mcp_module_map=mcp_module_map,
+                mcp_servers=mcp_servers,
+            )
+            names = {tool_name}
+            if raw_name:
+                names.add(raw_name)
+            if self._tool_matches_patterns(
+                positive_patterns=positive_patterns,
+                negative_patterns=negative_patterns,
+                category="mcp",
+                modules={module},
+                names=names,
+            ):
+                filtered_mcp.append(tool)
 
-        resolved_subagents = None
-        if config.subagents:
-            tasks = [
-                asyncio.to_thread(
-                    self._create_subagent,
-                    sc,
-                    tool_resources,
-                    skill_resources,
-                )
-                for sc in config.subagents
-            ]
-            resolved_subagents = await asyncio.gather(*tasks)
+        return filtered_runtime, filtered_mcp
 
-        prompt_template = cast(str, config.prompt)
-        if "{user_memory}" not in prompt_template:
-            prompt_template = f"{prompt_template}\n\n{{user_memory}}"
+    def _filter_tool_objects_by_patterns(
+        self,
+        *,
+        tools: list[BaseTool],
+        positive_patterns: list[tuple[str, str, str]],
+        negative_patterns: list[tuple[str, str, str]],
+        mcp_module_map: dict[str, str],
+        mcp_servers: set[str],
+    ) -> list[BaseTool]:
+        filtered: list[BaseTool] = []
+        for tool in tools:
+            tool_name = self._tool_name(tool)
+            module, raw_name = self._resolve_mcp_tool_identity(
+                tool_name=tool_name,
+                mcp_module_map=mcp_module_map,
+                mcp_servers=mcp_servers,
+            )
 
-        if skill_selection.prompt_suffix:
-            prompt_template = f"{prompt_template}{skill_selection.prompt_suffix}"
+            if module != "unknown":
+                names = {tool_name}
+                if raw_name:
+                    names.add(raw_name)
+                if self._tool_matches_patterns(
+                    positive_patterns=positive_patterns,
+                    negative_patterns=negative_patterns,
+                    category="mcp",
+                    modules={module},
+                    names=names,
+                ):
+                    filtered.append(tool)
+                continue
 
-        llm_tools = [*tool_selection.llm_tools, *skill_selection.tools]
-        internal_tools = tool_selection.internal_tools
-        tools_in_catalog = tool_selection.tools_in_catalog
+            if self._tool_matches_patterns(
+                positive_patterns=positive_patterns,
+                negative_patterns=negative_patterns,
+                category="impl",
+                modules=self._runtime_modules_for_tool(tool_name),
+                names=self._runtime_names_for_tool(tool_name),
+            ):
+                filtered.append(tool)
+        return filtered
 
-        agent = create_deep_agent(
-            name=config.name,
-            tools=llm_tools,
-            internal_tools=internal_tools,
-            llm_config=llm_config or cast(LLMConfig, config.llm),
-            prompt=prompt_template,
-            state_schema=state_schema,
-            context_schema=context_schema,
-            checkpointer=checkpointer,
-            subagents=resolved_subagents,
-            model_provider=self.llm_factory.create,
-            tool_sandbox_map=tool_sandbox_map,
-            retry_config=config.retry,
+    @staticmethod
+    def _tool_name(tool: BaseTool) -> str:
+        return str(getattr(tool, "name", "") or "")
+
+    @staticmethod
+    def _runtime_modules_for_tool(tool_name: str) -> set[str]:
+        del tool_name
+        return {"deepagents"}
+
+    @staticmethod
+    def _runtime_names_for_tool(tool_name: str) -> set[str]:
+        return {tool_name}
+
+    @staticmethod
+    def _collect_mcp_servers(
+        mcp_client: Any | None,
+        mcp_module_map: dict[str, str],
+    ) -> set[str]:
+        servers = {
+            module_ref.split(":", 1)[1]
+            for module_ref in mcp_module_map.values()
+            if module_ref.startswith("mcp:") and ":" in module_ref
+        }
+        config = getattr(mcp_client, "config", None)
+        config_servers = getattr(config, "servers", None)
+        if isinstance(config_servers, dict):
+            servers.update(str(name) for name in config_servers.keys())
+        return servers
+
+    def _resolve_mcp_tool_identity(
+        self,
+        *,
+        tool_name: str,
+        mcp_module_map: dict[str, str],
+        mcp_servers: set[str],
+    ) -> tuple[str, str]:
+        module_ref = mcp_module_map.get(tool_name, "")
+        module = ""
+        if module_ref.startswith("mcp:") and ":" in module_ref:
+            module = module_ref.split(":", 1)[1]
+
+        if not module:
+            parsed_module, parsed_name = self._parse_mcp_prefixed_tool_name(
+                tool_name=tool_name,
+                mcp_servers=mcp_servers,
+            )
+            if parsed_module:
+                return parsed_module, parsed_name
+            return "unknown", tool_name
+
+        parsed_module, parsed_name = self._parse_mcp_prefixed_tool_name(
+            tool_name=tool_name,
+            mcp_servers={module},
         )
-        agent._llm_tools = llm_tools + internal_tools  # type: ignore
-        agent._tools_in_catalog = tools_in_catalog  # type: ignore
-        agent._agent_skills = skill_selection.skills  # type: ignore
-        return agent
+        if parsed_module:
+            return module, parsed_name
+        return module, tool_name
+
+    @staticmethod
+    def _parse_mcp_prefixed_tool_name(
+        *,
+        tool_name: str,
+        mcp_servers: set[str],
+    ) -> tuple[str | None, str]:
+        for server in sorted(mcp_servers, key=len, reverse=True):
+            for separator in ("__", "_"):
+                prefix = f"{server}{separator}"
+                if tool_name.startswith(prefix):
+                    return server, tool_name[len(prefix) :]
+        return None, tool_name
+
+    @staticmethod
+    def _compile_tool_patterns(
+        patterns: list[str],
+    ) -> tuple[list[tuple[str, str, str]], list[tuple[str, str, str]]]:
+        positives: list[tuple[str, str, str]] = []
+        negatives: list[tuple[str, str, str]] = []
+
+        for raw_pattern in patterns:
+            if not raw_pattern:
+                continue
+            is_negative = raw_pattern.startswith("!")
+            pattern = raw_pattern[1:] if is_negative else raw_pattern
+            parts = pattern.split(":")
+            if len(parts) != 3:
+                logger.warning(
+                    "Ignoring invalid tool pattern '%s'. Expected format 'category:module:name'.",
+                    raw_pattern,
+                )
+                continue
+            entry = (parts[0], parts[1], parts[2])
+            if is_negative:
+                negatives.append(entry)
+            else:
+                positives.append(entry)
+        return positives, negatives
+
+    @staticmethod
+    def _tool_matches_patterns(
+        *,
+        positive_patterns: list[tuple[str, str, str]],
+        negative_patterns: list[tuple[str, str, str]],
+        category: str,
+        modules: set[str],
+        names: set[str],
+    ) -> bool:
+        if not positive_patterns:
+            return False
+
+        def _match(pattern: tuple[str, str, str]) -> bool:
+            category_p, module_p, name_p = pattern
+            if not fnmatch(category, category_p):
+                return False
+            if not any(fnmatch(module, module_p) for module in modules):
+                return False
+            return any(fnmatch(name, name_p) for name in names)
+
+        return any(_match(p) for p in positive_patterns) and not any(
+            _match(p) for p in negative_patterns
+        )
+
+    @staticmethod
+    def _resolve_existing_paths(paths: Path | list[Path] | None) -> list[str]:
+        if paths is None:
+            return []
+        candidates = [paths] if isinstance(paths, Path) else list(paths)
+        return [str(path) for path in candidates if path.exists()]
+
+    @staticmethod
+    def _should_enable_skills_middleware(
+        *,
+        config: AgentConfig,
+        skills_sources: list[str],
+    ) -> bool:
+        if not skills_sources:
+            return False
+        skills_config = getattr(config, "skills", None)
+        if skills_config is None:
+            return False
+        patterns = list(getattr(skills_config, "patterns", []) or [])
+        return any(pattern and not pattern.startswith("!") for pattern in patterns)
+
+    @staticmethod
+    def _ensure_memory_file(working_dir: Path) -> list[str]:
+        from msagent.tools.internal.memory import ensure_memory_file
+
+        memory_file = ensure_memory_file(working_dir)
+        return [str(memory_file)]
+
+    @staticmethod
+    def _build_composite_backend(working_dir: Path) -> CompositeBackend:
+        local_backend = LocalShellBackend(root_dir=str(working_dir))
+        large_results_backend = FilesystemBackend(
+            root_dir=tempfile.mkdtemp(prefix="msagent_large_tool_results_"),
+            virtual_mode=True,
+        )
+        conversation_history_backend = FilesystemBackend(
+            root_dir=working_dir / CONFIG_CONVERSATION_HISTORY_DIR,
+            virtual_mode=True,
+        )
+        return CompositeBackend(
+            default=local_backend,
+            routes={
+                "/large_tool_results/": large_results_backend,
+                "/conversation_history/": conversation_history_backend,
+            },
+        )
+
+    @staticmethod
+    def _build_skills_text(skills: list[Any], use_catalog: bool) -> str:
+        if not skills:
+            return ""
+
+        lines = [
+            "Available skills:",
+            "Always call `get_skill(name, category)` before using a skill.",
+        ]
+        for skill in skills:
+            scripts: list[str] = getattr(
+                skill, "get_script_relative_paths", lambda: []
+            )()
+            scripts_text = (
+                f" (scripts: {', '.join(f'`{p}`' for p in scripts)})"
+                if scripts
+                else ""
+            )
+            lines.append(
+                f"- {getattr(skill, 'display_name', getattr(skill, 'name', 'unknown'))}: "
+                f"{getattr(skill, 'description', '')}{scripts_text}"
+            )
+
+        if not use_catalog:
+            lines.append(
+                "When scripts are present under `scripts/`, prefer running those scripts."
+            )
+        return "\n".join(lines)
+
+    @staticmethod
+    def _resolve_retry_on_exceptions(
+        names: list[str],
+    ) -> tuple[type[Exception], ...] | None:
+        if not names:
+            return None
+
+        resolved: list[type[Exception]] = []
+        for raw_name in names:
+            name = str(raw_name).strip()
+            if not name:
+                continue
+
+            exc_type: type[Exception] | None = None
+            if "." in name:
+                module_name, _, attr_name = name.rpartition(".")
+                try:
+                    module = import_module(module_name)
+                    candidate = getattr(module, attr_name, None)
+                except Exception:
+                    candidate = None
+            else:
+                import builtins
+
+                candidate = getattr(builtins, name, None)
+
+            if isinstance(candidate, type) and issubclass(candidate, Exception):
+                exc_type = candidate
+
+            if exc_type is None:
+                logger.warning(
+                    "Ignoring retry.tool.retry_on entry '%s': not a resolvable Exception subclass.",
+                    name,
+                )
+                continue
+
+            resolved.append(exc_type)
+
+        return tuple(resolved) if resolved else None

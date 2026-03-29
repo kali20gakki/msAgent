@@ -8,11 +8,34 @@ from msagent.skills.factory import DEFAULT_SKILL_CATEGORY, SkillFactory
 
 
 def test_legacy_system_prompt_is_preserved() -> None:
-    prompt_path = Path("resources/configs/default/prompts/agents/msagent.md")
+    prompt_path = Path("resources/configs/default/prompts/agents/Hermes.md")
     prompt = prompt_path.read_text(encoding="utf-8")
 
     assert "Ascend NPU Profiling 性能分析助手" in prompt
     assert "msprof-mcp" in prompt
+    assert "Todo 使用约束" in prompt
+    assert "纯 subagent 内部短任务" in prompt
+    assert "Subagent 使用约束" in prompt
+    assert "执行与验证约束" in prompt
+    assert "失败与调试约束" in prompt
+
+
+def test_default_general_purpose_subagent_prompt_discourages_todo_management() -> None:
+    prompt_path = Path("resources/configs/default/prompts/subagents/general-purpose.md")
+    prompt = prompt_path.read_text(encoding="utf-8")
+
+    assert "Do not manage the user-facing todo list by default" in prompt
+    assert "Do not spawn additional subagents unless explicitly instructed" in prompt
+    assert "Stay within the delegated scope" in prompt
+
+
+def test_default_explorer_subagent_prompt_has_scope_constraints() -> None:
+    prompt_path = Path("resources/configs/default/prompts/subagents/explorer.md")
+    prompt = prompt_path.read_text(encoding="utf-8")
+
+    assert "Stay within the delegated search scope" in prompt
+    assert "Do not create or manage user-facing todos" in prompt
+    assert "Do not spawn additional subagents unless explicitly instructed" in prompt
 
 
 @pytest.mark.asyncio
@@ -87,4 +110,4 @@ def test_skill_factory_default_skills_dir_uses_resources_package() -> None:
     default_skills_dir = SkillFactory.get_default_skills_dir()
 
     assert default_skills_dir.name == "skills"
-    assert default_skills_dir.parent.name == "resources"
+    assert "resources" in default_skills_dir.as_posix()

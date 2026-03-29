@@ -2,20 +2,17 @@
 
 from __future__ import annotations
 
-from prompt_toolkit.application import Application
 from prompt_toolkit.formatted_text import FormattedText
 from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.keys import Keys
-from prompt_toolkit.layout import Layout
-from prompt_toolkit.layout.containers import HSplit, Window
 from prompt_toolkit.layout.controls import FormattedTextControl
 
 from msagent.cli.bootstrap.initializer import initializer
 from msagent.cli.theme import console, theme
 from msagent.cli.ui.shared import (
-    create_bottom_toolbar,
+    SelectorState,
     create_instruction,
-    create_prompt_style,
+    create_selector_application,
 )
 from msagent.core.logging import get_logger
 from msagent.core.settings import settings
@@ -73,13 +70,13 @@ class MCPHandler:
             return False
 
         server_names = list(mcp_servers.keys())
-        current_index = 0
+        state = SelectorState()
         modified = False
 
         # Create text control with formatted text
         text_control = FormattedTextControl(
             text=lambda: self._format_server_list(
-                mcp_servers, server_names, current_index
+                mcp_servers, server_names, state.index
             ),
             focusable=True,
             show_cursor=False,
@@ -90,18 +87,16 @@ class MCPHandler:
 
         @kb.add(Keys.Up)
         def _(event):
-            nonlocal current_index
-            current_index = (current_index - 1) % len(server_names)
+            state.move_cyclic(-1, size=len(server_names))
 
         @kb.add(Keys.Down)
         def _(event):
-            nonlocal current_index
-            current_index = (current_index + 1) % len(server_names)
+            state.move_cyclic(1, size=len(server_names))
 
         @kb.add(" ")
         def _(event):
             nonlocal modified
-            server_name = server_names[current_index]
+            server_name = server_names[state.index]
             server_config = mcp_servers[server_name]
             # Toggle enabled state
             server_config.enabled = not server_config.enabled
@@ -117,29 +112,11 @@ class MCPHandler:
 
         # Create application
         context = self.session.context
-        app: Application = Application(
-            layout=Layout(
-                HSplit(
-                    [
-                        *create_instruction("Space: toggle, Enter: save"),
-                        Window(content=text_control),
-                        Window(
-                            height=1,
-                            content=FormattedTextControl(
-                                lambda: create_bottom_toolbar(
-                                    context,
-                                    context.working_dir,
-                                    bash_mode=context.bash_mode,
-                                )
-                            ),
-                        ),
-                    ]
-                )
-            ),
+        app = create_selector_application(
+            context=context,
+            text_control=text_control,
             key_bindings=kb,
-            full_screen=False,
-            style=create_prompt_style(context, bash_mode=context.bash_mode),
-            erase_when_done=True,
+            header_windows=create_instruction("Space: toggle, Enter: save"),
         )
 
         try:

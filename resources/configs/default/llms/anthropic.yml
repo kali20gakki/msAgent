@@ -1,4 +1,4 @@
-- version: 1.0.0
+- version: 0.1.2
   model: claude-sonnet-4-5
   alias: sonnet-4.5
   provider: anthropic
@@ -14,7 +14,7 @@
     check_every_n_seconds: 0.05
     max_bucket_size: 100
 
-- version: 1.0.0
+- version: 0.1.2
   model: claude-haiku-4-5
   alias: haiku-4.5-thinking
   provider: anthropic
@@ -33,7 +33,7 @@
     check_every_n_seconds: 0.05
     max_bucket_size: 100
 
-- version: 1.0.0
+- version: 0.1.2
   model: claude-haiku-4-5
   alias: haiku-4.5
   provider: anthropic

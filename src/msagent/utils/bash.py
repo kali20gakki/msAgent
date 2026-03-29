@@ -4,9 +4,10 @@ import os
 import signal
 import subprocess
 import sys
+from typing import Any
 
 
-def _subprocess_spawn_kwargs() -> dict[str, object]:
+def _subprocess_spawn_kwargs() -> dict[str, Any]:
     """Create platform-specific subprocess kwargs for isolating child processes."""
     if sys.platform == "win32":
         return {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}

@@ -1,217 +1,187 @@
-"""MCP client - orchestrates caching, sessions, loading, and registry."""
+"""MCP client that loads tools from enabled servers in MCPConfig."""
 
 from __future__ import annotations
 
-import asyncio
-from dataclasses import dataclass
-from pathlib import Path
-from typing import TYPE_CHECKING, Any
+import importlib
+from datetime import timedelta
+from types import ModuleType
+from typing import TYPE_CHECKING, Any, cast
 
-from langchain_mcp_adapters.client import MultiServerMCPClient
-from langchain_mcp_adapters.sessions import Connection
-
-from msagent.core.logging import get_logger
-from msagent.mcp.cache import MCPCache
-from msagent.mcp.loader import MCPLoader
-from msagent.mcp.registry import MCPRegistry
-from msagent.mcp.session import MCPSessions
-from msagent.mcp.tool import MCPTool
-from msagent.tools.schema import ToolSchema
+from msagent.configs import MCPConfig, MCPServerConfig, MCPTransport
+from msagent.tools.factory import ToolFactory
 
 if TYPE_CHECKING:
     from langchain_core.tools import BaseTool
 
-logger = get_logger(__name__)
+try:
+    _mcp_client_module: ModuleType | None = importlib.import_module(
+        "langchain_mcp_adapters.client"
+    )
+except ImportError:  # pragma: no cover - fallback for partial local environments
+    _mcp_client_module = None
+
+MultiServerMCPClient: Any = (
+    getattr(_mcp_client_module, "MultiServerMCPClient", None)
+    if _mcp_client_module is not None
+    else None
+)
 
 
-@dataclass
-class RepairConfig:
-    """Repair configuration for a server."""
-
-    command: list[str]
-    timeout: int
-
-
-@dataclass
-class ServerMeta:
-    """Per-server metadata for MCP client."""
-
-    hash: str | None = None
-    stateful: bool = False
-    invoke_timeout: float | None = None
-    repair: RepairConfig | None = None
-
-
-class MCPClient(MultiServerMCPClient):
-    """MCP client with caching, sessions, and tool management."""
+class MCPClient:
+    """Client for managing MCP tool loading from in-memory configuration."""
 
     def __init__(
         self,
-        connections: dict[str, Connection] | None = None,
-        tool_filters: dict[str, dict] | None = None,
-        enable_approval: bool = True,
-        cache_dir: Path | None = None,
-        server_metadata: dict[str, ServerMeta] | None = None,
+        config: MCPConfig,
+        *,
+        default_invoke_timeout: float | None = None,
+        tool_factory: ToolFactory | None = None,
     ) -> None:
-        super().__init__(connections)
-        self._server_metadata = server_metadata or {}
-        self._enable_approval = enable_approval
-        server_hashes = {k: v.hash for k, v in self._server_metadata.items() if v.hash}
-        repairs = {k: v.repair for k, v in self._server_metadata.items() if v.repair}
-        self._cache = MCPCache(cache_dir, server_hashes)
-        self._registry = MCPRegistry(tool_filters)
-        self._sessions = MCPSessions(self.session)
-        self._loader = MCPLoader(
-            lambda s: self.get_tools(server_name=s),
-            self._sessions.get,
-            self._sessions.close,
-            repairs,
-        )
-        self._tools_cache: list[BaseTool] | None = None
-        self._live: dict[str, dict[str, BaseTool]] = {}
-        self._init_lock = asyncio.Lock()
-        self._server_locks: dict[str, asyncio.Lock] = {}
-
-    def _build_metadata(
-        self, server: str, source: dict[str, Any] | None = None
-    ) -> dict[str, Any]:
-        """Build tool metadata with timeout and approval config."""
-        metadata: dict[str, Any] = dict(source) if source else {}
-        meta = self._server_metadata.get(server)
-        if meta and meta.invoke_timeout is not None:
-            metadata["timeout"] = meta.invoke_timeout
-        if self._enable_approval:
-            metadata["approval_config"] = {"name_only": True, "always_approve": False}
-        return metadata
+        self.config = config
+        self.default_invoke_timeout = default_invoke_timeout
+        self.tool_factory = tool_factory or ToolFactory()
+        self._tools: list[BaseTool] = []
+        self._module_map: dict[str, str] = {}
 
     async def tools(self) -> list[BaseTool]:
-        """Get all MCP tools (lazy-loaded proxies)."""
-        if self._tools_cache is not None:
-            return self._tools_cache
-
-        async with self._init_lock:
-            if self._tools_cache is not None:
-                return self._tools_cache
-            self._tools_cache = await self._load_all()
-            return self._tools_cache
-
-    async def _load_all(self) -> list[BaseTool]:
-        tools: list[BaseTool] = []
-        pending: list[str] = []
-        cached_stateful: list[str] = []
-
-        for server in self.connections:
-            cached = await self._cache.load(server)
-            if cached:
-                tools.extend(self._wrap_cached(server, cached))
-                # Track cached stateful servers for warmup
-                meta = self._server_metadata.get(server)
-                if meta and meta.stateful:
-                    cached_stateful.append(server)
-            else:
-                pending.append(server)
-
-        # Warm up sessions for cached stateful servers in parallel
-        if cached_stateful:
-            logger.debug(
-                "Warming up sessions for %d stateful servers", len(cached_stateful)
+        """Load and return tools from all enabled MCP servers."""
+        if MultiServerMCPClient is None:
+            raise RuntimeError(
+                "langchain-mcp-adapters is required but not installed."
             )
-            warmup_results: list[Any] = await asyncio.gather(
-                *(self._sessions.get(s) for s in cached_stateful),
-                return_exceptions=True,
-            )
-            for warmup_server, warmup_result in zip(
-                cached_stateful, warmup_results, strict=True
-            ):
-                if isinstance(warmup_result, BaseException):
-                    logger.warning(
-                        "Failed to warm up session for %s: %s. "
-                        "Session will initialize on first tool invocation.",
-                        warmup_server,
-                        warmup_result,
-                    )
+        connections = self._build_connections()
+        if not connections:
+            self._tools = []
+            self._module_map = {}
+            return []
 
-        if pending:
-            results = await asyncio.gather(
-                *(self._load_server(s) for s in pending),
-                return_exceptions=True,
-            )
-            for server, result in zip(pending, results, strict=True):
-                if isinstance(result, ValueError):
-                    raise result
-                if isinstance(result, BaseException):
-                    logger.error("Failed to load %s: %s", server, result)
-                else:
-                    tools.extend(result)
+        client = MultiServerMCPClient(
+            connections=cast(Any, connections),
+            tool_name_prefix=True,
+        )
+        loaded_tools = await client.get_tools()
 
-        return tools
-
-    def _wrap_cached(self, server: str, schemas: list[ToolSchema]) -> list[BaseTool]:
-        tools: list[BaseTool] = []
-        for schema in schemas:
-            if not self._registry.allowed(schema.name, server):
+        filtered_tools: list[BaseTool] = []
+        module_map: dict[str, str] = {}
+        for tool in loaded_tools:
+            tool_name = getattr(tool, "name", "")
+            server_name, raw_name = self._parse_tool_name(tool_name)
+            if server_name is None:
+                # Unexpected naming format from adapter; keep tool enabled.
+                filtered_tools.append(tool)
+                module_map[tool_name] = "mcp:unknown"
                 continue
-            if not self._registry.register(schema.name, server):
+
+            server = self.config.servers.get(server_name)
+            if server is None or not self._is_tool_enabled(server, tool_name, raw_name):
                 continue
-            metadata = self._build_metadata(server)
-            tools.append(MCPTool(server, schema, self._load_live, metadata))
-        return tools
 
-    async def _load_server(self, server: str) -> list[BaseTool]:
-        """Load tools from MCP server, register, cache, and populate _live."""
-        meta = self._server_metadata.get(server)
-        if meta and meta.stateful:
-            raw = await self._loader.stateful(server)
-        else:
-            raw = await self._loader.stateless(server)
+            timeout = (
+                float(server.invoke_timeout)
+                if server.invoke_timeout is not None
+                else self.default_invoke_timeout
+            )
+            wrapped = self.tool_factory.wrap_tool_with_timeout(
+                tool,
+                timeout_seconds=float(timeout),
+                source=f"mcp:{server_name}",
+            ) if timeout else tool
 
-        filtered = [t for t in raw if self._registry.allowed(t.name, server)]
-        for t in filtered:
-            self._registry.register(t.name, server)
+            filtered_tools.append(wrapped)
+            module_map[getattr(wrapped, "name", tool_name)] = f"mcp:{server_name}"
 
-        self._live[server] = {t.name: t for t in filtered}
-
-        if filtered:
-            schemas = [ToolSchema.from_tool(t) for t in filtered]
-            await self._cache.save(server, schemas)
-            logger.info("MCP server '%s': loaded %d tools", server, len(filtered))
-
-        return [self._wrap_loaded(server, t) for t in filtered]
-
-    def _wrap_loaded(self, server: str, tool: BaseTool) -> MCPTool:
-        schema = ToolSchema.from_tool(tool)
-        metadata = self._build_metadata(server, tool.metadata)
-        proxy = MCPTool(server, schema, self._load_live, metadata)
-        proxy._loaded = tool
-        return proxy
-
-    async def _load_live(self, server: str, name: str) -> BaseTool | None:
-        if server in self._live:
-            return self._live[server].get(name)
-
-        lock = self._server_locks.setdefault(server, asyncio.Lock())
-        async with lock:
-            if server in self._live:
-                return self._live[server].get(name)
-            await self._populate_live(server)
-            return self._live.get(server, {}).get(name)
-
-    async def _populate_live(self, server: str) -> None:
-        """Fetch tools from MCP server and populate _live for invocation."""
-        meta = self._server_metadata.get(server)
-        if meta and meta.stateful:
-            raw = await self._loader.stateful(server)
-        else:
-            raw = await self._loader.stateless(server)
-
-        filtered = [t for t in raw if self._registry.allowed(t.name, server)]
-        self._live[server] = {t.name: t for t in filtered}
-
-    async def close(self) -> None:
-        """Close all stateful sessions."""
-        await self._sessions.close_all()
+        self._tools = filtered_tools
+        self._module_map = module_map
+        return filtered_tools
 
     @property
     def module_map(self) -> dict[str, str]:
-        """Tool name to server name mapping."""
-        return self._registry.module_map
+        return dict(self._module_map)
+
+    async def close(self) -> None:
+        # MultiServerMCPClient uses per-call sessions, no long-lived close required.
+        return None
+
+    def _build_connections(self) -> dict[str, dict[str, Any]]:
+        connections: dict[str, dict[str, Any]] = {}
+        for server_name, server in self.config.servers.items():
+            if not server.enabled:
+                continue
+
+            connection = self._build_connection(server)
+            if connection is None:
+                continue
+            connections[server_name] = connection
+        return connections
+
+    @staticmethod
+    def _build_connection(server: MCPServerConfig) -> dict[str, Any] | None:
+        if server.transport == MCPTransport.STDIO:
+            if not server.command:
+                return None
+            connection: dict[str, Any] = {
+                "transport": "stdio",
+                "command": server.command,
+                "args": list(server.args),
+            }
+            if server.env:
+                connection["env"] = dict(server.env)
+            return connection
+
+        if server.transport == MCPTransport.SSE:
+            if not server.url:
+                return None
+            connection = {"transport": "sse", "url": server.url}
+            if server.headers:
+                connection["headers"] = dict(server.headers)
+            if server.timeout is not None:
+                connection["timeout"] = float(server.timeout)
+            if server.sse_read_timeout is not None:
+                connection["sse_read_timeout"] = float(server.sse_read_timeout)
+            return connection
+
+        if server.transport == MCPTransport.HTTP:
+            if not server.url:
+                return None
+            connection = {"transport": "streamable_http", "url": server.url}
+            if server.headers:
+                connection["headers"] = dict(server.headers)
+            if server.timeout is not None:
+                connection["timeout"] = timedelta(seconds=float(server.timeout))
+            if server.sse_read_timeout is not None:
+                connection["sse_read_timeout"] = timedelta(
+                    seconds=float(server.sse_read_timeout)
+                )
+            return connection
+
+        if server.transport == MCPTransport.WEBSOCKET:
+            if not server.url:
+                return None
+            return {"transport": "websocket", "url": server.url}
+
+        return None
+
+    def _parse_tool_name(self, tool_name: str) -> tuple[str | None, str]:
+        server_names = sorted(self.config.servers.keys(), key=len, reverse=True)
+        for server_name in server_names:
+            for separator in ("__", "_"):
+                prefix = f"{server_name}{separator}"
+                if tool_name.startswith(prefix):
+                    return server_name, tool_name[len(prefix) :]
+        return None, tool_name
+
+    @staticmethod
+    def _is_tool_enabled(
+        server: MCPServerConfig,
+        full_name: str,
+        raw_name: str,
+    ) -> bool:
+        if not server.enabled:
+            return False
+        include = {name.strip() for name in server.include if name.strip()}
+        exclude = {name.strip() for name in server.exclude if name.strip()}
+        if include and full_name not in include and raw_name not in include:
+            return False
+        if full_name in exclude or raw_name in exclude:
+            return False
+        return True

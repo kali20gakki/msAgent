@@ -7,6 +7,7 @@ from prompt_toolkit.formatted_text.utils import fragment_list_to_text
 
 from msagent.cli.core.context import Context
 from msagent.cli.ui.prompt import InteractivePrompt
+from msagent.cli.ui.shared import build_agent_prompt
 from msagent.configs import ApprovalMode
 
 
@@ -49,27 +50,47 @@ def test_bottom_toolbar_hides_usage_without_input_tokens() -> None:
     assert " out " not in usage
 
 
-def test_placeholder_text_uses_msagent_prompt() -> None:
+def test_placeholder_text_uses_current_agent_name() -> None:
     prompt = InteractivePrompt.__new__(InteractivePrompt)
-    prompt.context = _build_prompt_context()
+    prompt.context = _build_prompt_context(agent="Hermes")
 
     text = prompt._build_placeholder_text()
 
-    assert text == "尽管问msAgent，@ 引用文件，/ 使用命令"
+    assert text == "尽管问Hermes，@ 引用文件，/ 使用命令"
 
 
 def test_placeholder_text_stays_consistent_in_bash_mode() -> None:
     prompt = InteractivePrompt.__new__(InteractivePrompt)
-    prompt.context = _build_prompt_context(bash_mode=True)
+    prompt.context = _build_prompt_context(agent="general", bash_mode=True)
 
     text = prompt._build_placeholder_text()
 
-    assert text == "尽管问msAgent，@ 引用文件，/ 使用命令"
+    assert text == "尽管问general，@ 引用文件，/ 使用命令"
+
+
+def test_prompt_hotkeys_include_tool_output_toggle() -> None:
+    prompt = InteractivePrompt.__new__(InteractivePrompt)
+    prompt.context = _build_prompt_context()
+    prompt.commands = ["/help", "/tool-output"]
+    prompt.session = SimpleNamespace(prefilled_text=None)
+    prompt.hotkeys = {}
+
+    prompt._create_key_bindings()
+
+    assert "Ctrl+O" in prompt.hotkeys
+    assert prompt.hotkeys["Ctrl+O"] == "Expand/collapse latest tool output"
+
+
+def test_build_agent_prompt_uses_current_agent_name() -> None:
+    prompt_text = build_agent_prompt(_build_prompt_context(agent="Hermes"))
+
+    assert prompt_text == "Hermes > "
 
 
 @pytest.mark.asyncio
 async def test_get_input_disables_prompt_toolkit_sigint_handling() -> None:
     prompt = InteractivePrompt.__new__(InteractivePrompt)
+    prompt.context = _build_prompt_context()
     prompt.commands = ["/help"]
     prompt.session = SimpleNamespace(prefilled_text=None)
 
@@ -87,6 +108,7 @@ async def test_get_input_disables_prompt_toolkit_sigint_handling() -> None:
 
     assert content == "/help"
     assert is_command is True
+    assert captured["args"][0][0][1] == "general > "
     assert captured["kwargs"]["handle_sigint"] is False
 
 

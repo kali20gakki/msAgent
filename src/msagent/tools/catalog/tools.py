@@ -1,159 +1,145 @@
+"""Catalog tools for browsing and invoking available runtime tools."""
+
+from __future__ import annotations
+
 import json
 import re
+from typing import Any
 
-from langchain.tools import ToolRuntime, tool
-from langchain_core.messages import ToolMessage
-from langchain_core.tools import ToolException
-from langgraph.types import Command
+from langchain_core.tools import ToolException, tool
+from pydantic import BaseModel, Field
 
-from msagent.agents.context import AgentContext
-from msagent.tools.schema import ToolSchema
+from msagent.tools.factory import ToolFactory
 
 
-@tool
-async def fetch_tools(
-    runtime: ToolRuntime[AgentContext], pattern: str | None = None
-) -> str:
-    """Discover and search for available tools in the catalog.
+def _context_value(context: Any, key: str) -> Any:
+    if isinstance(context, dict):
+        return context.get(key)
+    return getattr(context, key, None)
 
-    This is the PRIMARY tool for finding tools you need. Use this when you need to know what
-    tools are available or when looking for tools to accomplish a specific task.
 
-    WITHOUT pattern: Returns ALL available tools (use for browsing/exploring)
-    WITH pattern: Returns ONLY matching tools (use when you know what you're looking for)
+def _runtime_tool_catalog(runtime: Any) -> list[Any]:
+    context = getattr(runtime, "context", None)
+    if context is None:
+        return []
+    return list(_context_value(context, "tool_catalog") or [])
 
-    The pattern searches BOTH tool names AND descriptions using case-insensitive regex.
-    This is much more efficient than listing all tools when you have a specific need.
 
-    Args:
-        pattern: Optional regex pattern to filter tools. Common patterns:
-            - Simple keyword: "file", "web", "search"
-            - Multiple keywords: "read|write|edit"
-            - Starts with: "^web"
-            - Contains word: "\\bfile\\b"
-
-    Returns:
-        Newline-separated list of matching tool names, sorted alphabetically.
-        Returns "No tools found matching pattern" if pattern yields no matches.
-
-    When to use:
-        - Starting a task: fetch_tools("keyword") to find relevant tools
-        - Exploring capabilities: fetch_tools() to see everything available
-        - Looking for alternatives: fetch_tools("read|write") to find similar tools
-        - Unsure what exists: fetch_tools("web") to discover web-related tools
-
-    Example workflow:
-    1. fetch_tools("file") - find file-related tools
-    2. get_tool("read_file") - learn how to use a specific tool
-    3. run_tool("read_file", {"file_path": "/path"}) - execute it
-
-    Examples:
-        fetch_tools() - list all available tools
-        fetch_tools("file") - find all file-related tools
-        fetch_tools("read|write") - find tools for reading or writing
-        fetch_tools("^web") - find tools starting with "web"
-        fetch_tools("search") - find all search-related tools
-    """
-    tools = runtime.context.tool_catalog
-
-    if pattern is None:
-        return "\n".join(sorted(t.name for t in tools))
-
+def _initializer_tool_catalog() -> list[Any]:
     try:
-        regex = re.compile(pattern, re.IGNORECASE)
-    except re.error as e:
-        raise ToolException(f"Invalid regex pattern: {e}") from e
-
-    matches = []
-    for t in tools:
-        if regex.search(t.name):
-            matches.append(t.name)
-        elif t.description and regex.search(t.description):
-            matches.append(t.name)
-
-    if not matches:
-        return "No tools found matching pattern"
-
-    return "\n".join(sorted(matches))
+        from msagent.cli.bootstrap.initializer import initializer
+    except Exception:
+        return []
+    return list(getattr(initializer, "cached_tools_in_catalog", []) or [])
 
 
-fetch_tools.metadata = {"approval_config": {"always_approve": True}}
+def _fallback_tool_catalog() -> list[Any]:
+    cached = _initializer_tool_catalog()
+    if cached:
+        return cached
+    return list(ToolFactory().get_catalog_tools())
 
 
-@tool
-async def get_tool(tool_name: str, runtime: ToolRuntime[AgentContext]) -> str:
-    """Learn how to use a specific tool by getting its documentation and parameters.
-
-    Use this after fetch_tools() when you've identified a tool you want to use but need to
-    understand its parameters and what it does. Returns detailed JSON with the tool's
-    description and input schema (parameter names, types, and descriptions).
-
-    Args:
-        tool_name: Name of the tool (get this from fetch_tools() output)
-
-    Returns:
-        JSON with: name (str), description (str), parameters (object schema)
-    """
-    tools = runtime.context.tool_catalog
-    tool = next((t for t in tools if t.name == tool_name), None)
-
-    if not tool:
-        raise ToolException(f"Tool '{tool_name}' not found")
-
-    schema = ToolSchema.from_tool(tool).model_dump()
-
-    return json.dumps(schema, indent=2)
+class FetchToolsInput(BaseModel):
+    pattern: str = Field(default=".*", description="Regex used to filter tools by name/description")
 
 
-get_tool.metadata = {"approval_config": {"always_approve": True}}
+@tool("fetch_tools", args_schema=FetchToolsInput)
+async def fetch_tools(*, pattern: str = ".*", runtime: Any = None) -> str:
+    """List tool names available in current runtime context."""
+    try:
+        compiled = re.compile(pattern)
+    except re.error as exc:
+        raise ToolException(f"Invalid regex pattern: {exc}") from exc
+
+    catalog = _runtime_tool_catalog(runtime)
+    if not catalog:
+        catalog = _fallback_tool_catalog()
+
+    matched = []
+    for tool_obj in catalog:
+        name = getattr(tool_obj, "name", "")
+        description = getattr(tool_obj, "description", "")
+        haystack = f"{name}\n{description}"
+        if compiled.search(haystack):
+            matched.append(name)
+
+    return "\n".join(matched)
 
 
-@tool
-async def run_tool(
-    tool_name: str, tool_args: dict, runtime: ToolRuntime[AgentContext]
-) -> str | ToolMessage | Command:
-    """Execute a tool from the catalog with the specified arguments.
-
-    Use this after you've called get_tool() to understand the required parameters.
-    This is how you actually perform actions using discovered tools.
-
-    Args:
-        tool_name: Name of the tool to run (from fetch_tools() output)
-        tool_args: Dictionary of arguments matching the tool's input schema (from get_tool())
-
-    Returns:
-        The result of the tool execution, which may be a string, ToolMessage, Command.
-
-    Example:
-        After get_tool("read_file") shows it needs {"file_path": "..."},
-        call run_tool("read_file", {"file_path": "/path/to/file.txt"})
-    """
-    tools = runtime.context.tool_catalog
-    underlying_tool = next((t for t in tools if t.name == tool_name), None)
-
-    if not underlying_tool:
-        raise ToolException(f"Tool '{tool_name}' not found")
-
-    tool_expects_runtime = False
-    if underlying_tool.args_schema is not None and hasattr(
-        underlying_tool.args_schema, "model_fields"
-    ):
-        tool_expects_runtime = "runtime" in underlying_tool.args_schema.model_fields
-
-    invoke_args = {**tool_args}
-    if tool_expects_runtime:
-        invoke_args["runtime"] = runtime
-
-    result = await underlying_tool.ainvoke(invoke_args)
-
-    return result
+class GetToolInput(BaseModel):
+    tool_name: str = Field(description="Name of the tool to inspect")
 
 
-run_tool.metadata = {
-    "approval_config": {
-        "is_catalog_proxy": True,
+@tool("get_tool", args_schema=GetToolInput)
+async def get_tool(*, tool_name: str, runtime: Any = None) -> str:
+    """Get tool schema and metadata in JSON format."""
+    catalog = _runtime_tool_catalog(runtime)
+    if not catalog:
+        catalog = _fallback_tool_catalog()
+
+    tool_obj = next(
+        (tool for tool in catalog if getattr(tool, "name", "") == tool_name),
+        None,
+    )
+    if tool_obj is None:
+        return json.dumps(
+            {
+                "error": f"Tool '{tool_name}' not found",
+                "available_tools": [
+                    getattr(tool, "name", "")
+                    for tool in catalog
+                    if getattr(tool, "name", "")
+                ],
+            },
+            ensure_ascii=False,
+        )
+
+    schema = getattr(tool_obj, "tool_call_schema", None) or getattr(tool_obj, "args_schema", None)
+    if isinstance(schema, type) and issubclass(schema, BaseModel):
+        schema_json = schema.model_json_schema()
+    elif isinstance(schema, dict):
+        schema_json = schema
+    else:
+        schema_json = {"type": "object", "properties": {}}
+
+    payload = {
+        "name": getattr(tool_obj, "name", tool_name),
+        "description": getattr(tool_obj, "description", ""),
+        "parameters": schema_json,
     }
-}
+    return json.dumps(payload, ensure_ascii=False)
 
 
-CATALOG_TOOLS = [fetch_tools, get_tool, run_tool]
+class RunToolInput(BaseModel):
+    tool_name: str = Field(description="Tool name to run")
+    tool_args: dict[str, Any] = Field(default_factory=dict, description="Tool args")
+
+
+@tool("run_tool", args_schema=RunToolInput)
+async def run_tool(*, tool_name: str, tool_args: dict[str, Any], runtime: Any = None) -> Any:
+    """Invoke a tool from the runtime catalog by name."""
+    catalog = _runtime_tool_catalog(runtime)
+    if not catalog:
+        catalog = _fallback_tool_catalog()
+
+    tool_obj = next(
+        (tool for tool in catalog if getattr(tool, "name", "") == tool_name),
+        None,
+    )
+    if tool_obj is None:
+        return {
+            "error": f"Tool '{tool_name}' not found",
+            "available_tools": [
+                getattr(tool, "name", "")
+                for tool in catalog
+                if getattr(tool, "name", "")
+            ],
+        }
+
+    payload = dict(tool_args or {})
+    try:
+        return await tool_obj.ainvoke(payload | {"runtime": runtime})
+    except TypeError:
+        return await tool_obj.ainvoke(payload)
+

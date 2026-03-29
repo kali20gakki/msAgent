@@ -26,6 +26,9 @@ class CheckpointerConfig(VersionedConfig):
         default=CHECKPOINTER_CONFIG_VERSION, description="Config schema version"
     )
     type: CheckpointerProvider = Field(description="The checkpointer type")
+    connection_string: str | None = Field(
+        default=None, description="Connection string for database checkpointer"
+    )
 
     @classmethod
     def get_latest_version(cls) -> str:

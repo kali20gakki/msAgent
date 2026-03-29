@@ -5,6 +5,7 @@ import pytest
 
 from msagent.cli.core.context import Context
 from msagent.cli.core.session import Session
+from msagent.cli.ui.prompt import InteractivePrompt
 from msagent.configs import ApprovalMode
 
 
@@ -19,10 +20,18 @@ def _build_context() -> Context:
     )
 
 
+def _patch_prompt_setup(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fake_setup_session(self) -> None:
+        self.prompt_session = None
+
+    monkeypatch.setattr(InteractivePrompt, "_setup_session", fake_setup_session)
+
+
 @pytest.mark.asyncio
 async def test_check_updates_background_keeps_sigint_registration(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    _patch_prompt_setup(monkeypatch)
     session = Session(_build_context())
     session._sigint_registered = True
 
@@ -36,7 +45,10 @@ async def test_check_updates_background_keeps_sigint_registration(
     assert session._sigint_registered is True
 
 
-def test_sigint_handler_delegates_to_prompt_when_idle() -> None:
+def test_sigint_handler_delegates_to_prompt_when_idle(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch_prompt_setup(monkeypatch)
     session = Session(_build_context())
     session._previous_sigint = signal.default_int_handler
     session.current_stream_task = None

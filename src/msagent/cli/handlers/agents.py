@@ -2,18 +2,15 @@
 
 from __future__ import annotations
 
-from prompt_toolkit.application import Application
 from prompt_toolkit.formatted_text import FormattedText
 from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.keys import Keys
-from prompt_toolkit.layout import Layout
-from prompt_toolkit.layout.containers import HSplit, Window
 from prompt_toolkit.layout.controls import FormattedTextControl
 
 from msagent.cli.bootstrap.initializer import initializer
 from msagent.cli.core.context import Context
 from msagent.cli.theme import console, theme
-from msagent.cli.ui.shared import create_bottom_toolbar, create_prompt_style
+from msagent.cli.ui.shared import SelectorState, create_selector_application
 from msagent.configs import AgentConfig
 from msagent.core.logging import get_logger
 from msagent.core.settings import settings
@@ -34,23 +31,21 @@ class AgentHandler:
             config_data = await initializer.load_agents_config(
                 self.session.context.working_dir
             )
-            # Filter out current agent from the list
-            current_agent_name = self.session.context.agent
-            available_agents = [
-                agent
-                for agent in config_data.agents
-                if isinstance(agent, AgentConfig) and agent.name != current_agent_name
+            configured_agents = [
+                agent for agent in config_data.agents if isinstance(agent, AgentConfig)
             ]
+            current_agent_name = self.session.context.agent
 
-            if not available_agents:
-                console.print_error("No other agents available")
+            if not configured_agents:
+                console.print_error("No agents configured")
                 console.print("")
                 return
 
-            # Show interactive agent selector
-            selected_agent_name = await self._get_agent_selection(available_agents)
+            selected_agent_name = await self._get_agent_selection(
+                configured_agents, current_agent_name
+            )
 
-            if selected_agent_name:
+            if selected_agent_name and selected_agent_name != current_agent_name:
                 # Load the selected agent's config to get its model
                 selected_agent_config = await initializer.load_agent_config(
                     selected_agent_name, self.session.context.working_dir
@@ -59,6 +54,7 @@ class AgentHandler:
                 # Update context with both agent and its configured model
                 self.session.update_context(
                     agent=selected_agent_name,
+                    agent_description=selected_agent_config.description or None,
                     model=selected_agent_config.llm.alias,
                     model_display=Context.format_model_display(
                         selected_agent_config.llm.alias, selected_agent_config.llm
@@ -79,11 +75,14 @@ class AgentHandler:
             console.print("")
             logger.debug("Agent switch error", exc_info=True)
 
-    async def _get_agent_selection(self, agents: list[AgentConfig]) -> str:
+    async def _get_agent_selection(
+        self, agents: list[AgentConfig], current_agent_name: str
+    ) -> str:
         """Get agent selection from user using interactive list.
 
         Args:
             agents: List of agent configuration objects
+            current_agent_name: Currently active agent name
 
         Returns:
             Selected agent name or empty string if canceled
@@ -91,11 +90,21 @@ class AgentHandler:
         if not agents:
             return ""
 
-        current_index = 0
+        initial_index = next(
+            (
+                index
+                for index, agent in enumerate(agents)
+                if agent.name == current_agent_name
+            ),
+            0,
+        )
+        state = SelectorState(index=initial_index)
 
         # Create text control with formatted text
         text_control = FormattedTextControl(
-            text=lambda: self._format_agent_list(agents, current_index),
+            text=lambda: self._format_agent_list(
+                agents, state.index, current_agent_name
+            ),
             focusable=True,
             show_cursor=False,
         )
@@ -105,13 +114,11 @@ class AgentHandler:
 
         @kb.add(Keys.Up)
         def _(event):
-            nonlocal current_index
-            current_index = (current_index - 1) % len(agents)
+            state.move_cyclic(-1, size=len(agents))
 
         @kb.add(Keys.Down)
         def _(event):
-            nonlocal current_index
-            current_index = (current_index + 1) % len(agents)
+            state.move_cyclic(1, size=len(agents))
 
         selected = [False]
 
@@ -126,28 +133,10 @@ class AgentHandler:
 
         # Create application
         context = self.session.context
-        app: Application = Application(
-            layout=Layout(
-                HSplit(
-                    [
-                        Window(content=text_control),
-                        Window(
-                            height=1,
-                            content=FormattedTextControl(
-                                lambda: create_bottom_toolbar(
-                                    context,
-                                    context.working_dir,
-                                    bash_mode=context.bash_mode,
-                                )
-                            ),
-                        ),
-                    ]
-                )
-            ),
+        app = create_selector_application(
+            context=context,
+            text_control=text_control,
             key_bindings=kb,
-            full_screen=False,
-            style=create_prompt_style(context, bash_mode=context.bash_mode),
-            erase_when_done=True,
         )
 
         selected_agent_name = ""
@@ -156,7 +145,7 @@ class AgentHandler:
             await app.run_async()
 
             if selected[0]:
-                selected_agent_name = agents[current_index].name
+                selected_agent_name = agents[state.index].name
 
         except (KeyboardInterrupt, EOFError):
             pass
@@ -164,12 +153,15 @@ class AgentHandler:
         return selected_agent_name
 
     @staticmethod
-    def _format_agent_list(agents: list[AgentConfig], selected_index: int):
+    def _format_agent_list(
+        agents: list[AgentConfig], selected_index: int, current_agent_name: str
+    ):
         """Format the agent list with highlighting.
 
         Args:
             agents: List of agent configuration objects
             selected_index: Index of currently selected agent
+            current_agent_name: Name of the active agent
 
         Returns:
             FormattedText with styled lines
@@ -178,9 +170,12 @@ class AgentHandler:
         lines = []
         for i, agent in enumerate(agents):
             agent_name = agent.name
-            alias = agent.llm.alias
+            tags: list[str] = []
+            if agent.name == current_agent_name:
+                tags.append("current")
+            tags_text = f" [{' | '.join(tags)}]" if tags else ""
 
-            display_text = f"{agent_name} ({alias})"
+            display_text = f"{agent_name}{tags_text}"
 
             if i == selected_index:
                 # Use direct color code for selected line
@@ -190,7 +185,12 @@ class AgentHandler:
             else:
                 lines.append(("", f"  {display_text}"))
 
+            if agent.description:
+                lines.append(("", "\n"))
+                lines.append(("dim", f"    {agent.description}"))
+
             if i < len(agents) - 1:
+                lines.append(("", "\n"))
                 lines.append(("", "\n"))
 
         return FormattedText(lines)

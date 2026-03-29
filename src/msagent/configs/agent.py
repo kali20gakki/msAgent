@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from pathlib import Path
+from typing import Any, Literal
 
 import yaml
 from packaging import version as pkg_version
@@ -66,36 +67,137 @@ class ToolsConfig(BaseModel):
         default=None,
         description="Maximum tokens per tool output. Larger outputs stored in virtual filesystem.",
     )
+    execution_timeout_seconds: float = Field(
+        default=300.0,
+        description="Maximum execution timeout for tool calls in seconds",
+        gt=0,
+    )
+
+
+class ModelRetryConfig(BaseModel):
+    """Retry parameters forwarded to init_chat_model."""
+
+    enabled: bool = Field(
+        default=True,
+        description="Enable LLM request retry overrides",
+    )
+    max_retries: int = Field(
+        default=3,
+        ge=0,
+        description="Forwarded to init_chat_model(max_retries=...)",
+    )
+    timeout: float | None = Field(
+        default=None,
+        gt=0,
+        description=(
+            "Optional timeout override in seconds, forwarded to "
+            "init_chat_model(timeout=...). If null, use LLM config timeout."
+        ),
+    )
+
+
+class ToolRetryConfig(BaseModel):
+    """Retry parameters forwarded to ToolRetryMiddleware."""
+
+    enabled: bool = Field(
+        default=True,
+        description="Enable tool retry middleware",
+    )
+    max_retries: int = Field(
+        default=2,
+        ge=0,
+        description="Forwarded to ToolRetryMiddleware(max_retries=...)",
+    )
+    tools: list[str] | None = Field(
+        default=None,
+        description="Optional tool name allowlist forwarded to ToolRetryMiddleware(tools=...)",
+    )
+    retry_on: list[str] | None = Field(
+        default=None,
+        description=(
+            "Optional exception class names for ToolRetryMiddleware(retry_on=...). "
+            "Use built-in names like TimeoutError, ConnectionError, Exception."
+        ),
+    )
+    on_failure: Literal["continue", "error"] = Field(
+        default="continue",
+        description="Forwarded to ToolRetryMiddleware(on_failure=...)",
+    )
+    backoff_factor: float = Field(
+        default=2.0,
+        ge=0,
+        description="Forwarded to ToolRetryMiddleware(backoff_factor=...)",
+    )
+    initial_delay: float = Field(
+        default=1.0,
+        ge=0,
+        description="Forwarded to ToolRetryMiddleware(initial_delay=...)",
+    )
+    max_delay: float = Field(
+        default=60.0,
+        ge=0,
+        description="Forwarded to ToolRetryMiddleware(max_delay=...)",
+    )
+    jitter: bool = Field(
+        default=True,
+        description="Forwarded to ToolRetryMiddleware(jitter=...)",
+    )
 
 
 class RetryPolicyConfig(BaseModel):
-    """Retry configuration for LLM requests and tool calls."""
+    """Retry configuration aligned with deepagents/LangChain primitives."""
 
-    enabled: bool = Field(
-        default=True, description="Whether retry is enabled"
+    enabled: bool = Field(default=True, description="Whether retry overrides are enabled")
+    model: ModelRetryConfig = Field(
+        default_factory=ModelRetryConfig,
+        description="init_chat_model retry/timeout parameters",
     )
-    llm_max_retries: int = Field(
-        default=3, description="Maximum retry attempts for LLM requests", ge=0
+    tool: ToolRetryConfig = Field(
+        default_factory=ToolRetryConfig,
+        description="ToolRetryMiddleware parameters",
     )
-    llm_base_delay: float = Field(
-        default=1.0, description="Initial delay between LLM retries (seconds)", ge=0
-    )
-    llm_max_delay: float = Field(
-        default=60.0, description="Maximum delay for LLM retries (seconds)", ge=0
-    )
-    enable_circuit_breaker: bool = Field(
-        default=False, description="Enable circuit breaker pattern"
-    )
-    circuit_breaker_threshold: int = Field(
-        default=5,
-        description="Consecutive failures before opening circuit",
-        ge=1,
-    )
-    circuit_breaker_recovery: float = Field(
-        default=60.0,
-        description="Seconds to wait before attempting recovery",
-        ge=0,
-    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_legacy_retry_fields(cls, data: object) -> object:
+        """Support legacy flat retry fields and map them to deepagents-aligned shape."""
+        if not isinstance(data, dict):
+            return data
+
+        legacy_keys = {
+            "llm_max_retries",
+            "llm_base_delay",
+            "llm_max_delay",
+            "enable_circuit_breaker",
+            "circuit_breaker_threshold",
+            "circuit_breaker_recovery",
+        }
+
+        if not (legacy_keys & set(data)):
+            return data
+
+        migrated = dict(data)
+        model_cfg = dict(migrated.get("model") or {})
+        tool_cfg = dict(migrated.get("tool") or {})
+
+        if "llm_max_retries" in migrated:
+            model_cfg.setdefault("max_retries", migrated["llm_max_retries"])
+            tool_cfg.setdefault("max_retries", migrated["llm_max_retries"])
+        if "llm_base_delay" in migrated:
+            tool_cfg.setdefault("initial_delay", migrated["llm_base_delay"])
+        if "llm_max_delay" in migrated:
+            tool_cfg.setdefault("max_delay", migrated["llm_max_delay"])
+
+        migrated["model"] = model_cfg
+        migrated["tool"] = tool_cfg
+
+        for key in legacy_keys:
+            migrated.pop(key, None)
+
+        logger.warning(
+            "Detected legacy retry fields; mapped to retry.model/retry.tool."
+        )
+        return migrated
 
 
 class SkillsConfig(BaseModel):
@@ -255,7 +357,7 @@ class BaseAgentConfig(VersionedConfig):
         if from_ver < pkg_version.parse("2.2.1"):
             cls._copy_missing_sandbox_profiles()
 
-        # Migrate 2.2.1 -> 2.3.0: add retry configuration
+        # Migrate 2.2.1 -> 2.3.0: add retry configuration (legacy shape)
         if from_ver < pkg_version.parse("2.3.0"):
             if "retry" not in data:
                 data["retry"] = {
@@ -267,6 +369,56 @@ class BaseAgentConfig(VersionedConfig):
                     "circuit_breaker_threshold": 5,
                     "circuit_breaker_recovery": 60.0,
                 }
+
+        # Migrate 2.3.0 -> 2.4.0: align retry schema with deepagents parameters
+        if from_ver < pkg_version.parse("2.4.0"):
+            default_retry: dict[str, Any] = {
+                "enabled": True,
+                "model": {
+                    "enabled": True,
+                    "max_retries": 3,
+                    "timeout": None,
+                },
+                "tool": {
+                    "enabled": True,
+                    "max_retries": 2,
+                    "tools": None,
+                    "retry_on": None,
+                    "on_failure": "continue",
+                    "backoff_factor": 2.0,
+                    "initial_delay": 1.0,
+                    "max_delay": 60.0,
+                    "jitter": True,
+                },
+            }
+
+            retry = data.get("retry")
+            if not isinstance(retry, dict):
+                data["retry"] = default_retry
+                return data
+
+            normalized: dict[str, Any] = {
+                "enabled": bool(retry.get("enabled", True)),
+                "model": dict(default_retry["model"]),
+                "tool": dict(default_retry["tool"]),
+            }
+
+            model_cfg = retry.get("model")
+            if isinstance(model_cfg, dict):
+                normalized["model"].update(model_cfg)
+            tool_cfg = retry.get("tool")
+            if isinstance(tool_cfg, dict):
+                normalized["tool"].update(tool_cfg)
+
+            if "llm_max_retries" in retry:
+                normalized["model"]["max_retries"] = retry["llm_max_retries"]
+                normalized["tool"]["max_retries"] = retry["llm_max_retries"]
+            if "llm_base_delay" in retry:
+                normalized["tool"]["initial_delay"] = retry["llm_base_delay"]
+            if "llm_max_delay" in retry:
+                normalized["tool"]["max_delay"] = retry["llm_max_delay"]
+
+            data["retry"] = normalized
 
         return data
 

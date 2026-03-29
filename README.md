@@ -37,19 +37,39 @@
 - glibc >= 2.34 (msprof-mcp trace_processor binary required)
 
 ### 2) 📦 安装
-推荐优先使用 **PyPI 安装**。如果你需要跟踪最新源码、参与开发，或同步最新内置 Skills，再使用**源码运行**方式。
+Linux / macOS / WSL 用户推荐优先使用 **curl 一键安装**；它会自动安装 `uv`，再通过 `uv tool install` 安装 `mindstudio-agent`，并一并暴露 `msprof-mcp` 命令。  
+如果你更习惯手动安装，可继续使用 **PyPI 安装**。如果你需要跟踪最新源码、参与开发，或同步最新内置 Skills，再使用**源码运行**方式。
 
 说明：
 - 下文中的 `msagent` 默认指已安装的命令行入口
 - 如果采用源码运行，请将示例中的 `msagent` 替换为 `uv run msagent`
 
-#### 方式一：PyPI 安装（推荐）
+#### 方式一：curl 一键安装（Linux / macOS / WSL 推荐）
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/kali20gakki/msAgent/main/scripts/install.sh | bash
+```
+
+安装完成后，建议先确认命令可用：
+
+```bash
+msagent --version
+```
+
+如果你想指定 Python 版本或安装特定包版本，可以在 `bash` 前覆盖环境变量：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/kali20gakki/msAgent/main/scripts/install.sh | MSAGENT_PYTHON=3.12 bash
+curl -fsSL https://raw.githubusercontent.com/kali20gakki/msAgent/main/scripts/install.sh | MSAGENT_PACKAGE_SPEC="mindstudio-agent==0.1.2" bash
+```
+
+#### 方式二：PyPI 安装
 
 ```bash
 pip install -U mindstudio-agent
 ```
 
-#### 方式二：源码运行（开发 / 跟踪最新代码）
+#### 方式三：源码运行（开发 / 跟踪最新代码）
 
 拉取源码并进入目录：
 
@@ -163,6 +183,55 @@ msagent config --show
 
 ```bash
 msagent
+```
+
+手动指定启动 agent：
+
+```bash
+msagent --agent Hermes
+msagent --agent Minos
+```
+
+### 4.1) 🌐 启动 Web UI（复用官方 `deep-agents-ui`）
+
+启动：
+
+```bash
+msagent web
+```
+
+打开：
+
+```text
+http://127.0.0.1:3000
+```
+
+说明：
+
+- 通过 `pip install -U mindstudio-agent` 安装后，也可以直接使用 `msagent web`
+- `msagent web` 默认会同时启动：
+  - API：`http://127.0.0.1:2024`
+  - UI：`http://127.0.0.1:3000`
+- 启动成功后会自动打开默认浏览器进入 UI
+- 浏览器访问 UI 地址，不是 API 地址
+- 首次打开时会自动预填：
+  - `Deployment URL` = `http://127.0.0.1:2024`
+  - `Assistant ID` = `msagent`
+- 如果端口冲突，改端口启动即可
+- 如果本地残留了旧的 Web 进程，可先手动清理：
+
+```bash
+pkill -f "next dev --turbopack" || true
+pkill -f "langgraph dev" || true
+```
+
+常用命令：
+
+```bash
+msagent web --host 127.0.0.1 --port 2024 --ui-port 3000
+msagent web --port 2025 --ui-port 3001
+msagent web --no-open
+msagent web --no-ui
 ```
 
 

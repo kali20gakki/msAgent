@@ -1,4 +1,4 @@
-version: "1.0.0"
+version: "0.1.2"
 name: rw-online-linux
 type: bubblewrap
 os: linux

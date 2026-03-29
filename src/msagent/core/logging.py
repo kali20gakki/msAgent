@@ -3,6 +3,7 @@ import sys
 import warnings
 from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
+from typing import Any, cast
 
 from msagent.core.constants import CONFIG_LOG_DIR
 from msagent.core.settings import settings
@@ -12,14 +13,45 @@ FILE_LOG_FORMAT = (
     "%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s"
 )
 
+_ERROR_LOGGERS = (
+    "langchain_google_genai._function_utils",
+    "langchain_anthropic",
+    "langchain_openai",
+)
 
-def configure_logging(show_logs: bool = False, working_dir: Path = Path.cwd()) -> None:
+_WARNING_LOGGERS = (
+    "httpx",
+    "httpcore",
+    "urllib3",
+    "langgraph.checkpoint",
+    "aiosqlite",
+    "markdown_it",
+)
+
+
+def _install_unraisablehook_filter() -> None:
+    original_hook = sys.unraisablehook
+
+    def _filtered_hook(unraisable: object) -> None:
+        exc_value = getattr(unraisable, "exc_value", None)
+        if isinstance(exc_value, ValueError) and "I/O operation on closed file" in str(exc_value):
+            return
+        cast(Any, original_hook)(unraisable)
+
+    if getattr(sys.unraisablehook, "__name__", "") != "_filtered_hook":
+        sys.unraisablehook = _filtered_hook
+
+
+def configure_logging(show_logs: bool = False, working_dir: Path | None = None) -> None:
     """Configure application logging.
 
     Args:
         show_logs: Enable file logging and show log location hint.
         working_dir: Working directory for log file.
     """
+    if working_dir is None:
+        working_dir = Path.cwd()
+
     # Configure root logger
     root_logger = logging.getLogger()
     root_logger.setLevel(settings.log_level)
@@ -32,23 +64,10 @@ def configure_logging(show_logs: bool = False, working_dir: Path = Path.cwd()) -
     # does not dump ERROR tracebacks to stderr when verbose logging is off.
     root_logger.addHandler(logging.NullHandler())
 
-    # Suppress langchain warnings
-    logging.getLogger("langchain_google_genai._function_utils").setLevel(logging.ERROR)
-    logging.getLogger("langchain_anthropic").setLevel(logging.ERROR)
-    logging.getLogger("langchain_openai").setLevel(logging.ERROR)
-
-    # Suppress HTTP client loggers (noisy at INFO level)
-    logging.getLogger("httpx").setLevel(logging.WARNING)
-    logging.getLogger("httpcore").setLevel(logging.WARNING)
-    logging.getLogger("urllib3").setLevel(logging.WARNING)
-
-    # Suppress checkpointer/database loggers
-    logging.getLogger("langgraph.checkpoint.sqlite.aio").setLevel(logging.WARNING)
-    logging.getLogger("langgraph.checkpoint").setLevel(logging.WARNING)
-    logging.getLogger("aiosqlite").setLevel(logging.WARNING)
-
-    # Suppress markdown parser debug logs
-    logging.getLogger("markdown_it").setLevel(logging.WARNING)
+    for logger_name in _ERROR_LOGGERS:
+        logging.getLogger(logger_name).setLevel(logging.ERROR)
+    for logger_name in _WARNING_LOGGERS:
+        logging.getLogger(logger_name).setLevel(logging.WARNING)
 
     # Suppress langchain_aws warnings
     warnings.filterwarnings("ignore", module="langchain_aws.chat_models.bedrock")
@@ -66,6 +85,15 @@ def configure_logging(show_logs: bool = False, working_dir: Path = Path.cwd()) -
         "ignore",
         message="Using fallback GPT-2 tokenizer",
         category=UserWarning,
+    )
+
+    # Suppress benign pydantic serializer noise when LangGraph/deepagents
+    # passes runtime context objects through internal serialization paths.
+    warnings.filterwarnings(
+        "ignore",
+        message=r"Pydantic serializer warnings:",
+        category=UserWarning,
+        module=r"pydantic(\.v1)?\.main",
     )
 
     if show_logs:
@@ -89,17 +117,11 @@ def configure_logging(show_logs: bool = False, working_dir: Path = Path.cwd()) -
             # Print log file location hint (using plain print, not logging)
             abs_log_path = log_file_path.resolve()
             print(f"📝 Logs written to: {abs_log_path}", flush=True)
-        except (OSError, PermissionError):
+        except OSError:
             pass  # Sandbox may block file creation
 
     # Suppress urllib3 "I/O operation on closed file" during botocore GC cleanup.
-    _orig_hook = sys.unraisablehook
-    sys.unraisablehook = lambda u: (
-        None
-        if isinstance(u.exc_value, ValueError)
-        and "I/O operation on closed file" in str(u.exc_value)
-        else _orig_hook(u)
-    )
+    _install_unraisablehook_filter()
 
 
 def get_logger(name: str) -> logging.Logger:

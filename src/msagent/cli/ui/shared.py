@@ -2,16 +2,56 @@
 
 import html
 import os
+from dataclasses import dataclass
 
+from prompt_toolkit.application import Application
 from prompt_toolkit.formatted_text import HTML, FormattedText
+from prompt_toolkit.key_binding import KeyBindings
+from prompt_toolkit.layout import Layout
+from prompt_toolkit.layout.containers import HSplit
 from prompt_toolkit.layout.containers import Window
 from prompt_toolkit.layout.controls import FormattedTextControl
 from prompt_toolkit.styles import Style
 
 from msagent.cli.theme import theme
 from msagent.configs import ApprovalMode
+from msagent.core.settings import settings
 from msagent.utils.cost import calculate_context_percentage, format_tokens
 from msagent.utils.version import get_version
+
+
+@dataclass
+class SelectorState:
+    """Shared selection state for prompt-toolkit list UIs."""
+
+    index: int = 0
+    scroll_offset: int = 0
+    window_size: int | None = None
+
+    def move_cyclic(self, delta: int, *, size: int) -> None:
+        """Move selection with wrap-around semantics."""
+        if size <= 0:
+            self.index = 0
+            return
+        self.index = (self.index + delta) % size
+
+    def move_linear(self, delta: int, *, size: int) -> None:
+        """Move selection within bounds and keep it visible in the scroll window."""
+        if size <= 0:
+            self.index = 0
+            self.scroll_offset = 0
+            return
+
+        next_index = max(0, min(self.index + delta, size - 1))
+        self.index = next_index
+
+        if self.window_size is None or self.window_size <= 0:
+            return
+
+        if self.index < self.scroll_offset:
+            self.scroll_offset = self.index
+        elif self.index >= self.scroll_offset + self.window_size:
+            self.scroll_offset = self.index - self.window_size + 1
 
 
 def get_prompt_color(context, *, bash_mode: bool = False) -> str:
@@ -24,6 +64,15 @@ def get_prompt_color(context, *, bash_mode: bool = False) -> str:
         ApprovalMode.AGGRESSIVE: theme.approval_aggressive,
     }
     return mode_colors[context.approval_mode]
+
+
+def build_agent_prompt(context) -> str:
+    """Build the visible prompt prefix for the current agent."""
+    base_prompt = settings.cli.prompt_style
+    agent_name = str(getattr(context, "agent", "") or "").strip()
+    if not agent_name:
+        return base_prompt
+    return f"{agent_name} {base_prompt}"
 
 
 def create_prompt_style(context, *, bash_mode: bool = False) -> Style:
@@ -111,6 +160,8 @@ def _truncate_middle(text: str, max_length: int) -> str:
     head = (max_length - 3) // 2
     tail = max_length - 3 - head
     return f"{text[:head]}...{text[-tail:]}"
+
+
 def create_bottom_toolbar(
     context,
     working_dir: str,
@@ -121,7 +172,9 @@ def create_bottom_toolbar(
     terminal_width = os.get_terminal_size().columns if os.isatty(1) else 80
     version = get_version()
     working_dir_str = str(working_dir)
-    model_label = getattr(context, "model_display", None) or getattr(context, "model", "")
+    model_label = getattr(context, "model_display", None) or getattr(
+        context, "model", ""
+    )
     usage_summary = build_usage_summary(context)
 
     # Left side: version + directory
@@ -148,7 +201,9 @@ def create_bottom_toolbar(
     right_plain_parts.append(mode_name)
 
     right_content = " | ".join(right_plain_parts)
-    working_dir_width = max(0, terminal_width - len(left_prefix) - len(right_content) - 1)
+    working_dir_width = max(
+        0, terminal_width - len(left_prefix) - len(right_content) - 1
+    )
     display_working_dir = _truncate_middle(working_dir_str, working_dir_width)
     left_text = f"{left_prefix}{display_working_dir}"
     left_content = f"{html.escape(left_prefix)}{html.escape(display_working_dir)}"
@@ -160,9 +215,7 @@ def create_bottom_toolbar(
     for i, (style_name, value) in enumerate(right_parts):
         if i > 0:
             styled_right_parts.append("<muted> | </muted>")
-        styled_right_parts.append(
-            f"<{style_name}>{html.escape(value)}</{style_name}>"
-        )
+        styled_right_parts.append(f"<{style_name}>{html.escape(value)}</{style_name}>")
     styled_right = "".join(styled_right_parts)
 
     return HTML(f"<muted>{left_content}{padding}</muted>{styled_right}<muted> </muted>")
@@ -186,3 +239,48 @@ def create_instruction(
     if spacer:
         windows.append(Window(height=1, char=" "))
     return windows
+
+
+def create_selector_application(
+    *,
+    context,
+    text_control: FormattedTextControl | None = None,
+    key_bindings: KeyBindings,
+    header_windows: list[Window] | None = None,
+    body_windows: list[Window] | None = None,
+    content_window: Window | None = None,
+    full_screen: bool = False,
+    mouse_support: bool = False,
+) -> Application:
+    """Create the shared prompt-toolkit shell used by list selectors."""
+    if content_window is None:
+        if text_control is None:
+            raise ValueError(
+                "text_control is required when content_window is not provided"
+            )
+        content_window = Window(content=text_control)
+
+    layout_windows = [
+        *(header_windows or []),
+        content_window,
+        *(body_windows or []),
+        Window(
+            height=1,
+            content=FormattedTextControl(
+                lambda: create_bottom_toolbar(
+                    context,
+                    context.working_dir,
+                    bash_mode=context.bash_mode,
+                )
+            ),
+        ),
+    ]
+
+    return Application(
+        layout=Layout(HSplit(layout_windows)),
+        key_bindings=key_bindings,
+        full_screen=full_screen,
+        style=create_prompt_style(context, bash_mode=context.bash_mode),
+        erase_when_done=True,
+        mouse_support=mouse_support,
+    )

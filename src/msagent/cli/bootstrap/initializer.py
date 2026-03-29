@@ -1,29 +1,32 @@
+"""Initializer for assembling deepagents runtime dependencies."""
+
 from __future__ import annotations
 
 import asyncio
+import os
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
+from fnmatch import fnmatch
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
-from langchain_core.runnables import RunnableConfig
+from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
 from msagent.agents.context import AgentContext
 from msagent.agents.factory import AgentFactory
-from msagent.agents.state import AgentState
-from msagent.checkpointer.base import BaseCheckpointer
-from msagent.checkpointer.factory import CheckpointerFactory
 from msagent.cli.bootstrap.timer import timer
 from msagent.configs import (
     AgentConfig,
     BatchAgentConfig,
     BatchCheckpointerConfig,
     BatchLLMConfig,
-    BatchSubAgentConfig,
     CheckpointerConfig,
+    CheckpointerProvider,
     ConfigRegistry,
     LLMConfig,
     MCPConfig,
+    ToolApprovalConfig,
 )
 from msagent.core.constants import (
     CONFIG_CHECKPOINTS_URL_FILE_NAME,
@@ -31,138 +34,117 @@ from msagent.core.constants import (
     CONFIG_MCP_OAUTH_DIR,
     CONFIG_SKILLS_DIR,
 )
-from msagent.core.logging import get_logger
-from msagent.core.settings import settings
 from msagent.llms.factory import LLMFactory
 from msagent.mcp.factory import MCPFactory
-from msagent.sandboxes.factory import SandboxFactory
-from msagent.skills.factory import SkillFactory
+from msagent.skills.factory import Skill, SkillFactory
+from msagent.testing.fake_graph import FakeGraph
 from msagent.tools.factory import ToolFactory
-
-logger = get_logger(__name__)
 
 if TYPE_CHECKING:
     from langchain_core.tools import BaseTool
+    from langgraph.checkpoint.base import BaseCheckpointSaver
     from langgraph.graph.state import CompiledStateGraph
-
-    from msagent.skills.factory import Skill
 
 
 class Initializer:
-    """Centralized service for initializing and managing agent resources."""
+    """Centralized service for initializing and caching runtime resources."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.tool_factory = ToolFactory()
         self.skill_factory = SkillFactory()
-        self.llm_factory = LLMFactory(settings.llm)
-        self.mcp_factory = MCPFactory()
-        self.checkpointer_factory = CheckpointerFactory()
-        self.sandbox_factory = SandboxFactory()
+        self.llm_factory = LLMFactory()
+        self.mcp_factory = MCPFactory(tool_factory=self.tool_factory)
         self.agent_factory = AgentFactory(
-            tool_factory=self.tool_factory,
             llm_factory=self.llm_factory,
-            skill_factory=self.skill_factory,
+            tool_factory=self.tool_factory,
         )
+
         self.cached_llm_tools: list[BaseTool] = []
-        self.cached_tools_in_catalog: list[BaseTool] = []
+        self.cached_tools_in_catalog: list[BaseTool | object] = []
         self.cached_agent_skills: list[Skill] = []
         self.cached_mcp_server_names: list[str] = []
 
-        # Registry cache per working_dir
         self._registries: dict[Path, ConfigRegistry] = {}
 
     def get_registry(self, working_dir: Path) -> ConfigRegistry:
-        """Get or create a ConfigRegistry for the given working directory."""
         if working_dir not in self._registries:
             self._registries[working_dir] = ConfigRegistry(working_dir)
         return self._registries[working_dir]
 
     async def load_llms_config(self, working_dir: Path) -> BatchLLMConfig:
-        """Load LLMs configuration."""
         return await self.get_registry(working_dir).load_llms()
 
     async def load_llm_config(self, model: str, working_dir: Path) -> LLMConfig:
-        """Load LLM configuration by name."""
         return await self.get_registry(working_dir).get_llm(model)
 
     async def load_checkpointers_config(
         self, working_dir: Path
     ) -> BatchCheckpointerConfig:
-        """Load checkpointers configuration."""
         return await self.get_registry(working_dir).load_checkpointers()
 
-    async def load_subagents_config(self, working_dir: Path) -> BatchSubAgentConfig:
-        """Load subagents configuration."""
-        return await self.get_registry(working_dir).load_subagents()
-
     async def load_agents_config(self, working_dir: Path) -> BatchAgentConfig:
-        """Load agents configuration with resolved subagent references."""
         return await self.get_registry(working_dir).load_agents()
 
     async def load_agent_config(
         self, agent: str | None, working_dir: Path
     ) -> AgentConfig:
-        """Load agent configuration by name."""
         return await self.get_registry(working_dir).get_agent(agent)
 
     async def load_mcp_config(self, working_dir: Path) -> MCPConfig:
-        """Get MCP configuration."""
         return await self.get_registry(working_dir).load_mcp()
 
     async def save_mcp_config(self, mcp_config: MCPConfig, working_dir: Path) -> None:
-        """Save MCP configuration."""
         await self.get_registry(working_dir).save_mcp(mcp_config)
 
     async def update_agent_llm(
         self, agent_name: str, new_llm_name: str, working_dir: Path
     ) -> None:
-        """Update a specific agent's LLM in the config file."""
         await self.get_registry(working_dir).update_agent_llm(agent_name, new_llm_name)
 
-    async def update_subagent_llm(
-        self, subagent_name: str, new_llm_name: str, working_dir: Path
-    ) -> None:
-        """Update a specific subagent's LLM in the config file."""
-        await self.get_registry(working_dir).update_subagent_llm(
-            subagent_name, new_llm_name
-        )
-
     async def update_default_agent(self, agent_name: str, working_dir: Path) -> None:
-        """Update which agent is marked as default in the config file."""
         await self.get_registry(working_dir).update_default_agent(agent_name)
 
     async def load_user_memory(self, working_dir: Path) -> str:
-        """Load user memory from project-specific memory file."""
         return await self.get_registry(working_dir).load_user_memory()
 
     @asynccontextmanager
     async def get_checkpointer(
         self, agent: str, working_dir: Path
-    ) -> AsyncIterator[BaseCheckpointer]:
-        """Get checkpointer for agent."""
+    ) -> AsyncIterator[BaseCheckpointSaver]:
+        """Open the configured checkpointer for a given agent."""
         agent_config = await self.load_agent_config(agent, working_dir)
-        async with self.checkpointer_factory.create(
-            cast(CheckpointerConfig, agent_config.checkpointer),
+        checkpointer_ctx = self._create_checkpointer(
+            cast(CheckpointerConfig | None, agent_config.checkpointer),
             str(working_dir / CONFIG_CHECKPOINTS_URL_FILE_NAME),
-        ) as checkpointer:
+        )
+        checkpointer = await checkpointer_ctx.__aenter__()
+        try:
             yield checkpointer
+        finally:
+            await checkpointer_ctx.__aexit__(None, None, None)
 
     async def create_graph(
         self,
         agent: str | None,
         model: str | None,
         working_dir: Path,
-    ) -> tuple[CompiledStateGraph, Callable[[], Awaitable[None]]]:
-        """Create graph and return cleanup function. Core method for both modes.
+    ) -> tuple[CompiledStateGraph | FakeGraph, Callable[[], Awaitable[None]]]:
+        if os.getenv("MSAGENT_FAKE_BACKEND", "").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+        }:
+            fake_graph = FakeGraph()
+            self.cached_llm_tools = []
+            self.cached_tools_in_catalog = []
+            self.cached_agent_skills = []
+            self.cached_mcp_server_names = []
 
-        Args:
-            agent: Agent name or None for default
-            model: Model name or None for agent default
-            working_dir: Working directory path
+            async def fake_cleanup() -> None:
+                return None
 
-        Returns:
-            (graph, cleanup_fn) - Call cleanup_fn when done.
-        """
+            return fake_graph, fake_cleanup
+
         registry = self.get_registry(working_dir)
 
         with timer("Load configs"):
@@ -179,48 +161,83 @@ class Initializer:
                 )
                 llm_config = None
 
+        with timer("Load approval config"):
+            load_approval = getattr(registry, "load_approval", None)
+            if callable(load_approval):
+                approval_config = load_approval()
+            else:
+                approval_config = ToolApprovalConfig()
+            interrupt_on = approval_config.to_interrupt_on_payload()
+
         with timer("Create checkpointer"):
-            checkpointer_ctx = self.checkpointer_factory.create(
-                cast(CheckpointerConfig, agent_config.checkpointer),
+            checkpointer_ctx = self._create_checkpointer(
+                cast(CheckpointerConfig | None, agent_config.checkpointer),
                 str(working_dir / CONFIG_CHECKPOINTS_URL_FILE_NAME),
             )
-
-        sandbox_bindings = None
-        if agent_config.sandboxes:
-            with timer("Build sandbox bindings"):
-                sandbox_bindings = self.sandbox_factory.build_bindings(
-                    agent_config.sandboxes, working_dir
-                )
+            checkpointer = await checkpointer_ctx.__aenter__()
 
         with timer("Create MCP client"):
+            default_timeout = (
+                float(agent_config.tools.execution_timeout_seconds)
+                if agent_config.tools is not None
+                else None
+            )
             mcp_client = await self.mcp_factory.create(
                 config=mcp_config,
                 cache_dir=working_dir / CONFIG_MCP_CACHE_DIR,
                 oauth_dir=working_dir / CONFIG_MCP_OAUTH_DIR,
-                sandbox_bindings=sandbox_bindings,
+                sandbox_bindings=None,
+                default_invoke_timeout=default_timeout,
+            )
+            mcp_module_map = dict(getattr(mcp_client, "module_map", {}) or {})
+
+        with timer("Load skills metadata"):
+            skills_dirs = self._resolve_skills_dirs(working_dir)
+            skill_map = await self.skill_factory.load_skills(skills_dirs)
+            cached_skills = [
+                skill for category in skill_map.values() for skill in category.values()
+            ]
+            skills_config = getattr(agent_config, "skills", None)
+            skill_patterns = (
+                list(skills_config.patterns or []) if skills_config is not None else []
+            )
+            filtered_skills = self._filter_skills_by_patterns(
+                cached_skills,
+                patterns=skill_patterns,
+            )
+            runtime_skills_dirs = (
+                skills_dirs
+                if any(
+                    pattern and not pattern.startswith("!")
+                    for pattern in skill_patterns
+                )
+                else None
             )
 
-        checkpointer = await checkpointer_ctx.__aenter__()
-
         with timer("Create and compile graph"):
-            skills_dirs = self._resolve_skills_dirs(working_dir)
             graph = await self.agent_factory.create(
                 config=agent_config,
-                state_schema=AgentState,
+                working_dir=working_dir,
                 context_schema=AgentContext,
                 checkpointer=checkpointer,
                 mcp_client=mcp_client,
                 llm_config=llm_config,
-                skills_dir=skills_dirs,
-                sandbox_bindings=sandbox_bindings,
+                skills_dir=runtime_skills_dirs,
+                sandbox_bindings=None,
+                interrupt_on=interrupt_on,
             )
 
-        self.cached_llm_tools = getattr(graph, "_llm_tools", [])
-        self.cached_tools_in_catalog = getattr(graph, "_tools_in_catalog", [])
-        self.cached_agent_skills = getattr(graph, "_agent_skills", [])
-        self.cached_mcp_server_names = [
-            name for name, server in mcp_config.servers.items() if server.enabled
-        ]
+        self.cached_llm_tools = list(getattr(graph, "_llm_tools", []))
+        self.cached_tools_in_catalog = list(
+            getattr(graph, "_tools_in_catalog", self.cached_llm_tools)
+            or self.tool_factory.get_catalog_tools()
+        )
+        self.cached_agent_skills = filtered_skills
+        self.cached_mcp_server_names = self._resolve_cached_mcp_server_names(
+            tools=self.cached_llm_tools,
+            mcp_config=mcp_config,
+            mcp_module_map=mcp_module_map,
+        )
 
         async def cleanup() -> None:
             await mcp_client.close()
@@ -243,8 +260,91 @@ class Initializer:
                 continue
             seen.add(normalized)
             unique_paths.append(path)
-
         return unique_paths
+
+    def _resolve_cached_mcp_server_names(
+        self,
+        *,
+        tools: list[BaseTool],
+        mcp_config: MCPConfig,
+        mcp_module_map: dict[str, str],
+    ) -> list[str]:
+        enabled_servers = {
+            name for name, server in mcp_config.servers.items() if server.enabled
+        }
+        if not enabled_servers:
+            return []
+
+        visible_servers: set[str] = set()
+        for tool in tools:
+            tool_name = self.agent_factory._tool_name(tool)
+            module, _raw_name = self.agent_factory._resolve_mcp_tool_identity(
+                tool_name=tool_name,
+                mcp_module_map=mcp_module_map,
+                mcp_servers=enabled_servers,
+            )
+            if module != "unknown":
+                visible_servers.add(module)
+
+        return [name for name in mcp_config.servers.keys() if name in visible_servers]
+
+    @asynccontextmanager
+    async def _create_checkpointer(
+        self,
+        config: CheckpointerConfig | None,
+        db_path: str | None = None,
+    ) -> AsyncIterator[BaseCheckpointSaver]:
+        if config is None or config.type == CheckpointerProvider.MEMORY:
+            yield InMemorySaver()
+            return
+
+        if config.type == CheckpointerProvider.SQLITE:
+            sqlite_path = config.connection_string or db_path
+            if sqlite_path:
+                import aiosqlite
+
+                conn = await aiosqlite.connect(sqlite_path)
+                try:
+                    yield AsyncSqliteSaver(conn)
+                finally:
+                    await conn.close()
+                return
+
+        yield InMemorySaver()
+
+    @staticmethod
+    def _filter_skills_by_patterns(
+        skills: list[Skill], patterns: list[str]
+    ) -> list[Skill]:
+        if not patterns:
+            return []
+
+        positive_patterns = [p for p in patterns if p and not p.startswith("!")]
+        negative_patterns = [p[1:] for p in patterns if p.startswith("!")]
+        if not positive_patterns:
+            return []
+
+        def matches(pattern: str, *, category: str, name: str) -> bool:
+            parts = pattern.split(":")
+            if len(parts) != 2:
+                return False
+            category_p, name_p = parts
+            return fnmatch(category, category_p) and fnmatch(name, name_p)
+
+        filtered: list[Skill] = []
+        for skill in skills:
+            if not any(
+                matches(pattern, category=skill.category, name=skill.name)
+                for pattern in positive_patterns
+            ):
+                continue
+            if any(
+                matches(pattern, category=skill.category, name=skill.name)
+                for pattern in negative_patterns
+            ):
+                continue
+            filtered.append(skill)
+        return filtered
 
     @asynccontextmanager
     async def get_graph(
@@ -252,69 +352,12 @@ class Initializer:
         agent: str | None,
         model: str | None,
         working_dir: Path,
-    ) -> AsyncIterator[CompiledStateGraph]:
-        """Context manager wrapper around create_graph with auto-cleanup."""
+    ) -> AsyncIterator[CompiledStateGraph | FakeGraph]:
         graph, cleanup = await self.create_graph(agent, model, working_dir)
         try:
             yield graph
         finally:
             await cleanup()
-
-    async def get_threads(self, agent: str, working_dir: Path) -> list[dict]:
-        """Get all conversation threads with metadata.
-
-        Args:
-            agent: Name of the agent
-            working_dir: Working directory path
-
-        Returns:
-            List of thread dictionaries with thread_id, last_message, timestamp
-        """
-        async with self.get_checkpointer(agent, working_dir) as checkpointer:
-            try:
-                thread_ids = await checkpointer.get_threads()
-
-                threads = {}
-                for thread_id in thread_ids:
-                    try:
-                        checkpoint_tuple = await checkpointer.aget_tuple(
-                            config=RunnableConfig(configurable={"thread_id": thread_id})
-                        )
-
-                        if not checkpoint_tuple or not checkpoint_tuple.checkpoint:
-                            continue
-
-                        messages = checkpoint_tuple.checkpoint.get(
-                            "channel_values", {}
-                        ).get("messages", [])
-
-                        if not messages:
-                            continue
-
-                        last_msg = messages[-1]
-                        msg_text = getattr(last_msg, "short_content", None) or getattr(
-                            last_msg, "text", "No content"
-                        )
-                        if isinstance(msg_text, list):
-                            msg_text = " ".join(str(item) for item in msg_text)
-
-                        threads[thread_id] = {
-                            "thread_id": thread_id,
-                            "last_message": str(msg_text)[:100],
-                            "timestamp": checkpoint_tuple.checkpoint.get("ts", ""),
-                        }
-
-                    except Exception:
-                        logger.debug("Thread checkpoint parse failed", exc_info=True)
-                        continue
-
-                # Sort threads by timestamp (latest first)
-                thread_list = list(threads.values())
-                thread_list.sort(key=lambda t: t.get("timestamp", 0), reverse=True)
-                return thread_list
-            except Exception:
-                logger.debug("Get threads failed", exc_info=True)
-                return []
 
 
 initializer = Initializer()

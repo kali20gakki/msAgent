@@ -7,12 +7,21 @@ from msagent.configs.agent import (
     BatchAgentConfig,
     BatchSubAgentConfig,
     CompressionConfig,
+    ModelRetryConfig,
     RetryPolicyConfig,
     SkillsConfig,
     SubAgentConfig,
+    ToolRetryConfig,
     ToolsConfig,
 )
-from msagent.configs.approval import ApprovalMode, ToolApprovalConfig, ToolApprovalRule
+from msagent.configs.approval import (
+    ApprovalMode,
+    InterruptOnRule,
+    ToolDecision,
+    ToolDecisionRule,
+    ToolApprovalConfig,
+    ToolApprovalRule,
+)
 from msagent.configs.base import VersionedConfig
 from msagent.configs.checkpointer import (
     BatchCheckpointerConfig,
@@ -20,7 +29,7 @@ from msagent.configs.checkpointer import (
     CheckpointerProvider,
 )
 from msagent.configs.llm import BatchLLMConfig, LLMConfig, LLMProvider, RateConfig
-from msagent.configs.mcp import MCPConfig, MCPServerConfig
+from msagent.configs.mcp import MCPConfig, MCPServerConfig, MCPTransport
 from msagent.configs.registry import ConfigRegistry
 from msagent.configs.sandbox import (
     BatchSandboxConfig,
@@ -52,12 +61,15 @@ __all__ = [
     "BatchSubAgentConfig",
     "BaseBatchConfig",
     "CompressionConfig",
+    "ModelRetryConfig",
     "ToolsConfig",
     "SkillsConfig",
     "RetryPolicyConfig",
+    "ToolRetryConfig",
     # MCP
     "MCPConfig",
     "MCPServerConfig",
+    "MCPTransport",
     # Sandbox
     "SandboxConfig",
     "BatchSandboxConfig",
@@ -67,6 +79,9 @@ __all__ = [
     "NetworkConfig",
     # Approval
     "ApprovalMode",
+    "InterruptOnRule",
+    "ToolDecision",
+    "ToolDecisionRule",
     "ToolApprovalConfig",
     "ToolApprovalRule",
     # Registry

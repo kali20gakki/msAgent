@@ -42,7 +42,7 @@ def calculate_message_tokens(
             msg.model_copy(update={"content": msg.text}) for msg in messages
         ]
         return llm.get_num_tokens_from_messages(list(cleaned_messages))
-    except (NotImplementedError, ImportError):
+    except (AttributeError, NotImplementedError, ImportError, TypeError):
         # Fallback to tiktoken with cl100k_base encoding (used by GPT-4, GPT-3.5-turbo)
         try:
             encoding = tiktoken.get_encoding("cl100k_base")
