@@ -26,7 +26,9 @@ def is_windows_absolute_path(path: str) -> bool:
 def is_absolute_path_like(path: str) -> bool:
     """Check whether a path should be treated as absolute across platforms."""
     expanded = Path(path).expanduser()
-    return expanded.is_absolute() or is_windows_absolute_path(path)
+    return expanded.is_absolute() or path.startswith("/") or is_windows_absolute_path(
+        path
+    )
 
 
 def resolve_path(working_dir: str, path: str) -> Path:

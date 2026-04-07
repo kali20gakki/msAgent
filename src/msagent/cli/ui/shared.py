@@ -2,16 +2,26 @@
 
 import html
 import os
+import sys
 from dataclasses import dataclass
 
 from prompt_toolkit.application import Application
 from prompt_toolkit.formatted_text import HTML, FormattedText
+from prompt_toolkit.input import DummyInput
 from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.layout import Layout
 from prompt_toolkit.layout.containers import HSplit
 from prompt_toolkit.layout.containers import Window
 from prompt_toolkit.layout.controls import FormattedTextControl
+from prompt_toolkit.output import DummyOutput
 from prompt_toolkit.styles import Style
+
+if sys.platform == "win32":
+    from prompt_toolkit.output.win32 import NoConsoleScreenBufferError
+else:
+
+    class NoConsoleScreenBufferError(Exception):
+        """Windows-only prompt-toolkit error placeholder for non-Windows hosts."""
 
 from msagent.cli.theme import theme
 from msagent.configs import ApprovalMode
@@ -276,11 +286,23 @@ def create_selector_application(
         ),
     ]
 
-    return Application(
-        layout=Layout(HSplit(layout_windows)),
-        key_bindings=key_bindings,
-        full_screen=full_screen,
-        style=create_prompt_style(context, bash_mode=context.bash_mode),
-        erase_when_done=True,
-        mouse_support=mouse_support,
-    )
+    application_kwargs = {
+        "layout": Layout(HSplit(layout_windows)),
+        "key_bindings": key_bindings,
+        "full_screen": full_screen,
+        "style": create_prompt_style(context, bash_mode=context.bash_mode),
+        "erase_when_done": True,
+        "mouse_support": mouse_support,
+    }
+
+    try:
+        return Application(**application_kwargs)
+    except NoConsoleScreenBufferError:
+        # Unit tests and some non-interactive Windows hosts do not expose a
+        # real console buffer. Fall back to dummy I/O so layout construction
+        # remains testable without changing interactive behavior.
+        return Application(
+            **application_kwargs,
+            input=DummyInput(),
+            output=DummyOutput(),
+        )
