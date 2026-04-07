@@ -3,25 +3,24 @@
 <p align="center"><strong>面向 Ascend NPU 场景的一站式调试调优 Agent</strong></p>
 
 **msAgent** 聚焦“发现问题 -> 定位根因 -> 给出建议 -> 辅助验证”的调试调优闭环。  
-它结合 LLM 推理能力与可扩展工具链，覆盖性能分析、文档走查、工具咨询等场景，帮助你把复杂问题快速转化为可执行的调试与优化决策。
+它结合 LLM 推理能力与可扩展工具链，覆盖性能分析、文档走查、GitCode PR 审查、工具咨询等场景，帮助你把复杂问题快速转化为可执行的调试与优化决策。
 
 <p align="center">
   <img src="https://github.com/luelueFLY/images/blob/main/img/msagent-hello.gif" alt="msAgent">
 </p>
 
-<p align="center">📌 文档导航：<a href="#最新消息">最新消息</a> ｜ <a href="docs/configuration-and-extension.md">配置与扩展</a> ｜ <a href="docs/build-and-package.md">编译与打包</a> ｜ <a href="docs/version-and-compatibility.md">版本与兼容性</a></p>
-
-
-## 最新消息
+## 📢 最新消息
 
 - 2026-03-19：`mindstudio-agent` 已发布到 PyPI，推荐优先使用 `pip install -U mindstudio-agent` 安装
 
 ## 🤖 内置 Agent 与能力分工
 
-| Agent 形象 | 名称 | 领域定位 | Agent 说明 |
+| 形象 | 名称 | 领域定位 | 说明 |
 |---|---|---|---|
-| <img src="docs/images/Hermes.png" alt="Hermes" width="120"> | **Hermes** | 性能调优：聚焦 Ascend Profiling 分析，覆盖单卡、多卡、集群等场景，擅长快慢卡、慢节点、MFU、通信瓶颈、算子热点、下发调度等性能问题定位与优化建议。 | [查看 Hermes 说明](docs/agents/Hermes.md) |
-| <img src="docs/images/Minos.png" alt="Minos" width="120"> | **Minos** | 文档体验与上手审查：聚焦 README 走查、安装流程验证、Quick Start 体验、新手 onboarding 和文档可用性评估，帮助发现文档阻塞点并输出改进建议。 | [查看 Minos 说明](docs/agents/Minos.md) |
+| <img src="docs/images/Hermes.png" alt="Hermes" width="120"> | **Hermes** | 性能调优：聚焦 Ascend Profiling 分析，覆盖单卡、多卡、集群等场景，擅长快慢卡、慢节点、MFU、通信瓶颈、算子热点、下发调度等性能问题定位与优化建议。 | [Hermes说明](docs/agents/Hermes.md) |
+| <img src="docs/images/Minos.png" alt="Minos" width="120"> | **Minos** | 文档体验与代码审查辅助：聚焦 README 走查、安装流程验证、Quick Start 体验、新手 onboarding、文档可用性评估，以及 GitCode PR 审查与评审意见整理。 | [Minos说明](docs/agents/Minos.md) |
+| Coming soon | **待定** | 精度分析与优化。 | Coming soon |
+| Coming soon | **待定** | 量化分析与优化。 | Coming soon |
 ---
 
 ## ⚡ 快速上手
@@ -231,7 +230,7 @@ msagent web --no-ui
 不同能力的说明与示例已经按 Agent 拆分：
 
 - `Hermes`：性能调优与 Profiling 分析 Agent 页面，见 [docs/agents/Hermes.md](docs/agents/Hermes.md)
-- `Minos`：文档体验与上手审查 Agent 页面，见 [docs/agents/Minos.md](docs/agents/Minos.md)
+- `Minos`：文档体验与 GitCode PR 审查 Agent 页面，见 [docs/agents/Minos.md](docs/agents/Minos.md)
 ---
 
 ## 🛠️ 参考文档

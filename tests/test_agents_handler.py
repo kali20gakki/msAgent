@@ -66,7 +66,7 @@ def test_format_agent_list_shows_all_state_markers() -> None:
         ),
         AgentConfig.model_construct(
             name="Minos",
-            description="Documentation onboarding and UX review agent",
+            description="Documentation onboarding and GitCode PR review agent",
             llm=SimpleNamespace(alias="default"),
             default=False,
         ),
@@ -80,4 +80,4 @@ def test_format_agent_list_shows_all_state_markers() -> None:
     assert "Hermes [current]" in text
     assert "Ascend NPU profiling analysis agent" in text
     assert "Minos" in text
-    assert "Documentation onboarding and UX review agent" in text
+    assert "Documentation onboarding and GitCode PR review agent" in text

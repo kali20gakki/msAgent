@@ -1,6 +1,6 @@
 version: 0.1.2
 name: Minos
-description: Documentation onboarding and UX review agent with document-ux-review-first workflow
+description: Documentation onboarding and GitCode PR review agent with document-ux-review and gitcode-code-reviewer workflows
 prompt:
   - prompts/agents/Minos.md
   - prompts/suffixes/environments.md
@@ -18,6 +18,7 @@ tools:
 skills:
   patterns:
     - default:document-ux-review
+    - default:gitcode-code-reviewer
   use_catalog: false
 compression:
   auto_compress_enabled: true

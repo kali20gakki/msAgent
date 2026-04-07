@@ -102,7 +102,11 @@ def test_default_agent_skill_bindings_are_split_between_hermes_and_minos() -> No
     minos = _load_default_minos_config()
 
     assert "default:document-ux-review" not in hermes["skills"]["patterns"]
-    assert minos["skills"]["patterns"] == ["default:document-ux-review"]
+    assert "default:gitcode-code-reviewer" not in hermes["skills"]["patterns"]
+    assert minos["skills"]["patterns"] == [
+        "default:document-ux-review",
+        "default:gitcode-code-reviewer",
+    ]
 
 
 @pytest.mark.asyncio
