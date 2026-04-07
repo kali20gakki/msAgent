@@ -17,9 +17,16 @@ def _load_default_msprof_server() -> dict:
     return config["mcpServers"]["msprof-mcp"]
 
 
-def _load_default_msagent_config() -> dict:
+def _load_default_hermes_config() -> dict:
     config_path = files("resources")
-    for part in ("configs", "default", "agents", "msagent.yml"):
+    for part in ("configs", "default", "agents", "Hermes.yml"):
+        config_path = config_path.joinpath(part)
+    return yaml.safe_load(config_path.read_text(encoding="utf-8"))
+
+
+def _load_default_minos_config() -> dict:
+    config_path = files("resources")
+    for part in ("configs", "default", "agents", "Minos.yml"):
         config_path = config_path.joinpath(part)
     return yaml.safe_load(config_path.read_text(encoding="utf-8"))
 
@@ -62,16 +69,40 @@ async def test_config_registry_bootstraps_default_layout(tmp_path: Path) -> None
     approval_config = json.loads(
         (config_dir / CONFIG_APPROVAL_FILE_NAME.name).read_text(encoding="utf-8")
     )
-    assert approval_config["always_allow"] == []
-    assert approval_config["always_deny"] == []
+    assert "interrupt_on" in approval_config
+    assert "execute" in approval_config["interrupt_on"]
+    assert approval_config["interrupt_on"]["execute"]["allowed_decisions"] == [
+        "approve",
+        "reject",
+    ]
+    assert "decision_rules" in approval_config
     assert any(
-        rule == {"name": "run_command", "args": {"command": "sudo\\s+.*"}}
-        for rule in approval_config["always_ask"]
+        rule
+        == {
+            "name": "execute",
+            "args": {"command": ".*"},
+            "decision": "always_approve",
+        }
+        for rule in approval_config["decision_rules"]
     )
 
-    msagent = yaml.safe_load((config_dir / "agents" / "msagent.yml").read_text())
-    default_msagent = _load_default_msagent_config()
-    assert msagent["tools"]["patterns"] == default_msagent["tools"]["patterns"]
+    hermes = yaml.safe_load((config_dir / "agents" / "Hermes.yml").read_text())
+    minos = yaml.safe_load((config_dir / "agents" / "Minos.yml").read_text())
+    default_hermes = _load_default_hermes_config()
+    default_minos = _load_default_minos_config()
+    assert hermes["name"] == "Hermes"
+    assert hermes["tools"]["patterns"] == default_hermes["tools"]["patterns"]
+    assert hermes["skills"]["patterns"] == default_hermes["skills"]["patterns"]
+    assert minos["name"] == "Minos"
+    assert minos["skills"]["patterns"] == default_minos["skills"]["patterns"]
+
+
+def test_default_agent_skill_bindings_are_split_between_hermes_and_minos() -> None:
+    hermes = _load_default_hermes_config()
+    minos = _load_default_minos_config()
+
+    assert "default:document-ux-review" not in hermes["skills"]["patterns"]
+    assert minos["skills"]["patterns"] == ["default:document-ux-review"]
 
 
 @pytest.mark.asyncio
@@ -109,7 +140,9 @@ async def test_config_registry_preserves_existing_mcp_server_config(
 
     await registry.ensure_config_dir()
 
-    mcp_config = json.loads((config_dir / "config.mcp.json").read_text(encoding="utf-8"))
+    mcp_config = json.loads(
+        (config_dir / "config.mcp.json").read_text(encoding="utf-8")
+    )
     msprof_server = mcp_config["mcpServers"]["msprof-mcp"]
     assert msprof_server["args"] == existing_mcp["mcpServers"]["msprof-mcp"]["args"]
     assert msprof_server["stateful"] is False
@@ -131,7 +164,9 @@ async def test_config_registry_adds_missing_default_mcp_server(
 
     await registry.ensure_config_dir()
 
-    mcp_config = json.loads((config_dir / "config.mcp.json").read_text(encoding="utf-8"))
+    mcp_config = json.loads(
+        (config_dir / "config.mcp.json").read_text(encoding="utf-8")
+    )
     msprof_server = mcp_config["mcpServers"]["msprof-mcp"]
     default_msprof_server = _load_default_msprof_server()
     assert msprof_server == default_msprof_server
@@ -155,5 +190,6 @@ async def test_config_registry_copies_missing_approval_template_into_existing_co
     approval_path = config_dir / CONFIG_APPROVAL_FILE_NAME.name
     assert approval_path.exists()
     approval_config = json.loads(approval_path.read_text(encoding="utf-8"))
-    assert approval_config["always_allow"] == []
-    assert len(approval_config["always_ask"]) >= 1
+    assert "interrupt_on" in approval_config
+    assert "execute" in approval_config["interrupt_on"]
+    assert "decision_rules" in approval_config

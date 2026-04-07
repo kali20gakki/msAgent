@@ -115,7 +115,9 @@ class ConfigRegistry:
 
         def normalize() -> None:
             prompt_path = self.config_dir / "prompts" / "agents" / "general.md"
-            template_prompt_path = template_config_dir / "prompts" / "agents" / "general.md"
+            template_prompt_path = (
+                template_config_dir / "prompts" / "agents" / "general.md"
+            )
             if prompt_path.exists() and template_prompt_path.exists():
                 prompt_text = prompt_path.read_text(encoding="utf-8")
                 if (
@@ -141,23 +143,24 @@ class ConfigRegistry:
             general_agent_path = self.config_dir / "agents" / "general.yml"
             template_general_agent_path = template_config_dir / "agents" / "general.yml"
             if general_agent_path.exists() and template_general_agent_path.exists():
-                current_agent = yaml.safe_load(
-                    general_agent_path.read_text(encoding="utf-8")
-                ) or {}
-                template_agent = yaml.safe_load(
-                    template_general_agent_path.read_text(encoding="utf-8")
-                ) or {}
-                current_patterns = (
-                    current_agent.setdefault("tools", {}).setdefault("patterns", [])
+                current_agent = (
+                    yaml.safe_load(general_agent_path.read_text(encoding="utf-8")) or {}
+                )
+                template_agent = (
+                    yaml.safe_load(
+                        template_general_agent_path.read_text(encoding="utf-8")
+                    )
+                    or {}
+                )
+                current_patterns = current_agent.setdefault("tools", {}).setdefault(
+                    "patterns", []
                 )
                 template_patterns = template_agent.get("tools", {}).get("patterns", [])
                 for pattern in template_patterns:
                     if pattern not in current_patterns:
                         current_patterns.append(pattern)
                 general_agent_path.write_text(
-                    yaml.safe_dump(
-                        current_agent, sort_keys=False, allow_unicode=True
-                    ),
+                    yaml.safe_dump(current_agent, sort_keys=False, allow_unicode=True),
                     encoding="utf-8",
                 )
 

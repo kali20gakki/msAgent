@@ -7,7 +7,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any, cast
 
-import aiofiles
+import aiofiles  # type: ignore[import-untyped]
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from msagent.configs.base import VersionedConfig

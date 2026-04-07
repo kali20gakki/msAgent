@@ -1,323 +1,203 @@
-"""TODO management tools for task planning and progress tracking.
+"""Todo rendering and payload parsing helpers used by the TUI."""
 
-This module provides tools for creating and managing structured task lists
-that enable agents to plan complex workflows and track progress through
-multi-step operations.
-"""
+from __future__ import annotations
 
-from langchain.tools import ToolRuntime, tool
-from langchain_core.messages import ToolMessage
-from langgraph.types import Command
-from rich import box
-from rich.markup import escape
+import ast
+import json
+import re
+from typing import Any, Literal, cast
+
 from rich.panel import Panel
 from rich.table import Table
-from rich.text import Text
 
-from msagent.agents.context import AgentContext
-from msagent.agents.state import AgentState, Todo
-from msagent.cli.theme import theme
+from msagent.agents.state import Todo
 
+TODO_PANEL_MARKER = "<!-- TODOS_PANEL -->"
 
-# Icon mapping for todo status (参考 langchain-code 的设计)
-_TODO_ICON = {
-    "pending": "○",
-    "in_progress": "◔",
-    "completed": "✓",
-}
+_STATUS_ORDER = {"completed": 0, "in_progress": 1, "pending": 2}
+_STATUS_ICON = {"completed": "✓", "in_progress": "◔", "pending": "○"}
+TodoStatus = Literal["pending", "in_progress", "completed"]
 
 
-def _coerce_sequential_todos(todos: list[Todo] | None) -> list[dict]:
-    """Ensure visual progression is strictly sequential.
-    
-    Once a todo is not completed, subsequent todos should not appear
-    as in_progress or completed.
-    """
-    todos = list(todos or [])
-    blocked = False
-    out: list[dict] = []
+def _normalize_status(value: str | None) -> TodoStatus:
+    normalized = (value or "pending").strip().replace("-", "_").lower()
+    if normalized not in _STATUS_ORDER:
+        return "pending"
+    return cast(TodoStatus, normalized)
+
+
+def _coerce_sequential_todos(todos: list[dict[str, Any]] | None) -> list[Todo]:
+    """Ensure todo statuses follow sequential progression."""
+    if not todos:
+        return []
+
+    coerced: list[Todo] = []
+    first_unfinished_seen = False
     for item in todos:
-        status = (item.get("status") or "pending").lower().replace("-", "_")
-        if blocked and status in {"in_progress", "completed"}:
+        content = str(item.get("content", "")).strip()
+        if not content:
+            continue
+
+        status = _normalize_status(cast(str | None, item.get("status")))
+        if first_unfinished_seen and status != "pending":
             status = "pending"
         if status != "completed":
-            blocked = True
-        out.append({**item, "status": status})
-    return out
+            first_unfinished_seen = True
+
+        coerced.append({"content": content, "status": status})
+    return coerced
 
 
 def _build_todos_table(
     todos: list[Todo],
+    *,
     max_items: int = 10,
-    max_completed: int = 2,
+    max_completed: int = 3,
     show_completed_indicator: bool = True,
 ) -> Table:
-    """Build a Rich Table with todos content.
-    
-    参考 langchain-code 的设计:
-    - 待办: ○ (空心圆), 进行中: ◔ (半圆), 完成: ✓ (对勾)
-    - 已完成的任务使用删除线(strike)划掉
-    """
-    todos = _coerce_sequential_todos(todos)
-
-    # Filter and limit todos
-    completed = [t for t in todos if t.get("status") == "completed"]
-    active = [t for t in todos if t.get("status") in ("in_progress", "pending")]
-
-    # Sort active by status priority (in_progress first)
-    priority = {"in_progress": 0, "pending": 1}
-    active_sorted = sorted(
-        active,
-        key=lambda todo: priority.get(todo.get("status", "pending"), 2),
+    # Keep the table borderless so the surrounding panel is the only frame.
+    table = Table(
+        show_header=False,
+        show_edge=False,
+        box=None,
+        expand=True,
+        padding=(0, 0),
     )
+    table.add_column("Status", width=1, no_wrap=True)
+    table.add_column("Task", min_width=20, overflow="fold")
 
-    # Build table
-    table = Table.grid(padding=(0, 1))
-    table.add_column(justify="right", width=3, no_wrap=True)
-    table.add_column()
+    if not todos:
+        table.add_row("", "[muted]No todos[/muted]")
+        return table
 
-    items_shown = 0
+    completed = [todo for todo in todos if todo["status"] == "completed"]
+    active = [todo for todo in todos if todo["status"] != "completed"]
+    visible_completed = completed[:max_completed]
 
-    # Show hidden completed indicator if needed
-    if show_completed_indicator and len(completed) > max_completed:
-        hidden_count = len(completed) - max_completed
-        table.add_row("", Text(f"+{hidden_count} more completed", style=f"{theme.muted_text}"))
+    visible: list[Todo] = [*visible_completed, *active]
+    visible = visible[:max_items]
 
-    # Show completed items (limited) - 使用删除线划掉
-    completed_to_show = completed[-max_completed:]
-    for todo in completed_to_show:
-        if items_shown >= max_items:
-            break
-        content = (todo.get("content") or "").strip() or "(empty)"
-        icon = _TODO_ICON["completed"]
-        # 已完成: 绿色 + 删除线(strike)
-        text = Text(content)
-        text.stylize("strike")
-        text.stylize(f"{theme.success_color}")
-        row_text = Text.assemble(
-            Text(f"{icon} ", style=f"{theme.success_color}"),
-            text,
-        )
-        table.add_row(f"{items_shown + 1}.", row_text)
-        items_shown += 1
+    for todo in visible:
+        icon = _STATUS_ICON[todo["status"]]
+        content = todo["content"]
+        if todo["status"] == "completed":
+            content = f"[strike]{content}[/strike]"
+        table.add_row(icon, content)
 
-    # Show active items
-    active_shown = 0
-    for todo in active_sorted:
-        if items_shown >= max_items:
-            remaining = len(active_sorted) - active_shown
-            if remaining > 0:
-                table.add_row("", Text(f"+{remaining} more", style=f"{theme.muted_text}"))
-            break
-        status = todo.get("status", "pending")
-        content = (todo.get("content") or "").strip() or "(empty)"
-        icon = _TODO_ICON.get(status, "○")
-        
-        if status == "in_progress":
-            # 进行中: 信息色
-            color = theme.info_color
-        else:
-            # 待办: 灰色
-            color = theme.muted_text
-        
-        text = Text(content)
-        text.stylize(f"{color}")
-        row_text = Text.assemble(
-            Text(f"{icon} ", style=f"{color}"),
-            text,
-        )
-        table.add_row(f"{items_shown + 1}.", row_text)
-        items_shown += 1
-        active_shown += 1
+    hidden_completed = len(completed) - len(visible_completed)
+    if show_completed_indicator and hidden_completed > 0:
+        table.add_row("", f"[muted]+{hidden_completed} more completed[/muted]")
 
     return table
 
 
 def render_todos_panel(
-    todos: list[Todo],
+    todos: list[dict[str, Any]] | None,
+    *,
     max_items: int = 10,
-    max_completed: int = 2,
+    max_completed: int = 3,
     show_completed_indicator: bool = True,
 ) -> Panel:
-    """Render todos as a Rich Panel with rounded box border.
-    
-    参考 langchain-code 的设计，使用 box.ROUNDED 风格的边框包围整个 todo 列表。
-    """
-    if not todos:
-        return Panel(
-            Text("No todos", style=f"{theme.muted_text}"),
-            title="TODOs",
-            border_style=f"{theme.muted_text}",
-            box=box.ROUNDED,
-            padding=(1, 1),
-        )
-
+    coerced = _coerce_sequential_todos(todos)
     table = _build_todos_table(
-        todos,
+        coerced,
         max_items=max_items,
         max_completed=max_completed,
         show_completed_indicator=show_completed_indicator,
     )
-
-    return Panel(
-        table,
-        title="TODOs",
-        border_style=f"{theme.muted_text}",
-        box=box.ROUNDED,
-        padding=(1, 1),
-        expand=True,
-    )
+    return Panel(table, title="TODOs", border_style="muted")
 
 
 def format_todos(
-    todos: list[Todo],
+    todos: list[dict[str, Any]] | None,
+    *,
     max_items: int = 10,
-    max_completed: int = 2,
+    max_completed: int = 3,
     show_completed_indicator: bool = True,
 ) -> str:
-    """Render todos as Rich markup string.
-    
-    用于需要字符串输出的场景（如 ToolMessage 的 short_content）。
-    """
-    if not todos:
+    coerced = _coerce_sequential_todos(todos)
+    if not coerced:
         return "[muted]No todos[/muted]"
 
-    # Use the table builder but convert to markup string
-    table = _build_todos_table(
-        todos,
-        max_items=max_items,
-        max_completed=max_completed,
-        show_completed_indicator=show_completed_indicator,
-    )
-    
-    # Build lines manually for string output
+    completed = [todo for todo in coerced if todo["status"] == "completed"]
+    active = [todo for todo in coerced if todo["status"] != "completed"]
+    visible_completed = completed[:max_completed]
+    visible = [*visible_completed, *active][:max_items]
+
     lines: list[str] = []
-    
-    # Filter and limit todos for string output
-    todos_list = _coerce_sequential_todos(todos)
-    completed = [t for t in todos_list if t.get("status") == "completed"]
-    active = [t for t in todos_list if t.get("status") in ("in_progress", "pending")]
-    
-    priority = {"in_progress": 0, "pending": 1}
-    active_sorted = sorted(
-        active,
-        key=lambda todo: priority.get(todo.get("status", "pending"), 2),
-    )
-    
-    items_shown = 0
-    
-    if show_completed_indicator and len(completed) > max_completed:
-        hidden_count = len(completed) - max_completed
-        lines.append(f"[{theme.muted_text}]+{hidden_count} more completed[/]")
-    
-    completed_to_show = completed[-max_completed:]
-    for todo in completed_to_show:
-        if items_shown >= max_items:
-            break
-        content = escape(todo.get("content", "").strip())
-        icon = _TODO_ICON["completed"]
-        lines.append(f"[{theme.success_color}]{icon} [strike]{content}[/strike][/]")
-        items_shown += 1
-    
-    active_shown = 0
-    for todo in active_sorted:
-        if items_shown >= max_items:
-            remaining = len(active_sorted) - active_shown
-            if remaining > 0:
-                lines.append(f"[{theme.muted_text}]+{remaining} more[/]")
-            break
-        status = todo.get("status", "pending")
-        content = escape(todo.get("content", "").strip())
-        icon = _TODO_ICON.get(status, "○")
-        
-        if status == "in_progress":
-            color = theme.info_color
-        else:
-            color = theme.muted_text
-        
-        lines.append(f"[{color}]{icon} {content}[/]")
-        items_shown += 1
-        active_shown += 1
+    for todo in visible:
+        icon = _STATUS_ICON[todo["status"]]
+        content = todo["content"]
+        if todo["status"] == "completed":
+            content = f"[strike]{content}[/strike]"
+        lines.append(f"{icon} {content}")
+
+    hidden_completed = len(completed) - len(visible_completed)
+    if show_completed_indicator and hidden_completed > 0:
+        lines.append(f"[muted]+{hidden_completed} more completed[/muted]")
 
     return "\n".join(lines)
 
 
-@tool()
-def write_todos(
-    todos: list[Todo],
-    runtime: ToolRuntime[AgentContext, AgentState],
-) -> Command:
-    """Create and manage structured task lists for tracking progress through complex workflows.
+def parse_todos_for_panel(content: str) -> list[Todo] | None:
+    """Parse todos from either legacy panel payloads or deepagents tool output."""
+    payload = content.strip()
+    if not payload:
+        return None
 
-    ## When to Use
-    - Multi-step or non-trivial tasks requiring coordination
-    - When user provides multiple tasks or explicitly requests todo list
-    - Avoid for single, trivial actions unless directed otherwise
+    if payload.startswith(TODO_PANEL_MARKER):
+        payload = payload[len(TODO_PANEL_MARKER) :]
+        todos = _parse_todos_from_formatted_lines(payload)
+        return todos if todos else None
 
-    ## Best Practices
-    - Only one in_progress task at a time
-    - Mark completed immediately when task is fully done
-    - Always send the full updated list when making changes
-    - Prune irrelevant items to keep list focused
+    prefix = "Updated todo list to "
+    if not payload.startswith(prefix):
+        return None
 
-    ## Progress Updates
-    - Call write_todos again to change task status or edit content
-    - Reflect real-time progress; don't batch completions
-    - If blocked, keep in_progress and add new task describing blocker
-
-    Args:
-        todos: List of Todo items with content and status
-
-    """
-    # Format with high limits to show all todos, no hidden indicator
-    formatted_todos = format_todos(
-        todos,
-        max_items=50,
-        max_completed=50,
-        show_completed_indicator=False,
-    )
-
-    # Add marker for renderer to display as panel
-    marked_content = f"{TODO_PANEL_MARKER}{formatted_todos}"
-
-    return Command(
-        update={
-            "todos": todos,
-            "messages": [
-                ToolMessage(
-                    name=write_todos.name,
-                    content=f"Updated todo list to {todos}",
-                    tool_call_id=runtime.tool_call_id,
-                    short_content=marked_content,
-                )
-            ],
-        }
-    )
+    raw_todos = payload[len(prefix) :].strip()
+    parsed = _parse_todos_payload(raw_todos)
+    if not isinstance(parsed, list):
+        return None
+    return _coerce_sequential_todos(cast(list[dict[str, Any]], parsed))
 
 
-write_todos.metadata = {"approval_config": {"always_approve": True}}
+def _parse_todos_payload(raw_todos: str) -> Any:
+    """Parse the serialized todo payload from write_todos tool output."""
+    try:
+        return json.loads(raw_todos)
+    except json.JSONDecodeError:
+        try:
+            return ast.literal_eval(raw_todos)
+        except (SyntaxError, ValueError):
+            return None
 
 
-@tool()
-def read_todos(
-    runtime: ToolRuntime[AgentContext, AgentState],
-) -> str:
-    """Read the current TODO list from the agent state.
+def _parse_todos_from_formatted_lines(content: str) -> list[Todo]:
+    """Parse todos from rendered panel lines."""
+    todos: list[Todo] = []
+    for raw_line in content.strip().splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("+"):
+            continue
 
-    This tool allows the agent to retrieve and review the current TODO list
-    to stay focused on remaining tasks and track progress through complex workflows.
-    """
-    todos = runtime.state.get("todos")
-    if not todos:
-        return "No todos currently in the list."
+        # Strip Rich markup before matching status icon + task content.
+        clean_line = re.sub(r"\[/?[^\]]*?\]", "", line).strip()
+        if not clean_line:
+            continue
 
-    return format_todos(todos, max_items=50)
+        status_text = _parse_status_from_icon(clean_line)
+        if status_text is None:
+            continue
+
+        status, todo_content = status_text
+        if todo_content:
+            todos.append({"content": todo_content, "status": status})
+    return todos
 
 
-read_todos.metadata = {"approval_config": {"always_approve": True}}
-
-
-# Marker for detecting todo panel in renderer
-TODO_PANEL_MARKER = "[TODO_PANEL]"
-
-TODO_TOOLS = [write_todos, read_todos]
+def _parse_status_from_icon(line: str) -> tuple[TodoStatus, str] | None:
+    """Parse todo status from a rendered icon-prefixed line."""
+    for status, icon in _STATUS_ICON.items():
+        if line.startswith(icon):
+            return cast(TodoStatus, status), line[len(icon) :].strip()
+    return None

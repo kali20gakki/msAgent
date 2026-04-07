@@ -1,38 +1,24 @@
-"""Middleware for LangChain agents.
+"""Middleware - now provided by deepagents."""
 
-This module contains middleware implementations for customizing agent behavior.
-"""
+# Deepagents provides:
+# - FilesystemMiddleware (ls, read_file, write_file, edit_file, glob, grep, execute)
+# - SkillsMiddleware (skill loading)
+# - MemoryMiddleware (AGENTS.md memory)
+# - TodoListMiddleware (todos tool)
 
-from msagent.middlewares.approval import ApprovalMiddleware
-from msagent.middlewares.compress_tool_output import CompressToolOutputMiddleware
-from msagent.middlewares.dynamic_prompt import create_dynamic_prompt_middleware
-from msagent.middlewares.pending_tool_result import PendingToolResultMiddleware
-from msagent.middlewares.return_direct import ReturnDirectMiddleware
-from msagent.middlewares.retry import (
-    CircuitBreakerRetryMiddleware,
-    NonRetryableError,
-    RetryConfig,
-    RetryMiddleware,
-    RetryableError,
-    ToolRetryConfig,
-    create_retry_middleware,
+# Re-export from deepagents for convenience.
+from deepagents.middleware import (
+    FilesystemMiddleware,
+    MemoryMiddleware,
+    SkillsMiddleware,
 )
-from msagent.middlewares.sandbox import SandboxMiddleware
-from msagent.middlewares.token_cost import TokenCostMiddleware
+from langchain.agents.middleware import TodoListMiddleware
+from msagent.middlewares.tool_result_eviction import ToolResultEvictionMiddleware
 
 __all__ = [
-    "ApprovalMiddleware",
-    "CircuitBreakerRetryMiddleware",
-    "CompressToolOutputMiddleware",
-    "NonRetryableError",
-    "PendingToolResultMiddleware",
-    "ReturnDirectMiddleware",
-    "RetryConfig",
-    "RetryMiddleware",
-    "RetryableError",
-    "SandboxMiddleware",
-    "TokenCostMiddleware",
-    "ToolRetryConfig",
-    "create_dynamic_prompt_middleware",
-    "create_retry_middleware",
+    "FilesystemMiddleware",
+    "TodoListMiddleware",
+    "SkillsMiddleware",
+    "MemoryMiddleware",
+    "ToolResultEvictionMiddleware",
 ]

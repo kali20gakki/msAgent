@@ -5,19 +5,16 @@ import textwrap
 from typing import TYPE_CHECKING
 
 from langchain_core.messages import HumanMessage
-from prompt_toolkit.application import Application
 from prompt_toolkit.formatted_text import FormattedText
 from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.keys import Keys
-from prompt_toolkit.layout import Layout
-from prompt_toolkit.layout.containers import HSplit, Window
 from prompt_toolkit.layout.controls import FormattedTextControl
 
 from msagent.cli.theme import console, theme
 from msagent.cli.ui.shared import (
-    create_bottom_toolbar,
+    SelectorState,
     create_instruction,
-    create_prompt_style,
+    create_selector_application,
 )
 from msagent.core.logging import get_logger
 from msagent.core.settings import settings
@@ -87,14 +84,16 @@ class SkillsHandler:
         return True
 
     async def _get_skill_selection(self, skills: list[Skill]) -> Skill | None:
-        current_index = 0
+        state = SelectorState(window_size=10)
         expanded_indices: set[int] = set()
-        scroll_offset = 0
-        window_size = 10
 
         text_control = FormattedTextControl(
             text=lambda: self._format_skill_list(
-                skills, current_index, expanded_indices, scroll_offset, window_size
+                skills,
+                state.index,
+                expanded_indices,
+                state.scroll_offset,
+                state.window_size or 10,
             ),
             focusable=True,
             show_cursor=False,
@@ -104,26 +103,18 @@ class SkillsHandler:
 
         @kb.add(Keys.Up)
         def _(_event):
-            nonlocal current_index, scroll_offset
-            if current_index > 0:
-                current_index -= 1
-                if current_index < scroll_offset:
-                    scroll_offset = current_index
+            state.move_linear(-1, size=len(skills))
 
         @kb.add(Keys.Down)
         def _(_event):
-            nonlocal current_index, scroll_offset
-            if current_index < len(skills) - 1:
-                current_index += 1
-                if current_index >= scroll_offset + window_size:
-                    scroll_offset = current_index - window_size + 1
+            state.move_linear(1, size=len(skills))
 
         @kb.add(Keys.Tab)
         def _(_event):
-            if current_index in expanded_indices:
-                expanded_indices.remove(current_index)
+            if state.index in expanded_indices:
+                expanded_indices.remove(state.index)
             else:
-                expanded_indices.add(current_index)
+                expanded_indices.add(state.index)
 
         selected = [False]
 
@@ -137,37 +128,19 @@ class SkillsHandler:
             event.app.exit()
 
         context = self.session.context
-        app: Application = Application(
-            layout=Layout(
-                HSplit(
-                    [
-                        *create_instruction(
-                            "Enter: select skill | Tab: expand/collapse"
-                        ),
-                        Window(content=text_control),
-                        Window(
-                            height=1,
-                            content=FormattedTextControl(
-                                lambda: create_bottom_toolbar(
-                                    context,
-                                    context.working_dir,
-                                    bash_mode=context.bash_mode,
-                                )
-                            ),
-                        ),
-                    ]
-                )
-            ),
+        app = create_selector_application(
+            context=context,
+            text_control=text_control,
             key_bindings=kb,
-            full_screen=False,
-            style=create_prompt_style(context, bash_mode=context.bash_mode),
-            erase_when_done=True,
+            header_windows=create_instruction(
+                "Enter: select skill | Tab: expand/collapse"
+            ),
         )
 
         try:
             await app.run_async()
             if selected[0]:
-                return skills[current_index]
+                return skills[state.index]
         except (KeyboardInterrupt, EOFError):
             pass
 
@@ -240,8 +213,8 @@ class SkillsHandler:
         category_matches = [
             skill
             for skill in skills
-            if cls._normalize_skill_ref(f"{skill.category}:{skill.name}")
-            == normalized_ref
+            if cls._normalize_skill_ref(f"{skill.category}:{skill.name}") == normalized_ref
+            or cls._normalize_skill_ref(f"{skill.category}/{skill.name}") == normalized_ref
         ]
         if len(category_matches) == 1:
             return category_matches[0]

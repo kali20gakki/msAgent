@@ -46,19 +46,6 @@ class MessageContentBuilder:
                 references[reference.ref_type] = []
             references[reference.ref_type].append(reference.value)
 
-        for word in text.split():
-            if word.startswith("@:"):
-                continue
-            # Strip common punctuation from end of word
-            cleaned_word = word.rstrip(".,!?;:")
-            for resolver in self.resolvers.values():
-                if resolver.is_standalone_reference(cleaned_word):
-                    ref_type = resolver.type
-                    if ref_type not in references:
-                        references[ref_type] = []
-                    references[ref_type].append(cleaned_word)
-                    break
-
         return references
 
     def _extract_reference_specs(self, text: str) -> list[_ExtractedReference]:
@@ -81,7 +68,35 @@ class MessageContentBuilder:
             )
 
         references.extend(self._extract_plain_mentions(text))
+        references.extend(self._extract_standalone_references(text))
         references.sort(key=lambda reference: reference.start)
+        return references
+
+    def _extract_standalone_references(self, text: str) -> list[_ExtractedReference]:
+        references: list[_ExtractedReference] = []
+
+        for match in re.finditer(r"\S+", text):
+            token = match.group(0)
+            if token.startswith("@"):
+                continue
+
+            cleaned = token.rstrip(".,!?;:")
+            if not cleaned:
+                continue
+
+            for resolver in self.resolvers.values():
+                if not resolver.is_standalone_reference(cleaned):
+                    continue
+                references.append(
+                    _ExtractedReference(
+                        ref_type=resolver.type,
+                        value=cleaned,
+                        token=cleaned,
+                        start=match.start(),
+                    )
+                )
+                break
+
         return references
 
     def _extract_plain_mentions(self, text: str) -> list[_ExtractedReference]:

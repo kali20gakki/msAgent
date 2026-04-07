@@ -1,7 +1,10 @@
+"""Agent context for template rendering and runtime state."""
+
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+import os
 from pathlib import Path
 from typing import Any, Literal
 
@@ -26,11 +29,18 @@ class RetryNotice:
 
 
 class AgentContext(BaseModel):
-    approval_mode: ApprovalMode
-    working_dir: Path
+    """Context passed to agent for template rendering."""
+
+    approval_mode: ApprovalMode = Field(default=ApprovalMode.ACTIVE)
+    working_dir: Path = Field(
+        default_factory=lambda: Path(
+            os.getenv("MSAGENT_WEB_WORKING_DIR", "").strip() or Path.cwd()
+        ).resolve()
+    )
     platform: str = Field(default="")
     os_version: str = Field(default="")
     current_date_time_zoned: str = Field(default="")
+    local_environment_context: str = Field(default="")
     mcp_servers: str = Field(default="")
     user_memory: str = Field(default="")
     tool_catalog: list[BaseTool] = Field(default_factory=list, exclude=True)
@@ -44,11 +54,13 @@ class AgentContext(BaseModel):
 
     @property
     def template_vars(self) -> dict[str, Any]:
+        """Get template variables for prompt rendering."""
         return {
             "working_dir": str(self.working_dir),
             "platform": self.platform,
             "os_version": self.os_version,
             "current_date_time_zoned": self.current_date_time_zoned,
+            "local_environment_context": self.local_environment_context,
             "mcp_servers": self.mcp_servers,
             "user_memory": self.user_memory,
         }

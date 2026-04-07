@@ -9,18 +9,20 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from json_repair import loads as repair_loads
+from langchain.tools import BaseTool
 from langchain_core.messages import (
     AIMessage,
     AIMessageChunk,
     AnyMessage,
+    BaseMessage,
     HumanMessage,
     ToolMessage,
 )
 from langchain_core.runnables import RunnableConfig
-from langgraph.types import Command
+from langgraph.types import Command, Overwrite
 from rich.console import Group, RenderableType
 from rich.live import Live
 from rich.measure import Measurement
@@ -28,10 +30,13 @@ from rich.spinner import Spinner
 from rich.text import Text
 
 from msagent.agents.context import AgentContext, RetryNotice
+from msagent.agents.local_context import build_local_environment_context
 from msagent.cli.bootstrap.initializer import initializer
 from msagent.cli.builders import MessageContentBuilder
+from msagent.cli.core.tool_output import ToolOutputEntry
 from msagent.cli.handlers import CompressionHandler, InterruptHandler
 from msagent.cli.theme import console, theme
+from msagent.cli.ui.renderer import Renderer
 from msagent.core.constants import OS_VERSION, PLATFORM
 from msagent.core.logging import get_logger
 from msagent.middlewares.token_cost import extract_usage_counts
@@ -82,6 +87,16 @@ class ToolActivityCall:
     def __hash__(self) -> int:
         """Hash based on name, args, and call_id only."""
         return hash((self.name, self.call_id, tuple(sorted(self.args.items()))))
+
+
+@dataclass(frozen=True, slots=True)
+class DeferredToolHeader:
+    """Cached tool call header rendered when the matching tool result arrives."""
+
+    tool_call: dict[str, Any]
+    indent_level: int
+    origin_label: str | None
+    started_at: float
 
 
 @dataclass
@@ -156,6 +171,7 @@ class MessageDispatcher:
     """Dispatch user message processing and AI response streaming."""
 
     _MAX_LOG_VALUE_LENGTH = 400
+    _SUBAGENT_ORIGIN_LABEL = "Subagent"
     
     # Tool names that should be hidden from activity display (shown via other means)
     _HIDDEN_ACTIVITY_TOOLS: set[str] = {"write_todos"}
@@ -166,7 +182,7 @@ class MessageDispatcher:
         self.interrupt_handler = InterruptHandler(session=session)
         self.message_builder = MessageContentBuilder(Path(session.context.working_dir))
         self._pending_compression = False
-        self._pending_tool_headers: dict[str, tuple[dict[str, Any], int, float]] = {}
+        self._pending_tool_headers: dict[str, DeferredToolHeader] = {}
 
     async def dispatch(self, content: str) -> None:
         """Dispatch user message and get AI response."""
@@ -184,24 +200,7 @@ class MessageDispatcher:
                 additional_kwargs={"reference_mapping": reference_mapping},
             )
             ctx = self.session.context
-            now = datetime.now(timezone.utc).astimezone()
-            user_memory = await initializer.load_user_memory(ctx.working_dir)
-            agent_context = AgentContext(
-                approval_mode=ctx.approval_mode,
-                working_dir=ctx.working_dir,
-                platform=PLATFORM,
-                os_version=OS_VERSION,
-                current_date_time_zoned=now.strftime("%Y-%m-%d %H:%M:%S %Z"),
-                mcp_servers=(
-                    ", ".join(initializer.cached_mcp_server_names)
-                    if initializer.cached_mcp_server_names
-                    else "None"
-                ),
-                user_memory=user_memory,
-                tool_catalog=initializer.cached_tools_in_catalog,
-                skill_catalog=initializer.cached_agent_skills,
-                tool_output_max_tokens=ctx.tool_output_max_tokens,
-            )
+            agent_context = await self._build_agent_context()
 
             graph_config = RunnableConfig(
                 configurable={"thread_id": ctx.thread_id},
@@ -226,6 +225,32 @@ class MessageDispatcher:
             console.print_error(f"Error processing message: {error_msg}")
             console.print("")
             await self._log_processing_error(e)
+
+    async def _build_agent_context(self) -> AgentContext:
+        """Build runtime context injected into prompt templates and middleware."""
+        ctx = self.session.context
+        now = datetime.now(timezone.utc).astimezone()
+        user_memory = await initializer.load_user_memory(ctx.working_dir)
+        return AgentContext(
+            approval_mode=ctx.approval_mode,
+            working_dir=ctx.working_dir,
+            platform=PLATFORM,
+            os_version=OS_VERSION,
+            current_date_time_zoned=now.strftime("%Y-%m-%d %H:%M:%S %Z"),
+            local_environment_context=build_local_environment_context(
+                ctx.working_dir,
+                now=now,
+            ),
+            mcp_servers=(
+                ", ".join(initializer.cached_mcp_server_names)
+                if initializer.cached_mcp_server_names
+                else "None"
+            ),
+            user_memory=user_memory,
+            tool_catalog=cast(list[BaseTool], initializer.cached_tools_in_catalog),
+            skill_catalog=initializer.cached_agent_skills,
+            tool_output_max_tokens=ctx.tool_output_max_tokens,
+        )
 
     async def _stream_response(
         self,
@@ -381,6 +406,8 @@ class MessageDispatcher:
         for message in reversed(messages):
             if isinstance(message, (AIMessage, ToolMessage)):
                 self.session.renderer.render_message(message)
+                if isinstance(message, ToolMessage):
+                    self._remember_expandable_tool_output(message, indent_level=0)
                 break
 
     async def _log_processing_error(self, error: Exception) -> None:
@@ -595,6 +622,13 @@ class MessageDispatcher:
         return None
 
     @staticmethod
+    def _unwrap_overwrite(value: Any) -> Any:
+        """Unwrap LangGraph Overwrite wrapper values when present."""
+        if isinstance(value, Overwrite):
+            return value.value
+        return value
+
+    @staticmethod
     def _get_stable_message_id(message: AnyMessage) -> str:
         """Get a stable ID for deduplication, even when message.id is None.
 
@@ -773,10 +807,17 @@ class MessageDispatcher:
 
     @classmethod
     def _build_tool_activity_label(
-        cls, tool_call: ToolActivityCall, indent_level: int = 0
+        cls,
+        tool_call: ToolActivityCall,
+        indent_level: int = 0,
+        origin_label: str | None = None,
     ) -> Text:
         """Build the live tool label with a fixed action prefix."""
         text = Text("  " * indent_level)
+        if origin_label:
+            text.append("[", style="muted")
+            text.append(origin_label, style="secondary")
+            text.append("] ", style="muted")
         text.append("Use tool ", style=_TOOL_PREFIX_STYLE)
         text.append(tool_call.name, style=_TOOL_NAME_STYLE)
         return text
@@ -795,11 +836,27 @@ class MessageDispatcher:
     def _stringify_tool_arg(value: Any, max_length: int) -> str:
         """Convert tool args to a compact single-line string."""
         if isinstance(value, str):
-            return value.replace("\n", "\\n")
+            text = value.replace("\r\n", "\n").replace("\n", " | ")
         elif isinstance(value, (dict, list)):
-            return json.dumps(value, ensure_ascii=False)
+            text = json.dumps(value, ensure_ascii=False)
         else:
-            return str(value)
+            text = str(value)
+
+        if max_length <= 0 or len(text) <= max_length:
+            return text
+
+        suffix = f"... ({len(text)} chars)"
+        keep = max(8, max_length - len(suffix))
+        if keep >= len(text):
+            return text
+        return f"{text[:keep]}{suffix}"
+
+    @classmethod
+    def _resolve_origin_label(cls, namespace: tuple | None = None) -> str | None:
+        """Mark nested namespace output as coming from a subagent."""
+        if namespace:
+            return cls._SUBAGENT_ORIGIN_LABEL
+        return None
 
     @classmethod
     def _build_tool_arg_items(
@@ -1018,6 +1075,7 @@ class MessageDispatcher:
         renderables: list[RenderableType] = []
 
         for namespace, tool_calls in cls._sorted_activity_items(active_tools):
+            origin_label = cls._resolve_origin_label(namespace)
             for tool_call in tool_calls:
                 # Skip hidden tools (e.g., write_todos shown via panel)
                 if tool_call.name in cls._HIDDEN_ACTIVITY_TOOLS:
@@ -1025,7 +1083,9 @@ class MessageDispatcher:
                 renderables.append(
                     ToolActivityIndicator(
                         cls._build_tool_activity_label(
-                            tool_call, indent_level=len(namespace)
+                            tool_call,
+                            indent_level=len(namespace),
+                            origin_label=origin_label,
                         ),
                         details=cls._build_tool_activity_args(
                             tool_call, indent_level=len(namespace)
@@ -1232,58 +1292,106 @@ class MessageDispatcher:
                 continue
 
             await self._update_token_tracking(node_data)
+            last_message = self._extract_last_update_message(node_data)
+            if last_message is None:
+                continue
 
-            if node_data and "messages" in node_data and node_data["messages"]:
-                messages = node_data["messages"]
-                last_message: AnyMessage = messages[-1]
-                base_id = self._get_stable_message_id(last_message)
-                message_id = f"{base_id}_{last_message.type}"
-                indent_level = len(namespace)
+            indent_level = len(namespace)
+            self._update_activity_for_message(
+                last_message,
+                namespace=namespace,
+                live=live,
+                active_tools=active_tools,
+                thinking_previews=thinking_previews,
+            )
+            self._render_new_update_message(
+                last_message,
+                indent_level=indent_level,
+                rendered_messages=rendered_messages,
+            )
 
-                if isinstance(last_message, AIMessage):
-                    tool_previews = self._extract_tool_call_previews(last_message)
-                    if tool_previews:
-                        self._set_tool_activity(
-                            live,
-                            active_tools,
-                            thinking_previews,
-                            namespace,
-                            tool_previews,
-                        )
-                elif isinstance(last_message, ToolMessage):
-                    self._clear_tool_activity(
-                        live,
-                        active_tools,
-                        thinking_previews,
-                        namespace,
-                        refresh=True,
-                    )
-                    self._clear_thinking_preview(
-                        live,
-                        active_tools,
-                        thinking_previews,
-                        namespace,
-                        refresh=True,
-                    )
+    def _extract_last_update_message(self, node_data: dict[str, Any]) -> AnyMessage | None:
+        """Return the newest message from an update payload when present."""
+        messages_value = self._unwrap_overwrite(node_data.get("messages"))
+        if isinstance(messages_value, tuple):
+            messages_value = list(messages_value)
+        if not isinstance(messages_value, list) or not messages_value:
+            return None
 
-                if message_id in rendered_messages:
-                    continue
+        last_message = messages_value[-1]
+        if not isinstance(last_message, BaseMessage):
+            return None
+        return cast(AnyMessage, last_message)
 
-                rendered_messages.add(message_id)
+    def _update_activity_for_message(
+        self,
+        message: AnyMessage,
+        *,
+        namespace: tuple,
+        live: Live | None,
+        active_tools: dict[tuple, list[ToolActivityCall]],
+        thinking_previews: dict[tuple, list[str]],
+    ) -> None:
+        """Update transient live activity state based on a final update message."""
+        if isinstance(message, AIMessage):
+            tool_previews = self._extract_tool_call_previews(message)
+            if tool_previews:
+                self._set_tool_activity(
+                    live,
+                    active_tools,
+                    thinking_previews,
+                    namespace,
+                    tool_previews,
+                )
+            return
 
-                if isinstance(last_message, AIMessage):
-                    self._render_assistant_with_deferred_tools(
-                        last_message,
-                        indent_level=indent_level,
-                    )
-                elif isinstance(last_message, ToolMessage):
-                    self._render_pending_tool_header(
-                        last_message,
-                        indent_level=indent_level,
-                    )
-                    self.session.renderer.render_tool_message(
-                        last_message, indent_level=indent_level
-                    )
+        if isinstance(message, ToolMessage):
+            self._clear_tool_activity(
+                live,
+                active_tools,
+                thinking_previews,
+                namespace,
+                refresh=True,
+            )
+            self._clear_thinking_preview(
+                live,
+                active_tools,
+                thinking_previews,
+                namespace,
+                refresh=True,
+            )
+
+    def _render_new_update_message(
+        self,
+        message: AnyMessage,
+        *,
+        indent_level: int,
+        rendered_messages: set[str],
+    ) -> None:
+        """Render the final message from an update chunk once per stable message id."""
+        message_id = f"{self._get_stable_message_id(message)}_{message.type}"
+        if message_id in rendered_messages:
+            return
+        rendered_messages.add(message_id)
+
+        if isinstance(message, AIMessage):
+            self._render_assistant_with_deferred_tools(
+                message,
+                indent_level=indent_level,
+            )
+            return
+
+        if isinstance(message, ToolMessage):
+            self._render_pending_tool_header(
+                message,
+                indent_level=indent_level,
+            )
+            self.session.renderer.render_tool_message(
+                message, indent_level=indent_level
+            )
+            self._remember_expandable_tool_output(
+                message, indent_level=indent_level
+            )
 
     @staticmethod
     def _extract_chunk_content(chunk: AIMessageChunk) -> str:
@@ -1325,20 +1433,24 @@ class MessageDispatcher:
 
     def _remember_tool_headers(self, message: AIMessage, indent_level: int) -> None:
         """Cache tool call headers so they can be rendered with the tool result."""
+        origin_label = (
+            self._SUBAGENT_ORIGIN_LABEL if indent_level > 0 else None
+        )
         for tool_call in message.tool_calls:
             call_id = tool_call.get("id")
             if not call_id:
                 continue
-            
+
             # Skip hidden tools (e.g., write_todos shown via panel)
             tool_name = tool_call.get("name", "")
             if tool_name in self._HIDDEN_ACTIVITY_TOOLS:
                 continue
-            
-            self._pending_tool_headers[str(call_id)] = (
-                dict(tool_call),
-                indent_level,
-                time.time(),
+
+            self._pending_tool_headers[str(call_id)] = DeferredToolHeader(
+                tool_call=dict(tool_call),
+                indent_level=indent_level,
+                origin_label=origin_label,
+                started_at=time.time(),
             )
 
     def _render_assistant_with_deferred_tools(
@@ -1369,18 +1481,61 @@ class MessageDispatcher:
         if pending is None:
             return
 
-        tool_call, stored_indent, start_time = pending
-        
+        if isinstance(pending, tuple):
+            pending = DeferredToolHeader(
+                tool_call=dict(pending[0]),
+                indent_level=int(pending[1]),
+                origin_label=None,
+                started_at=float(pending[2]),
+            )
+
+        tool_call = pending.tool_call
+
         # Skip hidden tools (e.g., write_todos shown via panel)
         tool_name = tool_call.get("name", "")
         if tool_name in self._HIDDEN_ACTIVITY_TOOLS:
             return
-        
+
         duration = self._extract_tool_execution_duration(message)
         if duration is None:
-            duration = time.time() - start_time if start_time else None
+            duration = time.time() - pending.started_at if pending.started_at else None
         self.session.renderer.render_tool_call(
-            tool_call, indent_level=stored_indent, duration=duration
+            tool_call,
+            indent_level=pending.indent_level,
+            duration=duration,
+            origin_label=pending.origin_label,
+        )
+
+    def _remember_expandable_tool_output(
+        self, message: ToolMessage, *, indent_level: int
+    ) -> None:
+        """Store the latest tool output that has a richer full view."""
+        remember = getattr(self.session, "remember_tool_output", None)
+        if not callable(remember):
+            return
+
+        display = Renderer._build_tool_message_display(message)
+        if display is None or display.is_todo_panel or not display.can_expand:
+            return
+
+        tool_call_id = str(
+            getattr(message, "tool_call_id", None)
+            or getattr(message, "id", None)
+            or ""
+        )
+        tool_name = str(getattr(message, "name", None) or "tool")
+        remember(
+            ToolOutputEntry(
+                tool_call_id=tool_call_id,
+                tool_name=tool_name,
+                preview_content=display.preview_content,
+                full_content=display.full_content,
+                indent_level=indent_level,
+                origin_label=(
+                    self._SUBAGENT_ORIGIN_LABEL if indent_level > 0 else None
+                ),
+                duration=self._extract_tool_execution_duration(message),
+            )
         )
 
     async def _finalize_streaming(
@@ -1461,11 +1616,17 @@ class MessageDispatcher:
         }
 
         updates = {
-            field: node_data.get(field) for field in token_fields if field in node_data
+            field: self._unwrap_overwrite(node_data.get(field))
+            for field in token_fields
+            if field in node_data
         }
 
         if len(updates) < len(token_fields):
-            messages = node_data.get("messages") or []
+            messages = self._unwrap_overwrite(node_data.get("messages")) or []
+            if isinstance(messages, tuple):
+                messages = list(messages)
+            if not isinstance(messages, list):
+                messages = []
             latest_message = messages[-1] if messages else None
             if isinstance(latest_message, AIMessage):
                 usage_counts = extract_usage_counts(latest_message)
@@ -1511,7 +1672,7 @@ class MessageDispatcher:
         )
 
         with console.console.status(
-            f"[{theme.spinner_color}]Context at {usage_pct}%, auto-compressing to new thread...[/{theme.spinner_color}]"
+            f"[{theme.spinner_color}]Context at {usage_pct}%, auto-compacting conversation in place...[/{theme.spinner_color}]"
         ):
             await CompressionHandler(self.session).handle()
 
@@ -1536,24 +1697,7 @@ class MessageDispatcher:
 
         # Reuse existing context creation + streaming
         ctx = self.session.context
-        now = datetime.now(timezone.utc).astimezone()
-        user_memory = await initializer.load_user_memory(ctx.working_dir)
-        agent_context = AgentContext(
-            approval_mode=ctx.approval_mode,
-            working_dir=ctx.working_dir,
-            platform=PLATFORM,
-            os_version=OS_VERSION,
-            current_date_time_zoned=now.strftime("%Y-%m-%d %H:%M:%S %Z"),
-            mcp_servers=(
-                ", ".join(initializer.cached_mcp_server_names)
-                if initializer.cached_mcp_server_names
-                else "None"
-            ),
-            user_memory=user_memory,
-            tool_catalog=initializer.cached_tools_in_catalog,
-            skill_catalog=initializer.cached_agent_skills,
-            tool_output_max_tokens=ctx.tool_output_max_tokens,
-        )
+        agent_context = await self._build_agent_context()
 
         graph_config = RunnableConfig(
             configurable={"thread_id": thread_id},

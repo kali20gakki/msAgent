@@ -15,7 +15,6 @@ async def handle_chat_command(args) -> int:
         context = await Context.create(
             agent=args.agent,
             model=args.model,
-            resume=args.resume,
             working_dir=Path(args.working_dir),
             approval_mode=args.approval_mode,
             stream_output=getattr(args, "stream", True),
@@ -25,20 +24,13 @@ async def handle_chat_command(args) -> int:
 
         # One-shot mode
         if args.message:
-            return await session.send(
-                args.message,
-                resume_thread_id=context.thread_id if args.resume else None,
-            )
+            return await session.send(args.message)
 
         # Interactive mode
         first_start = True
         while True:
-            resume_thread_id = (
-                context.thread_id if first_start and args.resume else None
-            )
             await session.start(
-                show_welcome=first_start and not args.resume,
-                resume_thread_id=resume_thread_id,
+                show_welcome=first_start,
             )
             first_start = False
 

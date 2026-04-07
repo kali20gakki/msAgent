@@ -1,20 +1,23 @@
-from typing import Annotated, Literal
+"""Agent state definition."""
 
-from typing_extensions import TypedDict
+from __future__ import annotations
 
-from langchain.agents import AgentState as BaseAgentState
+from typing import Annotated, Any, Literal
+
+from langchain.agents.middleware.types import AgentState as BaseAgentState
+from typing_extensions import NotRequired, TypedDict
 
 
 class Todo(TypedDict):
-    """Todo to track."""
+    """Todo item for tracking tasks."""
 
     content: str
     status: Literal["pending", "in_progress", "completed"]
 
 
 def file_reducer(
-    left: dict[str, str] | None, right: dict[str, str] | None
-) -> dict[str, str]:
+    left: dict[str, Any] | None, right: dict[str, Any] | None
+) -> dict[str, Any]:
     """Merge two file dictionaries, with right taking precedence."""
     if left is None:
         return right or {}
@@ -35,9 +38,21 @@ def replace_reducer(left: int | None, right: int | None) -> int:
 
 
 class AgentState(BaseAgentState):
-    """Agent state for LangChain v1 agents using create_agent."""
-
-    todos: list[Todo] | None
-    files: Annotated[dict[str, str] | None, file_reducer]
+    """Extended agent state with additional fields."""
+    
+    # Token tracking
+    input_tokens: Annotated[NotRequired[int], lambda x, y: y if y is not None else x]
+    output_tokens: Annotated[NotRequired[int], lambda x, y: y if y is not None else x]
+    
+    # Interrupt handling
+    interrupts: Annotated[NotRequired[list[dict]], lambda x, y: y if y is not None else x]
+    
+    # File storage (for backward compatibility)
+    files: Annotated[dict[str, Any] | None, file_reducer]
+    
+    # Todo list
+    todos: Annotated[list[Todo] | None, lambda x, y: y if y is not None else x]
+    
+    # Current token tracking
     current_input_tokens: Annotated[int | None, replace_reducer]
     current_output_tokens: Annotated[int | None, add_reducer]

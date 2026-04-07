@@ -17,43 +17,11 @@ class LLMSettings(BaseModel):
     openai_api_key: SecretStr = Field(
         default=SecretStr("dummy"), description="The OpenAI API key"
     )
-    custom_api_key: SecretStr = Field(
-        default=SecretStr(os.getenv("CUSTOM_API_KEY", "")),
-        description="The custom LLM API key",
-    )
     anthropic_api_key: SecretStr = Field(
         default=SecretStr("dummy"), description="The Anthropic API key"
     )
     google_api_key: SecretStr = Field(
         default=SecretStr("dummy"), description="The Google API key"
-    )
-    ollama_base_url: str = Field(
-        default="http://localhost:11434", description="The Ollama API base URL"
-    )
-    deepseek_api_key: SecretStr = Field(
-        default=SecretStr("dummy"), description="The DeepSeek API key"
-    )
-    zhipuai_api_key: SecretStr = Field(
-        default=SecretStr("dummy"), description="The Zhipu AI API key"
-    )
-    lmstudio_base_url: str = Field(
-        default="http://localhost:1234/v1", description="The LMStudio API base URL"
-    )
-    custom_base_url: str = Field(
-        default=os.getenv("CUSTOM_BASE_URL", ""),
-        description="The custom LLM request URL",
-    )
-    aws_access_key_id: SecretStr = Field(
-        default=SecretStr(os.getenv("AWS_ACCESS_KEY_ID", "")),
-        description="The AWS Access Key ID",
-    )
-    aws_secret_access_key: SecretStr = Field(
-        default=SecretStr(os.getenv("AWS_SECRET_ACCESS_KEY", "")),
-        description="The AWS Secret Access Key",
-    )
-    aws_session_token: SecretStr = Field(
-        default=SecretStr(os.getenv("AWS_SESSION_TOKEN", "")),
-        description="The AWS Session Token",
     )
     http_proxy: SecretStr = Field(
         default=SecretStr(os.getenv("HTTP_PROXY", os.getenv("http_proxy", ""))),
@@ -98,9 +66,6 @@ class CLISettings(BaseModel):
 
     # Behavior settings
     enable_word_wrap: bool = Field(default=True, description="Enable word wrap")
-    editor: str = Field(
-        default="vim", description="Default text editor for /memory command"
-    )
 
     # Autocomplete settings
     max_autocomplete_suggestions: int = Field(

@@ -5,19 +5,16 @@ from __future__ import annotations
 import shutil
 from typing import Any
 
-from prompt_toolkit.application import Application
 from prompt_toolkit.formatted_text import FormattedText
 from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.keys import Keys
-from prompt_toolkit.layout import Layout
-from prompt_toolkit.layout.containers import HSplit, Window
 from prompt_toolkit.layout.controls import FormattedTextControl
 
 from msagent.cli.theme import console, theme
 from msagent.cli.ui.shared import (
-    create_bottom_toolbar,
+    SelectorState,
     create_instruction,
-    create_prompt_style,
+    create_selector_application,
 )
 from msagent.core.logging import get_logger
 from msagent.core.settings import settings
@@ -60,15 +57,17 @@ class ToolsHandler:
         if not tools:
             return
 
-        current_index = 0
+        state = SelectorState(window_size=10)
         expanded_indices: set = set()  # Track which tools are expanded
-        scroll_offset = 0
-        window_size = 10
 
         # Create text control with formatted text
         text_control = FormattedTextControl(
             text=lambda: self._format_tool_list(
-                tools, current_index, expanded_indices, scroll_offset, window_size
+                tools,
+                state.index,
+                expanded_indices,
+                state.scroll_offset,
+                state.window_size or 10,
             ),
             focusable=True,
             show_cursor=False,
@@ -79,29 +78,19 @@ class ToolsHandler:
 
         @kb.add(Keys.Up)
         def _(event):
-            nonlocal current_index, scroll_offset
-            if current_index > 0:
-                current_index -= 1
-                # Adjust scroll window if needed
-                if current_index < scroll_offset:
-                    scroll_offset = current_index
+            state.move_linear(-1, size=len(tools))
 
         @kb.add(Keys.Down)
         def _(event):
-            nonlocal current_index, scroll_offset
-            if current_index < len(tools) - 1:
-                current_index += 1
-                # Adjust scroll window if needed
-                if current_index >= scroll_offset + window_size:
-                    scroll_offset = current_index - window_size + 1
+            state.move_linear(1, size=len(tools))
 
         @kb.add(Keys.Enter)
         def _(event):
             # Toggle expanded state
-            if current_index in expanded_indices:
-                expanded_indices.remove(current_index)
+            if state.index in expanded_indices:
+                expanded_indices.remove(state.index)
             else:
-                expanded_indices.add(current_index)
+                expanded_indices.add(state.index)
 
         @kb.add(Keys.ControlC)
         def _(event):
@@ -109,29 +98,11 @@ class ToolsHandler:
 
         # Create application
         context = self.session.context
-        app: Application = Application(
-            layout=Layout(
-                HSplit(
-                    [
-                        *create_instruction("Enter: expand/collapse"),
-                        Window(content=text_control),
-                        Window(
-                            height=1,
-                            content=FormattedTextControl(
-                                lambda: create_bottom_toolbar(
-                                    context,
-                                    context.working_dir,
-                                    bash_mode=context.bash_mode,
-                                )
-                            ),
-                        ),
-                    ]
-                )
-            ),
+        app = create_selector_application(
+            context=context,
+            text_control=text_control,
             key_bindings=kb,
-            full_screen=False,
-            style=create_prompt_style(context, bash_mode=context.bash_mode),
-            erase_when_done=True,
+            header_windows=create_instruction("Enter: expand/collapse"),
         )
 
         try:

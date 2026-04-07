@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import logging
 from enum import Enum
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from msagent.configs.base import VersionedConfig
 from msagent.configs.utils import (
@@ -16,17 +17,13 @@ from msagent.configs.utils import (
 )
 from msagent.core.constants import LLM_CONFIG_VERSION
 
+logger = logging.getLogger(__name__)
+
 
 class LLMProvider(str, Enum):
     OPENAI = "openai"
-    CUSTOM = "custom"
     ANTHROPIC = "anthropic"
     GOOGLE = "google"
-    OLLAMA = "ollama"
-    LMSTUDIO = "lmstudio"
-    BEDROCK = "bedrock"
-    DEEPSEEK = "deepseek"
-    ZHIPUAI = "zhipuai"
 
 
 class RateConfig(BaseModel):
@@ -67,6 +64,29 @@ class LLMConfig(VersionedConfig):
     max_tokens: int = Field(description="The maximum number of tokens to generate")
     temperature: float = Field(description="The temperature to use")
     streaming: bool = Field(default=True, description="Whether to stream the response")
+    request_timeout_seconds: float = Field(
+        default=120.0,
+        description="LLM request timeout in seconds",
+        gt=0,
+    )
+    trust_env: bool | None = Field(
+        default=None,
+        description=(
+            "Whether HTTP client should trust proxy/SSL env vars (HTTP_PROXY, "
+            "HTTPS_PROXY, SSL_CERT_FILE). Null means provider-specific default."
+        ),
+    )
+    http2: bool = Field(
+        default=False,
+        description="Whether to enable HTTP/2 for model requests",
+    )
+    params: dict[str, Any] | None = Field(
+        default=None,
+        description=(
+            "Extra keyword arguments forwarded to init_chat_model for "
+            "provider-specific options"
+        ),
+    )
     rate_config: RateConfig | None = Field(
         default=None, description="The rate config to use"
     )
@@ -95,6 +115,14 @@ class LLMConfig(VersionedConfig):
             self.alias = self.model
         return self
 
+    @field_validator("provider", mode="before")
+    @classmethod
+    def normalize_provider_alias(cls, value: Any) -> Any:
+        """Support gemini alias by normalizing to google."""
+        if isinstance(value, str) and value.strip().lower() == "gemini":
+            return LLMProvider.GOOGLE.value
+        return value
+
 
 class BatchLLMConfig(BaseModel):
     llms: list[LLMConfig] = Field(description="The LLMs configurations")
@@ -112,13 +140,44 @@ class BatchLLMConfig(BaseModel):
         file_path: Path | None = None,
         dir_path: Path | None = None,
     ) -> BatchLLMConfig:
-        llms = []
+        raw_llms: list[dict[str, Any]] = []
 
         if file_path and file_path.exists():
-            llms.extend(await _load_single_file(file_path, "llms", LLMConfig))
+            raw_llms.extend(await _load_single_file(file_path, "llms", LLMConfig))
 
         if dir_path:
-            llms.extend(await _load_dir_items(dir_path, config_class=LLMConfig))
+            raw_llms.extend(await _load_dir_items(dir_path, config_class=LLMConfig))
+
+        llms = cls._filter_supported_llms(raw_llms)
 
         _validate_no_duplicates(llms, key="alias", config_type="LLM")
         return cls.model_validate({"llms": llms})
+
+    @staticmethod
+    def _filter_supported_llms(llms: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Filter unsupported providers to keep runtime backward compatible."""
+        supported = {provider.value for provider in LLMProvider}
+        accepted_aliases = supported | {"gemini"}
+        filtered: list[dict[str, Any]] = []
+
+        for item in llms:
+            provider = str(item.get("provider", "")).strip().lower()
+            alias = str(item.get("alias", item.get("model", "<unknown>")))
+            if provider == "gemini":
+                item = dict(item)
+                item["provider"] = LLMProvider.GOOGLE.value
+                provider = LLMProvider.GOOGLE.value
+
+            if provider not in accepted_aliases:
+                logger.debug(
+                    "Ignoring unsupported LLM provider '%s' for alias '%s'. "
+                    "Supported providers: %s",
+                    provider,
+                    alias,
+                    ", ".join(sorted(supported | {"gemini"})),
+                )
+                continue
+
+            filtered.append(item)
+
+        return filtered

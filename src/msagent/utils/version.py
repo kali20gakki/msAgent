@@ -1,29 +1,15 @@
 """Version and features utilities."""
 
-import importlib.metadata
 import importlib.resources
-from pathlib import Path
 
 import httpx
-import yaml
+import yaml  # type: ignore[import-untyped]
+from msagent.core.constants import APP_VERSION
 
 
 def get_version() -> str:
-    """Get package version (hybrid: installed package -> pyproject.toml)."""
-    for package_name in ("mindstudio-agent", "msagent"):
-        try:
-            return importlib.metadata.version(package_name)
-        except importlib.metadata.PackageNotFoundError:
-            continue
-
-    try:
-        import tomllib
-
-        root = Path(__file__).parent.parent.parent
-        with open(root / "pyproject.toml", "rb") as f:
-            return tomllib.load(f)["project"]["version"]
-    except Exception:
-        return "unknown"
+    """Get package version from the shared application constant."""
+    return APP_VERSION
 
 
 def get_latest_features() -> list[str]:

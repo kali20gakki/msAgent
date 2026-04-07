@@ -1,41 +1,26 @@
-from contextlib import asynccontextmanager
-
 import pytest
+from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
-from msagent.checkpointer.factory import CheckpointerFactory
-from msagent.checkpointer.impl.memory import MemoryCheckpointer
-from msagent.checkpointer.impl.sqlite import AsyncSqliteCheckpointer
+from msagent.cli.bootstrap.initializer import Initializer
 from msagent.configs import CheckpointerConfig, CheckpointerProvider
 
 
 @pytest.mark.asyncio
-async def test_memory_checkpointer_is_reused_across_calls() -> None:
-    factory = CheckpointerFactory()
+async def test_memory_checkpointer_factory_returns_memory_saver() -> None:
+    initializer = Initializer()
     config = CheckpointerConfig(type=CheckpointerProvider.MEMORY)
 
-    async with factory.create(config, ":memory:") as first:
-        async with factory.create(config, ":memory:") as second:
-            assert isinstance(first, MemoryCheckpointer)
-            assert first is second
+    async with initializer._create_checkpointer(config, None) as checkpointer:
+        assert isinstance(checkpointer, InMemorySaver)
 
 
 @pytest.mark.asyncio
-async def test_sqlite_checkpointer_factory_delegates_to_async_creator(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    factory = CheckpointerFactory()
+async def test_sqlite_checkpointer_factory_returns_async_sqlite_saver(tmp_path) -> None:
+    initializer = Initializer()
     config = CheckpointerConfig(type=CheckpointerProvider.SQLITE)
-    captured: dict[str, str] = {}
-    sentinel = object()
+    db_path = tmp_path / "checkpoints.db"
 
-    @asynccontextmanager
-    async def fake_create(connection_string: str):
-        captured["connection_string"] = connection_string
-        yield sentinel
+    async with initializer._create_checkpointer(config, str(db_path)) as checkpointer:
+        assert isinstance(checkpointer, AsyncSqliteSaver)
 
-    monkeypatch.setattr(AsyncSqliteCheckpointer, "create", fake_create)
-
-    async with factory.create(config, "sqlite:///tmp/msagent.db") as checkpointer:
-        assert checkpointer is sentinel
-
-    assert captured["connection_string"] == "sqlite:///tmp/msagent.db"

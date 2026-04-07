@@ -8,7 +8,7 @@ from prompt_toolkit.completion import Completion
 from msagent.cli.resolvers.base import RefType, Resolver
 from msagent.core.logging import get_logger
 from msagent.utils.bash import execute_bash_command
-from msagent.utils.path import resolve_path
+from msagent.utils.path import is_absolute_path_like, resolve_path
 
 logger = get_logger(__name__)
 
@@ -89,6 +89,17 @@ class FileResolver(Resolver):
         except Exception:
             logger.debug("Failed to resolve file reference", exc_info=True)
             return ref
+
+    def is_standalone_reference(self, text: str) -> bool:
+        """Check if text is a standalone absolute file path."""
+        candidate = text.strip().strip("'\"")
+        if not candidate or not is_absolute_path_like(candidate):
+            return False
+
+        try:
+            return Path(candidate).expanduser().exists()
+        except (OSError, ValueError):
+            return False
 
     async def complete(self, fragment: str, ctx: dict, limit: int) -> list[Completion]:
         """Get file completions."""

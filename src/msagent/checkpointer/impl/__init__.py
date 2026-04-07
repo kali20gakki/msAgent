@@ -1,1 +1,0 @@
-"""Checkpointer implementations."""

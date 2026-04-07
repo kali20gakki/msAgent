@@ -11,6 +11,24 @@ class SymlinkEscapeError(ValueError):
     """Raised when a symlink resolves outside allowed boundaries."""
 
 
+_WINDOWS_DRIVE_ABSOLUTE_RE = re.compile(r"^[A-Za-z]:[\\/]")
+_WINDOWS_UNC_ABSOLUTE_RE = re.compile(r"^[\\/]{2}[^\\/]+[\\/][^\\/]+")
+
+
+def is_windows_absolute_path(path: str) -> bool:
+    """Check whether a path string is Windows-style absolute."""
+    return bool(
+        _WINDOWS_DRIVE_ABSOLUTE_RE.match(path)
+        or _WINDOWS_UNC_ABSOLUTE_RE.match(path)
+    )
+
+
+def is_absolute_path_like(path: str) -> bool:
+    """Check whether a path should be treated as absolute across platforms."""
+    expanded = Path(path).expanduser()
+    return expanded.is_absolute() or is_windows_absolute_path(path)
+
+
 def resolve_path(working_dir: str, path: str) -> Path:
     """Resolve a path relative to working directory if not absolute.
 
@@ -24,13 +42,20 @@ def resolve_path(working_dir: str, path: str) -> Path:
         return working_path
 
     expanded_path = Path(path).expanduser()
+    is_absolute = is_absolute_path_like(path)
 
-    if expanded_path.is_absolute():
-        resolved = expanded_path.resolve()
+    if is_absolute:
+        # On non-Windows hosts, Windows absolute paths (e.g. C:\foo\bar.txt)
+        # are not considered absolute by pathlib. Keep the raw form instead of
+        # incorrectly resolving them under working_dir.
+        if expanded_path.is_absolute():
+            resolved = expanded_path.resolve()
+        else:
+            resolved = Path(path)
     else:
         resolved = (working_path / path).resolve()
 
-    if not expanded_path.is_absolute():
+    if not is_absolute:
         original = working_path / path
         if original.exists() and is_symlink_escape(original, [working_path]):
             raise SymlinkEscapeError(

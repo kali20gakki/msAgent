@@ -50,5 +50,8 @@ dmypy.json
 # Project specific
 *.log
 config.local.json
+.langgraph_api/
 
 test_data/
+.claude/
+.omx/

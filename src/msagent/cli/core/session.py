@@ -6,12 +6,14 @@ import asyncio
 import signal
 from collections.abc import Callable
 from contextlib import AbstractAsyncContextManager
+from types import SimpleNamespace
 from types import FrameType
 from typing import TYPE_CHECKING, Any
 
 from msagent.cli.bootstrap.initializer import initializer
 from msagent.cli.dispatchers import CommandDispatcher, MessageDispatcher
 from msagent.cli.handlers.bash import BashDispatcher
+from msagent.cli.core.tool_output import ToolOutputEntry
 from msagent.cli.theme import console, theme
 from msagent.cli.ui.prompt import InteractivePrompt
 from msagent.cli.ui.renderer import Renderer
@@ -19,8 +21,6 @@ from msagent.core.logging import get_logger
 from msagent.utils.version import check_for_updates
 
 if TYPE_CHECKING:
-    from langgraph.graph.state import CompiledStateGraph
-
     from msagent.cli.core.context import Context
 
 SignalHandler = Callable[[int, FrameType | None], Any] | int | None
@@ -36,23 +36,20 @@ class Session:
         context: Context,
     ):
         self.context = context
-        self.renderer = Renderer()
+        self.renderer = Renderer(context)
         self.command_dispatcher = CommandDispatcher(self)
         self.message_dispatcher = MessageDispatcher(self)
         self.bash_dispatcher = BashDispatcher(self)
-        self.prompt = InteractivePrompt(
-            self.context, list(self.command_dispatcher.commands.keys()), session=self
-        )
+        self.prompt = self._create_prompt_with_fallback()
 
-        # Set up mode change callbacks
-        self.prompt.set_mode_change_callback(self._handle_approval_mode_change)
-        self.prompt.set_bash_mode_toggle_callback(self._handle_bash_mode_toggle)
+        if hasattr(self.prompt, "set_mode_change_callback"):
+            self.prompt.set_mode_change_callback(self._handle_approval_mode_change)
+        if hasattr(self.prompt, "set_bash_mode_toggle_callback"):
+            self.prompt.set_bash_mode_toggle_callback(self._handle_bash_mode_toggle)
 
         # Session state
-        self.graph: CompiledStateGraph | None = None
-        self.graph_context: AbstractAsyncContextManager[CompiledStateGraph] | None = (
-            None
-        )
+        self.graph: Any | None = None
+        self.graph_context: AbstractAsyncContextManager[Any] | None = None
         self.running = False
         self.needs_reload = False
         self.prefilled_text: str | None = None
@@ -61,10 +58,33 @@ class Session:
         self._sigint_registered = False
         self._previous_sigint: SignalHandler = None
         self._sigint_handler: SignalHandler = None
+        self.tool_outputs: list[ToolOutputEntry] = []
+        self.latest_tool_output: ToolOutputEntry | None = None
 
-    async def start(
-        self, show_welcome: bool = True, resume_thread_id: str | None = None
-    ) -> None:
+    def _create_prompt_with_fallback(self) -> InteractivePrompt | SimpleNamespace:
+        try:
+            return InteractivePrompt(
+                self.context,
+                list(self.command_dispatcher.commands.keys()),
+                session=self,
+            )
+        except Exception:
+            logger.debug(
+                "Prompt initialization failed, falling back to non-interactive stub",
+                exc_info=True,
+            )
+            return SimpleNamespace(
+                hotkeys={},
+                handle_external_sigint=lambda: False,
+                refresh_style=lambda: None,
+                reset_interrupt_state=lambda: None,
+                get_input=self._unsupported_get_input,
+            )
+
+    async def _unsupported_get_input(self) -> tuple[str, bool]:
+        raise RuntimeError("Interactive prompt is unavailable in this environment")
+
+    async def start(self, show_welcome: bool = True) -> None:
         """Start the interactive session."""
         try:
             self.graph_context = initializer.get_graph(
@@ -82,15 +102,6 @@ class Session:
                     self.graph = graph
                     status.stop()
 
-                    # Handle resume if requested
-                    pending_interrupts = None
-                    if resume_thread_id:
-                        pending_interrupts = (
-                            await self.command_dispatcher.resume_handler.handle(
-                                resume_thread_id
-                            )
-                        )
-
                     if show_welcome:
                         console.print("")
                         self.renderer.show_welcome(self.context)
@@ -100,12 +111,6 @@ class Session:
                             self._check_updates_background()
                         )
                         await update_task
-
-                    # Handle pending interrupts from resumed thread
-                    if pending_interrupts:
-                        await self.message_dispatcher.resume_from_interrupt(
-                            self.context.thread_id, pending_interrupts
-                        )
 
                     await self._main_loop()
                     status.start()
@@ -146,7 +151,7 @@ class Session:
 
         logger.info("Session ended")
 
-    async def send(self, message: str, resume_thread_id: str | None = None) -> int:
+    async def send(self, message: str) -> int:
         """Send a single message in one-shot mode (non-interactive)."""
         try:
             self.graph_context = initializer.get_graph(
@@ -159,18 +164,6 @@ class Session:
 
             async with self.graph_context as graph:
                 self.graph = graph
-
-                # Handle resume if requested
-                if resume_thread_id:
-                    pending_interrupts = (
-                        await self.command_dispatcher.resume_handler.handle(
-                            resume_thread_id, render_history=False
-                        )
-                    )
-                    if pending_interrupts:
-                        await self.message_dispatcher.resume_from_interrupt(
-                            self.context.thread_id, pending_interrupts
-                        )
 
                 await self.message_dispatcher.dispatch(message)
                 return 0
@@ -201,6 +194,24 @@ class Session:
         for key, value in kwargs.items():
             if hasattr(self.context, key):
                 setattr(self.context, key, value)
+
+    def remember_tool_output(self, entry: ToolOutputEntry) -> None:
+        """Store or refresh an expandable tool output for the viewer."""
+        for index, existing in enumerate(self.tool_outputs):
+            if existing.tool_call_id and existing.tool_call_id == entry.tool_call_id:
+                entry.sequence = existing.sequence
+                self.tool_outputs[index] = entry
+                self.latest_tool_output = entry
+                return
+
+        entry.sequence = len(self.tool_outputs) + 1
+        self.tool_outputs.append(entry)
+        self.latest_tool_output = entry
+
+    def clear_tool_output(self) -> None:
+        """Drop remembered expandable tool outputs."""
+        self.tool_outputs = []
+        self.latest_tool_output = None
 
     def _handle_approval_mode_change(self) -> None:
         """Handle approval mode cycling from keyboard shortcut."""

@@ -10,6 +10,7 @@ import yaml
 from rich.table import Table
 
 from msagent.cli.bootstrap.chat import handle_chat_command
+from msagent.cli.bootstrap.web import handle_web_command
 from msagent.cli.bootstrap.initializer import initializer
 from msagent.cli.theme import console
 from msagent.configs import ApprovalMode
@@ -21,18 +22,16 @@ LEGACY_PROVIDER_MAP = {
     "anthropic": LLMProvider.ANTHROPIC,
     "gemini": LLMProvider.GOOGLE,
     "google": LLMProvider.GOOGLE,
-    "custom": LLMProvider.CUSTOM,
 }
 
 DEFAULT_API_ENV_MAP = {
     LLMProvider.OPENAI: "OPENAI_API_KEY",
     LLMProvider.ANTHROPIC: "ANTHROPIC_API_KEY",
     LLMProvider.GOOGLE: "GOOGLE_API_KEY",
-    LLMProvider.CUSTOM: "CUSTOM_API_KEY",
 }
 
 DEFAULT_SESSION_COMMAND = "__session__"
-PUBLIC_COMMANDS = {"config"}
+PUBLIC_COMMANDS = {"config", "web"}
 ROOT_ONLY_FLAGS = {"-h", "--help", "--version"}
 
 
@@ -56,7 +55,7 @@ def create_legacy_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Show version information and exit",
     )
-    subparsers = parser.add_subparsers(dest="cli_command", metavar="{config}")
+    subparsers = parser.add_subparsers(dest="cli_command", metavar="{config,web}")
 
     config_parser = subparsers.add_parser("config", help="Configure msAgent")
     config_parser.add_argument(
@@ -66,10 +65,16 @@ def create_legacy_parser() -> argparse.ArgumentParser:
         help="Enable verbose logging to console and .msagent/app.log",
     )
     config_parser.add_argument(
-        "--show", "-s", action="store_true", help="Show current configuration"
+        "--show",
+        "-s",
+        action="store_true",
+        help="Show current configuration",
     )
     config_parser.add_argument("--llm-provider", help="LLM provider")
-    config_parser.add_argument("--llm-api-key", help="LLM API key for this process only")
+    config_parser.add_argument(
+        "--llm-api-key",
+        help="LLM API key for this process only",
+    )
     config_parser.add_argument(
         "--llm-max-tokens",
         type=int,
@@ -86,6 +91,52 @@ def create_legacy_parser() -> argparse.ArgumentParser:
         default=os.getcwd(),
         help="Working directory for project-local .msagent config",
     )
+
+    web_parser = subparsers.add_parser(
+        "web",
+        help="Start a LangGraph server for deep-agents-ui",
+    )
+    web_parser.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="Enable verbose logging to console and .msagent/app.log",
+    )
+    web_parser.add_argument(
+        "--host",
+        default="127.0.0.1",
+        help="Host interface for the LangGraph dev server",
+    )
+    web_parser.add_argument(
+        "--port",
+        type=int,
+        default=2024,
+        help="Port for the LangGraph dev server",
+    )
+    web_parser.add_argument(
+        "--ui-port",
+        type=int,
+        default=3000,
+        help="Port for the official deep-agents-ui frontend",
+    )
+    web_parser.add_argument(
+        "--no-ui",
+        action="store_true",
+        help="Start only the LangGraph API server without the deep-agents-ui frontend",
+    )
+    web_parser.add_argument(
+        "--no-open",
+        action="store_true",
+        help="Do not open the web UI in the default browser after startup",
+    )
+    web_parser.add_argument(
+        "-w",
+        "--working-dir",
+        default=os.getcwd(),
+        help="Working directory for project-local .msagent config",
+    )
+    web_parser.add_argument("-a", "--agent", default=None, help="Agent name")
+    web_parser.add_argument("-m", "--model", default=None, help="LLM model alias")
 
     return parser
 
@@ -114,12 +165,12 @@ def create_session_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Enable verbose logging to console and .msagent/app.log",
     )
-    _add_runtime_options(parser, include_resume=True, include_timer=True)
+    _add_runtime_options(parser, include_timer=True)
     return parser
 
 
 def _add_runtime_options(
-    parser: argparse.ArgumentParser, *, include_resume: bool, include_timer: bool
+    parser: argparse.ArgumentParser, *, include_timer: bool
 ) -> None:
     parser.add_argument(
         "-w",
@@ -129,12 +180,13 @@ def _add_runtime_options(
     )
     parser.add_argument("-a", "--agent", default=None, help="Agent name")
     parser.add_argument("-m", "--model", default=None, help="LLM model alias")
-    if include_resume:
-        parser.add_argument("-r", "--resume", action="store_true", help="Resume last thread")
-    else:
-        parser.set_defaults(resume=False)
+    parser.set_defaults(resume=False)
     if include_timer:
-        parser.add_argument("--timer", action="store_true", help="Enable startup timing")
+        parser.add_argument(
+            "--timer",
+            action="store_true",
+            help="Enable startup timing",
+        )
     else:
         parser.set_defaults(timer=False)
     parser.add_argument(
@@ -159,6 +211,8 @@ async def dispatch_legacy_command(args: argparse.Namespace) -> int:
         return await _handle_chat(args)
     if command == "config":
         return await _handle_config(args)
+    if command == "web":
+        return await _handle_web(args)
 
     console.print_error(f"Unknown command: {command}")
     console.print("")
@@ -171,7 +225,7 @@ async def _handle_chat(args: argparse.Namespace) -> int:
         working_dir=args.working_dir,
         agent=args.agent,
         model=args.model,
-        resume=args.resume,
+        resume=False,
         timer=args.timer,
         server=False,
         approval_mode=args.approval_mode,
@@ -217,7 +271,9 @@ async def _handle_config(args: argparse.Namespace) -> int:
         "alias": "default",
         "model": args.llm_model or current_llm.model,
         "api_key_env": DEFAULT_API_ENV_MAP.get(effective_provider),
-        "base_url": args.llm_base_url if args.llm_base_url is not None else current_llm.base_url,
+        "base_url": (
+            args.llm_base_url if args.llm_base_url is not None else current_llm.base_url
+        ),
         "max_tokens": (
             args.llm_max_tokens
             if args.llm_max_tokens is not None
@@ -225,6 +281,7 @@ async def _handle_config(args: argparse.Namespace) -> int:
         ),
         "temperature": current_llm.temperature,
         "streaming": True,
+        "request_timeout_seconds": current_llm.request_timeout_seconds,
         "context_window": current_llm.context_window,
     }
 
@@ -244,11 +301,26 @@ async def _handle_config(args: argparse.Namespace) -> int:
         if env_name:
             os.environ[str(env_name)] = args.llm_api_key
             console.print_warning(
-                f"已为当前进程设置 {env_name}，该密钥不会写入配置文件。"
+                f"Set {env_name} for this process only; it is not persisted to config."
             )
 
     console.print_success("Configuration saved successfully")
     return 0
+
+
+async def _handle_web(args: argparse.Namespace) -> int:
+    web_args = argparse.Namespace(
+        host=args.host,
+        port=args.port,
+        ui_port=args.ui_port,
+        no_ui=args.no_ui,
+        no_open=args.no_open,
+        working_dir=args.working_dir,
+        agent=args.agent,
+        model=args.model,
+        verbose=args.verbose,
+    )
+    return await handle_web_command(web_args)
 
 
 async def _show_config(registry, working_dir: Path) -> int:
@@ -256,7 +328,11 @@ async def _show_config(registry, working_dir: Path) -> int:
     llm_config = agent_config.llm
     mcp_config = await registry.load_mcp()
 
-    provider_label = "gemini" if llm_config.provider == LLMProvider.GOOGLE else llm_config.provider.value
+    provider_label = (
+        "gemini"
+        if llm_config.provider == LLMProvider.GOOGLE
+        else llm_config.provider.value
+    )
     api_env = llm_config.api_key_env or DEFAULT_API_ENV_MAP.get(llm_config.provider, "")
     api_key_set = bool(os.getenv(api_env, "")) if api_env else False
 
@@ -266,10 +342,13 @@ async def _show_config(registry, working_dir: Path) -> int:
     table.add_row("Agent", agent_config.name)
     table.add_row("LLM Provider", provider_label)
     table.add_row("Model", llm_config.model)
-    table.add_row("API Key", "✓ Set" if api_key_set else "✗ Not set")
+    table.add_row("API Key", "Set" if api_key_set else "Not set")
     table.add_row("API Key Env", api_env or "Not configured")
     table.add_row("Base URL", llm_config.base_url or "Default")
-    table.add_row("Max Tokens", "Auto" if llm_config.max_tokens <= 0 else str(llm_config.max_tokens))
+    table.add_row(
+        "Max Tokens",
+        "Auto" if llm_config.max_tokens <= 0 else str(llm_config.max_tokens),
+    )
     table.add_row(
         "MCP Servers",
         str(len([server for server in mcp_config.servers.values() if server.enabled])),
@@ -287,7 +366,7 @@ async def _show_config(registry, working_dir: Path) -> int:
                 name,
                 server.command or server.url or "",
                 " ".join(server.args) if server.args else "None",
-                "✓ Enabled" if server.enabled else "✗ Disabled",
+                "Enabled" if server.enabled else "Disabled",
             )
         console.print(mcp_table)
 

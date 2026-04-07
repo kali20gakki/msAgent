@@ -5,15 +5,16 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, cast
+from typing import Any, cast
 
 import mdformat
 from langchain_core.messages import AIMessage, AnyMessage, HumanMessage, ToolMessage
-from rich.align import Align
 from rich import box
+from rich.align import Align
 from rich.cells import cell_len
 from rich.console import Console, ConsoleOptions, Group, NewLine, RenderableType
 from rich.markdown import CodeBlock, Markdown
+from rich.padding import Padding
 from rich.panel import Panel
 from rich.segment import Segment
 from rich.style import Style
@@ -24,18 +25,19 @@ from rich.text import Text
 from msagent.cli.core.context import Context
 from msagent.cli.theme import console
 from msagent.cli.ui.markdown import wrap_html_in_code_blocks
+from msagent.cli.ui.shared import build_agent_prompt
 from msagent.core.constants import UNKNOWN
 from msagent.core.settings import settings
-from msagent.tools.internal.todo import TODO_PANEL_MARKER, render_todos_panel
 from msagent.agents.state import Todo
-
-if TYPE_CHECKING:
-    from langchain_core.runnables.graph import Graph
+from msagent.tools.internal.todo import parse_todos_for_panel, render_todos_panel
+from msagent.utils.version import get_version
 
 try:
     from pyfiglet import Figlet
-except ImportError:  # pragma: no cover - graceful fallback when dependency isn't installed yet
-    Figlet = None
+except (
+    ImportError
+):  # pragma: no cover - graceful fallback when dependency isn't installed yet
+    Figlet = None  # type: ignore[misc,assignment]
 
 WELCOME_TITLE = "* Welcome to msAgent"
 WELCOME_ASCII_FONT = "ansi_shadow"
@@ -87,7 +89,9 @@ def _render_welcome_ascii(
 
     try:
         lines = Figlet(font=font).renderText(text).rstrip("\n").splitlines()
-    except Exception:  # pragma: no cover - invalid font or partial install should not break startup
+    except (
+        Exception
+    ):  # pragma: no cover - invalid font or partial install should not break startup
         return Text(text, style="accent")
 
     while lines and not lines[-1].strip():
@@ -120,6 +124,35 @@ TOOL_ARG_KEY_STYLE = "muted"
 TOOL_ARG_VALUE_STYLE = "primary"
 TOOL_ARG_SEPARATOR_STYLE = "muted"
 TOOL_SUMMARY_VALUE_MAX = 72
+TOOL_MESSAGE_MAX_DISPLAY_CHARS = 200
+TOOL_MESSAGE_TOGGLE_HINT = "Ctrl+O /tool-output"
+SUBAGENT_ORIGIN_LABEL = "Subagent"
+TODO_PANEL_ACTION_LABEL = "Update TODOs"
+
+
+@dataclass(slots=True)
+class ToolMessageDisplay:
+    """Prepared display state for a tool result."""
+
+    preview_content: str
+    full_content: str
+    display_content: str
+    can_expand: bool
+    is_error: bool
+    is_todo_panel: bool = False
+    todos: list[Todo] | None = None
+
+
+def _truncate_preview_text(text: str, max_length: int) -> str:
+    """Keep tool arg previews compact while preserving original length context."""
+    if max_length <= 0 or len(text) <= max_length:
+        return text
+
+    suffix = f"... ({len(text)} chars)"
+    keep = max(8, max_length - len(suffix))
+    if keep >= len(text):
+        return text
+    return f"{text[:keep]}{suffix}"
 
 
 def _fix_escaped_code_fences(content: str) -> str:
@@ -282,6 +315,8 @@ class PrefixedMarkdown:
 class ChatWelcomeBanner:
     """Welcome banner shown when msagent starts."""
 
+    agent_name: str
+    agent_description: str | None = None
     model_label: str | None = None
     mcp_servers: list[str] | None = None
     loaded_skills: list[str] | None = None
@@ -295,25 +330,38 @@ class ChatWelcomeBanner:
         return line
 
     @staticmethod
-    def _summarize_items(
-        items: list[str] | None,
-        *,
-        max_items: int,
-        empty_label: str = "none",
-    ) -> str:
-        normalized = [item for item in items or [] if item]
-        if not normalized:
-            return empty_label
-        if len(normalized) <= max_items:
-            return ", ".join(normalized)
+    def _agent_label(agent_name: str, agent_description: str | None) -> str:
+        description = (agent_description or "").strip()
+        if not description:
+            return agent_name
+        return f"{agent_name} - {description}"
 
-        preview = ", ".join(normalized[:max_items])
-        remaining = len(normalized) - max_items
-        return f"{preview} +{remaining} more"
+    @staticmethod
+    def _normalize_items(items: list[str] | None) -> list[str]:
+        return [item for item in items or [] if item]
+
+    @classmethod
+    def _section_lines(cls, label: str, items: list[str] | None) -> list[Text]:
+        normalized = cls._normalize_items(items)
+        header = Text()
+        header.append(label, style="accent")
+        header.append(f" ({len(normalized)})", style="muted")
+
+        if not normalized:
+            empty_line = Text()
+            empty_line.append("  - ", style="muted")
+            empty_line.append("none", style="secondary")
+            return [header, empty_line]
+
+        lines = [header]
+        for item in normalized:
+            line = Text()
+            line.append("  - ", style="muted")
+            line.append(item, style="secondary")
+            lines.append(line)
+        return lines
 
     def compose(self) -> list[RenderableType]:
-        servers = self._summarize_items(self.mcp_servers, max_items=2)
-        skills = self._summarize_items(self.loaded_skills, max_items=20)
         model_label = self.model_label or UNKNOWN
 
         ascii_art = _render_welcome_ascii()
@@ -321,22 +369,29 @@ class ChatWelcomeBanner:
         welcome = Text()
         welcome.append("msAgent", style="accent")
         welcome.append(
-            " 是面向 Ascend NPU Profiling 的性能分析助手，基于真实数据定位瓶颈、解释根因并给出可执行优化方案。",
+            " 是 MindStudio 一站式调试调优 Agent，支持性能、精度、算子等场景问题定位。",
             style="secondary",
         )
 
         return [
             Align.center(ascii_art),
             welcome,
+            self._meta_line(
+                "Agent",
+                self._agent_label(
+                    self.agent_name,
+                    getattr(self, "agent_description", None),
+                ),
+            ),
             self._meta_line("Model", model_label),
-            self._meta_line("MCP", servers),
-            self._meta_line("Skills", skills),
+            *self._section_lines("MCP", self.mcp_servers),
+            *self._section_lines("Skills", self.loaded_skills),
         ]
 
     def render(self) -> RenderableType:
         return Panel(
             Group(*self.compose()),
-            title=f"[accent]{WELCOME_TITLE}[/accent]",
+            title=f"[accent]{WELCOME_TITLE} v{get_version()}[/accent]",
             border_style="border",
             padding=(1, 2),
             box=box.ROUNDED,
@@ -347,12 +402,19 @@ class ChatWelcomeBanner:
 class Renderer:
     """Handles rendering of UI elements using Rich."""
 
+    TOOL_MESSAGE_MAX_DISPLAY_CHARS = TOOL_MESSAGE_MAX_DISPLAY_CHARS
+
+    def __init__(self, context: Context | None = None) -> None:
+        self.context = context
+
     @staticmethod
     def show_welcome(context: Context) -> None:
         """Display the msAgent welcome banner with legacy TUI styling."""
         from msagent.cli.bootstrap.initializer import initializer
 
         banner = ChatWelcomeBanner(
+            agent_name=context.agent,
+            agent_description=context.agent_description,
             model_label=context.model_display or context.model,
             mcp_servers=initializer.cached_mcp_server_names,
             loaded_skills=[skill.name for skill in initializer.cached_agent_skills],
@@ -361,13 +423,16 @@ class Renderer:
         console.print(banner.render())
         console.print("")
 
-    @staticmethod
-    def render_user_message(message: HumanMessage) -> None:
+    def render_user_message(self, message: HumanMessage) -> None:
         """Render user message."""
         content = getattr(message, "short_content", None) or message.text
 
         # Calculate the visual width of the prompt prefix
-        prompt_prefix = settings.cli.prompt_style
+        prompt_prefix = (
+            build_agent_prompt(self.context)
+            if self.context is not None
+            else settings.cli.prompt_style
+        )
         prefix_width = cell_len(prompt_prefix)
         indent = " " * prefix_width
 
@@ -442,11 +507,33 @@ class Renderer:
     def _stringify_tool_arg(value: Any, max_length: int) -> str:
         """Convert tool args to a compact single-line string."""
         if isinstance(value, str):
-            return value.replace("\n", "\\n")
+            text = value.replace("\r\n", "\n").replace("\n", " | ")
         elif isinstance(value, (dict, list)):
-            return json.dumps(value, ensure_ascii=False)
+            text = json.dumps(value, ensure_ascii=False)
         else:
-            return str(value)
+            text = str(value)
+
+        return _truncate_preview_text(text, max_length)
+
+    @staticmethod
+    def _resolve_origin_label(
+        indent_level: int, origin_label: str | None = None
+    ) -> str | None:
+        """Resolve a human-friendly origin tag for nested subagent output."""
+        if origin_label:
+            return origin_label
+        if indent_level > 0:
+            return SUBAGENT_ORIGIN_LABEL
+        return None
+
+    @staticmethod
+    def _append_origin_label(result: Text, label: str | None) -> None:
+        """Append a compact origin badge before the tool action."""
+        if not label:
+            return
+        result.append("[", style="muted")
+        result.append(label, style="secondary")
+        result.append("] ", style="muted")
 
     @staticmethod
     def _append_tool_arg_block(
@@ -488,18 +575,25 @@ class Renderer:
 
     @staticmethod
     def _format_tool_call(
-        tool_call: dict[str, Any], indent_level: int = 0, duration: float | None = None
+        tool_call: dict[str, Any],
+        indent_level: int = 0,
+        duration: float | None = None,
+        origin_label: str | None = None,
     ) -> Text:
         """Format a single tool call with improved readability."""
         tool_name = tool_call.get("name", UNKNOWN)
         tool_args = cast(dict[str, Any], tool_call.get("args", {}))
 
         base_indent = "  " * indent_level
+        resolved_origin_label = Renderer._resolve_origin_label(
+            indent_level, origin_label
+        )
 
         # Build the text with formatting
         result = Text()
         result.append(base_indent)
         result.append("● ", style="indicator")
+        Renderer._append_origin_label(result, resolved_origin_label)
         result.append("Use tool ", style=TOOL_PREFIX_STYLE)
         result.append(tool_name, style=TOOL_NAME_STYLE)
 
@@ -530,7 +624,7 @@ class Renderer:
     def _should_skip_tool_call(tool_call: dict[str, Any]) -> bool:
         """Check if tool call should be skipped from display.
 
-        write_todos is handled specially via its ToolMessage short_content panel.
+        write_todos is rendered separately as a TODO panel from tool payload.
         """
         return tool_call.get("name") == "write_todos"
 
@@ -609,9 +703,9 @@ class Renderer:
             content = wrap_html_in_code_blocks(content)
         if content:
             if indent_level > 0:
-                prefix = "◇ "
+                prefix = "● "
             else:
-                prefix = "◆︎ "
+                prefix = "● "
 
             parts.append(
                 PrefixedMarkdown(
@@ -640,111 +734,150 @@ class Renderer:
 
     @staticmethod
     def render_tool_call(
-        tool_call: dict[str, Any], indent_level: int = 0, duration: float | None = None
+        tool_call: dict[str, Any],
+        indent_level: int = 0,
+        duration: float | None = None,
+        origin_label: str | None = None,
     ) -> None:
         """Render a single tool call header."""
         console.print(
             Renderer._format_tool_call(
-                tool_call, indent_level=indent_level, duration=duration
+                tool_call,
+                indent_level=indent_level,
+                duration=duration,
+                origin_label=origin_label,
             )
         )
 
     @staticmethod
     def render_tool_message(message: ToolMessage, indent_level: int = 0) -> None:
         """Render a tool execution message with Rich markup support."""
-        content = getattr(message, "short_content", None) or message.text
-
-        # Skip rendering if content is empty or None
-        if not content or (isinstance(content, str) and not content.strip()):
+        display = Renderer._build_tool_message_display(message)
+        if display is None:
             return
 
-        # Check if this is a todo panel message
-        if isinstance(content, str) and content.startswith(TODO_PANEL_MARKER):
-            Renderer._render_todo_panel(content, indent_level)
+        if display.is_todo_panel and display.todos is not None:
+            Renderer._render_todo_panel(
+                display.todos,
+                indent_level,
+                origin_label=Renderer._resolve_origin_label(indent_level),
+            )
             return
 
-        if isinstance(content, str):
-            content = Renderer._strip_frontmatter_fences(content)
+        if not display.display_content.strip():
+            return
+
+        base_indent = "  " * indent_level
+        formatted_lines = []
+        for i, line in enumerate(display.display_content.split("\n")):
+            if i == 0:
+                formatted_lines.append(f"{base_indent}  - {line}")
+            else:
+                formatted_lines.append(f"{base_indent}    {line}")
+
+        if display.can_expand:
+            formatted_lines.append(
+                (
+                    f"{base_indent}    "
+                    f"... press {TOOL_MESSAGE_TOGGLE_HINT} to browse full tool outputs"
+                )
+            )
+
+        formatted_content = "\n".join(formatted_lines)
+
+        if display.is_error:
+            console.print(Text(formatted_content, style="error"))
+        else:
+            console.print(Text(formatted_content, style=LOW_PRIORITY_STYLE))
+
+        console.print("")
+
+    @staticmethod
+    def _build_tool_message_display(
+        message: ToolMessage,
+        *,
+        expanded: bool = False,
+    ) -> ToolMessageDisplay | None:
+        """Normalize a tool result into preview/full display content."""
+        short_content = getattr(message, "short_content", None)
+        content = message.text
+
+        preview_source = short_content if short_content is not None else content
+        preview_text = str(preview_source or "")
+        full_text = str(content or "")
+
+        if not preview_text.strip() and not full_text.strip():
+            return None
+
+        parsed_todos = parse_todos_for_panel(preview_text) or parse_todos_for_panel(
+            full_text
+        )
+        if parsed_todos:
+            return ToolMessageDisplay(
+                preview_content="",
+                full_content="",
+                display_content="",
+                can_expand=False,
+                is_error=False,
+                is_todo_panel=True,
+                todos=parsed_todos,
+            )
+
+        preview_text = Renderer._strip_frontmatter_fences(preview_text)
+        full_text = Renderer._strip_frontmatter_fences(full_text)
+        preview_display = Renderer._truncate_tool_content_for_display(preview_text)
+        can_expand = bool(full_text.strip()) and preview_display != full_text
 
         is_error = (
             getattr(message, "is_error", False)
             or getattr(message, "status", None) == "error"
         )
 
-        base_indent = "  " * indent_level
-        formatted_lines = []
-        for i, line in enumerate(content.split("\n")):
-            if i == 0:
-                formatted_lines.append(f"{base_indent}  ㄴ{line}")
-            else:
-                formatted_lines.append(f"{base_indent}    {line}")
-
-        formatted_content = "\n".join(formatted_lines)
-
-        if is_error:
-            console.print(Text(formatted_content, style="error"))
-        else:
-            console.print(formatted_content, style=LOW_PRIORITY_STYLE)
-
-        console.print("")
+        return ToolMessageDisplay(
+            preview_content=preview_display,
+            full_content=full_text,
+            display_content=full_text if expanded and can_expand else preview_display,
+            can_expand=can_expand,
+            is_error=is_error,
+        )
 
     @staticmethod
-    def _render_todo_panel(content: str, indent_level: int = 0) -> None:
-        """Render todo content with a box panel.
+    def _truncate_tool_content_for_display(content: str) -> str:
+        """Truncate long tool output for terminal readability.
 
-        Parses the todo content and renders it using render_todos_panel
-        for a nice bordered display with strikethrough for completed items.
+        Includes the original character length so users can tell how much was omitted.
         """
-        import re
+        max_chars = Renderer.TOOL_MESSAGE_MAX_DISPLAY_CHARS
+        if max_chars <= 0 or len(content) <= max_chars:
+            return content
+        return (
+            f"{content[:max_chars]}\n"
+            f"... (truncated for display, original length: {len(content)} chars)"
+        )
 
-        # Remove the marker
-        content = content[len(TODO_PANEL_MARKER) :]
+    @staticmethod
+    def _render_todo_panel(
+        todos: list[Todo],
+        indent_level: int = 0,
+        origin_label: str | None = None,
+    ) -> None:
+        """Render todo items in a bordered panel."""
+        base_indent = "  " * indent_level
+        header = Text()
+        header.append(base_indent)
+        header.append("● ", style="indicator")
+        Renderer._append_origin_label(header, origin_label)
+        header.append(TODO_PANEL_ACTION_LABEL, style=TOOL_NAME_STYLE)
+        console.print(header)
 
-        # Parse todos from the formatted content (stripping Rich markup)
-        todos: list[Todo] = []
-        for line in content.strip().split("\n"):
-            line = line.strip()
-            if not line or line.startswith("+"):
-                continue
-
-            # Remove Rich markup like [#8be4e1], [/strike], [/] etc.
-            # Use a more careful pattern to handle nested brackets
-            clean_line = re.sub(r"\[/?[^\]]*?\]", "", line).strip()
-
-            # Parse icon and content
-            if clean_line.startswith("✓"):
-                status = "completed"
-                todo_content = clean_line[1:].strip()
-            elif clean_line.startswith("◔"):
-                status = "in_progress"
-                todo_content = clean_line[1:].strip()
-            elif clean_line.startswith("○"):
-                status = "pending"
-                todo_content = clean_line[1:].strip()
-            else:
-                # Debug: print what we couldn't parse
-                continue
-
-            if todo_content:
-                todos.append({"content": todo_content, "status": status})
-
-        if not todos:
-            return
-
-        # Render with panel (show all todos, no hidden indicator)
         panel = render_todos_panel(
-            todos,
+            cast(list[dict[str, Any]], todos),
             max_items=50,
             max_completed=50,
             show_completed_indicator=False,
         )
-
-        # For todo panels, print without the ㄴ prefix but with proper indentation
-        base_indent = "  " * indent_level
-        if indent_level > 0:
-            # Print base indent and then the panel
-            console.print(base_indent, end="")
-        console.console.print(panel)
+        panel_padding = len(base_indent) + 2
+        console.console.print(Padding(panel, (0, 0, 0, panel_padding)))
 
         console.print("")
 
@@ -830,43 +963,10 @@ class Renderer:
 
         return content, None
 
-    @staticmethod
-    def render_graph(drawable_graph: Graph) -> None:
-        """Render LangGraph visualization as Mermaid diagram.
-
-        Args:
-            drawable_graph: The drawable graph from graph.get_graph()
-        """
-        try:
-            mermaid_code = drawable_graph.draw_mermaid()
-            console.print("[muted]" + "─" * console.width + "[/muted]", markup=True)
-
-            # Use TransparentSyntax to match markdown code rendering style
-            syntax = TransparentSyntax(
-                mermaid_code,
-                "text",
-                theme="dracula",
-                line_numbers=False,
-                word_wrap=True,
-            )
-            console.console.print(syntax)
-
-            console.print("[muted]" + "─" * console.width + "[/muted]", markup=True)
-            console.print(
-                "Copy and visualize at [accent.secondary underline]https://mermaid.live[/accent.secondary underline]",
-                markup=True,
-            )
-            console.print()
-
-        except Exception as e:
-            console.print_error(f"Could not generate Mermaid diagram: {e}")
-            console.print("")
-
-    @staticmethod
-    def render_message(message: AnyMessage, indent_level: int = 0) -> None:
+    def render_message(self, message: AnyMessage, indent_level: int = 0) -> None:
         """Render any message."""
         if isinstance(message, HumanMessage):
-            Renderer.render_user_message(message)
+            self.render_user_message(message)
 
         elif isinstance(message, AIMessage):
             Renderer.render_assistant_message(message, indent_level=indent_level)

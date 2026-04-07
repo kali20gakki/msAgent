@@ -1,0 +1,49 @@
+version: 2.4.0
+name: Hermes
+description: Ascend NPU profiling analysis agent with msprof-mcp-first workflow
+prompt:
+  - prompts/agents/Hermes.md
+  - prompts/suffixes/environments.md
+llm: default
+checkpointer: sqlite
+default: true
+subagents:
+  - explorer
+recursion_limit: 1000
+tools:
+  patterns:
+    - impl:deepagents:*
+    - mcp:msprof-mcp:*
+  use_catalog: false
+  output_max_tokens: 10000
+skills:
+  patterns:
+    - default:ascend_pytorch_profiler_db_explorer
+    - default:cluster-fast-slow-rank-detector
+    - default:github-raw-fetch
+    - default:mindstudio_profiler_data_check
+    - default:op-mfu-calculator
+  use_catalog: false
+compression:
+  auto_compress_enabled: true
+  auto_compress_threshold: 0.8
+  llm: default
+  prompt:
+    - prompts/shared/general_compression.md
+    - prompts/suffixes/environments.md
+retry:
+  enabled: true
+  model:
+    enabled: true
+    max_retries: 5
+    timeout: 120.0
+  tool:
+    enabled: true
+    max_retries: 5
+    tools: null
+    retry_on: null
+    on_failure: continue
+    backoff_factor: 2.0
+    initial_delay: 5.0
+    max_delay: 60.0
+    jitter: true

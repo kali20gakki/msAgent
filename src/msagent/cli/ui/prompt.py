@@ -1,6 +1,7 @@
 """Prompt-toolkit session and input handling."""
 
 import time
+from collections.abc import Callable
 from pathlib import Path
 
 from prompt_toolkit import PromptSession
@@ -10,11 +11,16 @@ from prompt_toolkit.formatted_text import HTML
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.keys import Keys
+from prompt_toolkit.mouse_events import MouseEvent
 from prompt_toolkit.shortcuts import CompleteStyle
 
 from msagent.cli.completers import CompleterRouter
 from msagent.cli.core.context import Context
-from msagent.cli.ui.shared import create_bottom_toolbar, create_prompt_style
+from msagent.cli.ui.shared import (
+    build_agent_prompt,
+    create_bottom_toolbar,
+    create_prompt_style,
+)
 from msagent.core.constants import CONFIG_HISTORY_FILE_NAME
 from msagent.core.logging import get_logger
 from msagent.core.settings import settings
@@ -84,7 +90,7 @@ class InteractivePrompt:
             style=style,
             multiline=False,
             prompt_continuation=lambda width, line_number, is_soft_wrap: " "
-            * len(settings.cli.prompt_style),
+            * len(build_agent_prompt(self.context)),
             wrap_lines=settings.cli.enable_word_wrap,
             mouse_support=False,
             complete_while_typing=True,
@@ -127,6 +133,15 @@ class InteractivePrompt:
             buffer.text = "/hotkeys"
             buffer.validate_and_handle()
 
+        @kb.add(Keys.ControlO)
+        def _(event):
+            """Ctrl-O: Open latest expandable tool output."""
+            buffer = event.current_buffer
+            if self.session is not None and buffer.text.strip():
+                self.session.prefilled_text = buffer.text
+            buffer.text = "/tool-output"
+            buffer.validate_and_handle()
+
         @kb.add(Keys.Enter, filter=completion_is_selected)
         def _(event):
             """Enter when completion is selected: apply completion."""
@@ -166,6 +181,7 @@ class InteractivePrompt:
             self._format_key_name(Keys.BackTab): "Cycle approval mode",
             self._format_key_name(Keys.ControlB): "Toggle bash mode",
             self._format_key_name(Keys.ControlK): "Show keyboard shortcuts",
+            self._format_key_name(Keys.ControlO): "Expand/collapse latest tool output",
             "Tab": "Apply first completion",
             "Enter": "Apply selected completion or submit",
         }
@@ -225,7 +241,7 @@ class InteractivePrompt:
 
     def _build_placeholder_text(self) -> str:
         """Build placeholder copy shown inside the input box."""
-        return "尽管问msAgent，@ 引用文件，/ 使用命令"
+        return f"尽管问{self.context.agent}，@ 引用文件，/ 使用命令"
 
     def _get_bottom_toolbar(self) -> HTML:
         """Generate bottom toolbar text with version, working directory and approval mode."""
@@ -261,8 +277,10 @@ class InteractivePrompt:
     async def get_input(self) -> tuple[str, bool]:
         """Get user input asynchronously."""
         try:
-            prompt_text = [
-                ("class:prompt", settings.cli.prompt_style),
+            prompt_text: list[
+                tuple[str, str] | tuple[str, str, Callable[[MouseEvent], object]]
+            ] = [
+                ("class:prompt", build_agent_prompt(self.context)),
             ]
 
             default_text = ""

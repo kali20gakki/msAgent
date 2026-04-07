@@ -9,7 +9,7 @@ from msagent.configs.agent import BatchAgentConfig
 from msagent.configs.approval import ToolApprovalConfig
 from msagent.configs.mcp import MCPConfig
 
-PROMPT_TEXT = 'Follow the prompt with \u201csmart quotes\u201d and \u4e2d\u6587\u3002'
+PROMPT_TEXT = "Follow the prompt with \u201csmart quotes\u201d and \u4e2d\u6587\u3002"
 CHINESE_TEXT = "\u4e2d\u6587"
 
 
@@ -50,7 +50,6 @@ llm:
     monkeypatch.setattr(path_type, "read_text", strict_read_text)
 
     config = await BatchAgentConfig.from_yaml(dir_path=agents_dir)
-
     assert config.agents[0].prompt == PROMPT_TEXT
 
 
@@ -61,9 +60,12 @@ def test_tool_approval_config_reads_and_writes_utf8(
     config_path.write_text(
         json.dumps(
             {
-                "always_allow": [
-                    {"name": "run_command", "args": {"command": f"echo {CHINESE_TEXT}"}}
-                ]
+                "interrupt_on": {
+                    "run_tool": {
+                        "allowed_decisions": ["approve", "reject"],
+                        "description": f"approval-hint:{CHINESE_TEXT}",
+                    }
+                }
             },
             ensure_ascii=False,
         ),
@@ -82,9 +84,56 @@ def test_tool_approval_config_reads_and_writes_utf8(
     config = ToolApprovalConfig.from_json_file(config_path)
     config.save_to_json_file(config_path)
 
-    assert config.always_allow[0].args == {"command": f"echo {CHINESE_TEXT}"}
+    assert config.interrupt_on["run_tool"].description == f"approval-hint:{CHINESE_TEXT}"
     saved = json.loads(config_path.read_text(encoding="utf-8"))
-    assert saved["always_allow"][0]["args"]["command"] == f"echo {CHINESE_TEXT}"
+    assert saved["interrupt_on"]["run_tool"]["description"] == f"approval-hint:{CHINESE_TEXT}"
+    assert "decision_rules" in saved
+
+
+def test_tool_approval_config_migrates_legacy_shape_to_interrupt_on_and_decision_rules(
+    tmp_path: Path,
+) -> None:
+    config_path = tmp_path / "config.approval.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "always_ask": [
+                    {"name": "run_command", "args": {"command": "sudo\\s+.*"}}
+                ]
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    config = ToolApprovalConfig.from_json_file(config_path)
+    saved = json.loads(config_path.read_text(encoding="utf-8"))
+
+    assert "execute" in config.interrupt_on
+    assert config.resolve_decision("execute", {"command": "sudo whoami"}) == "ask"
+    assert config.resolve_decision("execute", {"command": "echo ok"}) == "always_approve"
+    assert "interrupt_on" in saved
+    assert "execute" in saved["interrupt_on"]
+    assert "decision_rules" in saved
+    assert "always_ask" not in saved
+
+
+def test_tool_approval_config_prepends_persistent_rule(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.approval.json"
+    config = ToolApprovalConfig.from_json_file(config_path)
+
+    config.prepend_decision_rule(
+        tool_name="execute",
+        tool_args={"command": "python dangerous.py"},
+        decision="always_reject",
+    )
+    config.save_to_json_file(config_path)
+
+    reloaded = ToolApprovalConfig.from_json_file(config_path)
+    assert (
+        reloaded.resolve_decision("execute", {"command": "python dangerous.py"})
+        == "always_reject"
+    )
 
 
 @pytest.mark.asyncio
@@ -118,5 +167,4 @@ async def test_mcp_config_reads_utf8_json(
     monkeypatch.setattr(aiofiles, "open", strict_aiofiles_open)
 
     config = await MCPConfig.from_json(config_path)
-
     assert config.servers["msprof-mcp"].env["LABEL"] == CHINESE_TEXT

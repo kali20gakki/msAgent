@@ -1,10 +1,6 @@
-from typing import TypeVar
+"""Agent creation using deepagents backend."""
 
-from msagent.agents.context import AgentContext
+from msagent.agents.factory import AgentFactory
 from msagent.agents.state import AgentState
 
-StateSchema = TypeVar("StateSchema", bound=AgentState)
-StateSchemaType = type[StateSchema]
-
-ContextSchema = TypeVar("ContextSchema", bound=AgentContext)
-ContextSchemaType = type[ContextSchema]
+__all__ = ["AgentFactory", "AgentState"]

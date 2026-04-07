@@ -1,12 +1,10 @@
-"""Sandbox execution for tools and MCP servers."""
+"""Sandbox backends using deepagents."""
 
-from msagent.sandboxes.backends import SandboxBackend
-from msagent.sandboxes.factory import SandboxFactory
-from msagent.sandboxes.serialization import deserialize_runtime, serialize_runtime
+from deepagents.backends import LocalShellBackend
+from deepagents.backends.protocol import SandboxBackendProtocol
 
-__all__ = [
-    "SandboxFactory",
-    "SandboxBackend",
-    "serialize_runtime",
-    "deserialize_runtime",
-]
+# Re-export deepagents backend types
+BackendProtocol = SandboxBackendProtocol
+SandboxBackend = SandboxBackendProtocol
+
+__all__ = ["LocalShellBackend", "SandboxBackendProtocol", "BackendProtocol", "SandboxBackend"]

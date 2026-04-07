@@ -9,6 +9,7 @@ from typing import Any
 import httpx
 import pytest
 from langchain_core.messages import AIMessage, AIMessageChunk
+from langgraph.types import Overwrite
 from openai import APIConnectionError
 from rich.console import Console
 
@@ -471,7 +472,9 @@ def test_live_tool_activity_arg_keeps_full_long_value(
 
     displayed = dispatcher._stringify_tool_arg("a" * 80, 72)
 
-    assert displayed == "a" * 80
+    assert displayed.startswith("a" * 8)
+    assert displayed.endswith("(80 chars)")
+    assert len(displayed) < 80
 
 
 def test_set_tool_activity_dedupes_same_call_across_namespaces(tmp_path: Path) -> None:
@@ -616,6 +619,57 @@ def test_extract_tool_call_names_handles_final_ai_messages(tmp_path: Path) -> No
     assert [span.style for span in label.spans] == ["accent", "primary"]
 
 
+def test_build_tool_activity_label_marks_subagent_origin(tmp_path: Path) -> None:
+    session = _build_session(tmp_path)
+    dispatcher = MessageDispatcher(session)
+
+    label = dispatcher._build_tool_activity_label(
+        message_module.ToolActivityCall(name="run_command", args={}),
+        indent_level=1,
+        origin_label="Subagent",
+    )
+
+    assert label.plain == "  [Subagent] Use tool run_command"
+
+
+def test_extract_last_update_message_returns_none_for_empty_or_invalid_payloads(
+    tmp_path: Path,
+) -> None:
+    session = _build_session(tmp_path)
+    dispatcher = MessageDispatcher(session)
+
+    assert dispatcher._extract_last_update_message({}) is None
+    assert dispatcher._extract_last_update_message({"messages": []}) is None
+    assert dispatcher._extract_last_update_message({"messages": ["not-a-message"]}) is None
+
+
+def test_render_new_update_message_deduplicates_by_stable_message_id(tmp_path: Path) -> None:
+    session = _build_session(tmp_path)
+    rendered: list[tuple[str, Any]] = []
+    session.renderer = SimpleNamespace(
+        render_assistant_message=lambda message, **kwargs: rendered.append(("assistant", message)),
+        render_tool_call=lambda *args, **kwargs: rendered.append(("tool_call", args)),
+        render_tool_message=lambda message, **kwargs: rendered.append(("tool_message", message)),
+    )
+    dispatcher = MessageDispatcher(session)
+    rendered_messages: set[str] = set()
+    message = AIMessage(content="same message")
+
+    dispatcher._render_new_update_message(
+        message,
+        indent_level=0,
+        rendered_messages=rendered_messages,
+    )
+    dispatcher._render_new_update_message(
+        message,
+        indent_level=0,
+        rendered_messages=rendered_messages,
+    )
+
+    assert rendered == [("assistant", message)]
+    assert len(rendered_messages) == 1
+
+
 def test_render_assistant_with_deferred_tools_hides_header_until_result(
     tmp_path: Path,
 ) -> None:
@@ -625,8 +679,8 @@ def test_render_assistant_with_deferred_tools_hides_header_until_result(
         render_assistant_message=lambda message, indent_level=0, show_tool_calls=True: rendered.append(
             ("assistant", indent_level, show_tool_calls, message)
         ),
-        render_tool_call=lambda tool_call, indent_level=0, duration=None: rendered.append(
-            ("tool_call", indent_level, tool_call, duration)
+        render_tool_call=lambda tool_call, indent_level=0, duration=None, origin_label=None: rendered.append(
+            ("tool_call", indent_level, tool_call, duration, origin_label)
         ),
         render_tool_message=lambda message, indent_level=0: rendered.append(
             ("tool_message", indent_level, message)
@@ -646,14 +700,15 @@ def test_render_assistant_with_deferred_tools_hides_header_until_result(
     assert rendered == [("assistant", 1, False, message)]
     assert "call-1" in dispatcher._pending_tool_headers
     pending = dispatcher._pending_tool_headers["call-1"]
-    assert pending[0] == {
+    assert pending.tool_call == {
         "name": "run_command",
         "args": {"command": "ls"},
         "id": "call-1",
         "type": "tool_call",
     }
-    assert pending[1] == 1
-    assert isinstance(pending[2], float)  # start_time
+    assert pending.indent_level == 1
+    assert pending.origin_label == "Subagent"
+    assert isinstance(pending.started_at, float)
 
 
 def test_render_pending_tool_header_uses_deferred_header_before_result(tmp_path: Path) -> None:
@@ -661,23 +716,24 @@ def test_render_pending_tool_header_uses_deferred_header_before_result(tmp_path:
     rendered: list[tuple[str, Any]] = []
     session.renderer = SimpleNamespace(
         render_assistant_message=lambda *args, **kwargs: None,
-        render_tool_call=lambda tool_call, indent_level=0, duration=None: rendered.append(
-            ("tool_call", indent_level, tool_call, duration)
+        render_tool_call=lambda tool_call, indent_level=0, duration=None, origin_label=None: rendered.append(
+            ("tool_call", indent_level, tool_call, duration, origin_label)
         ),
         render_tool_message=lambda message, indent_level=0: rendered.append(
             ("tool_message", indent_level, message)
         ),
     )
     dispatcher = MessageDispatcher(session)
-    dispatcher._pending_tool_headers["call-1"] = (
-        {
+    dispatcher._pending_tool_headers["call-1"] = message_module.DeferredToolHeader(
+        tool_call={
             "name": "run_command",
             "args": {"command": "ls"},
             "id": "call-1",
             "type": "tool_call",
         },
-        2,
-        1234567890.0,  # start_time
+        indent_level=2,
+        origin_label="Subagent",
+        started_at=1234567890.0,
     )
     tool_message = message_module.ToolMessage(
         content="done",
@@ -698,6 +754,7 @@ def test_render_pending_tool_header_uses_deferred_header_before_result(tmp_path:
         "type": "tool_call",
     }
     assert isinstance(rendered[0][3], float)  # duration
+    assert rendered[0][4] == "Subagent"
     assert rendered[1] == ("tool_message", 2, tool_message)
     assert dispatcher._pending_tool_headers == {}
 
@@ -709,21 +766,22 @@ def test_render_pending_tool_header_prefers_exact_tool_runtime_metadata(
     rendered: list[tuple[str, Any]] = []
     session.renderer = SimpleNamespace(
         render_assistant_message=lambda *args, **kwargs: None,
-        render_tool_call=lambda tool_call, indent_level=0, duration=None: rendered.append(
-            ("tool_call", indent_level, tool_call, duration)
+        render_tool_call=lambda tool_call, indent_level=0, duration=None, origin_label=None: rendered.append(
+            ("tool_call", indent_level, tool_call, duration, origin_label)
         ),
         render_tool_message=lambda *args, **kwargs: None,
     )
     dispatcher = MessageDispatcher(session)
-    dispatcher._pending_tool_headers["call-1"] = (
-        {
+    dispatcher._pending_tool_headers["call-1"] = message_module.DeferredToolHeader(
+        tool_call={
             "name": "run_command",
             "args": {"command": "sleep 60"},
             "id": "call-1",
             "type": "tool_call",
         },
-        1,
-        10.0,
+        indent_level=1,
+        origin_label="Subagent",
+        started_at=10.0,
     )
 
     tool_message = message_module.ToolMessage(
@@ -741,6 +799,32 @@ def test_render_pending_tool_header_prefers_exact_tool_runtime_metadata(
     assert rendered[0][0] == "tool_call"
     assert rendered[0][1] == 1
     assert rendered[0][3] == pytest.approx(30.0)
+    assert rendered[0][4] == "Subagent"
+
+
+def test_remember_expandable_tool_output_tracks_latest_preview(tmp_path: Path) -> None:
+    session = _build_session(tmp_path)
+    remembered = []
+    session.remember_tool_output = remembered.append
+    dispatcher = MessageDispatcher(session)
+
+    tool_message = message_module.ToolMessage(
+        content="line 1\nline 2\nline 3",
+        short_content="line 1\n... (truncated, original length: 20)",
+        tool_call_id="call-1",
+        name="run_command",
+    )
+
+    dispatcher._remember_expandable_tool_output(tool_message, indent_level=2)
+
+    assert len(remembered) == 1
+    entry = remembered[0]
+    assert entry.tool_call_id == "call-1"
+    assert entry.tool_name == "run_command"
+    assert entry.preview_content == "line 1\n... (truncated, original length: 20)"
+    assert entry.full_content == "line 1\nline 2\nline 3"
+    assert entry.indent_level == 2
+    assert entry.origin_label == "Subagent"
 
 
 def test_merge_chunks_preserves_usage_metadata() -> None:
@@ -800,6 +884,112 @@ async def test_update_token_tracking_falls_back_to_ai_message_usage_metadata(
 
     assert session.context.current_input_tokens == 4096
     assert session.context.current_output_tokens == 512
+
+
+@pytest.mark.asyncio
+async def test_update_token_tracking_accepts_overwrite_wrapped_messages(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session = _build_session(tmp_path)
+    dispatcher = MessageDispatcher(session)
+
+    async def fake_check_auto_compression() -> None:
+        return None
+
+    monkeypatch.setattr(
+        dispatcher,
+        "_check_auto_compression",
+        fake_check_auto_compression,
+    )
+
+    await dispatcher._update_token_tracking(
+        {
+            "messages": Overwrite(
+                [
+                    AIMessage(
+                        content="done",
+                        usage_metadata={
+                            "input_tokens": 123,
+                            "output_tokens": 45,
+                            "total_tokens": 168,
+                        },
+                    )
+                ]
+            )
+        }
+    )
+
+    assert session.context.current_input_tokens == 123
+    assert session.context.current_output_tokens == 45
+
+
+@pytest.mark.asyncio
+async def test_process_update_chunk_accepts_overwrite_wrapped_messages(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session = _build_session(tmp_path)
+    rendered: list[AIMessage] = []
+    session.renderer = SimpleNamespace(
+        render_assistant_message=lambda message, **kwargs: rendered.append(message),
+        render_tool_call=lambda *args, **kwargs: None,
+        render_tool_message=lambda *args, **kwargs: None,
+    )
+    dispatcher = MessageDispatcher(session)
+
+    async def fake_update_token_tracking(_node_data: dict[str, Any]) -> None:
+        return None
+
+    monkeypatch.setattr(
+        dispatcher,
+        "_update_token_tracking",
+        fake_update_token_tracking,
+    )
+
+    await dispatcher._process_update_chunk(
+        {
+            "agent": {
+                "messages": Overwrite([AIMessage(content="tool-less assistant update")])
+            }
+        },
+        (),
+        set(),
+        None,
+        {},
+        {},
+    )
+
+    assert len(rendered) == 1
+    assert rendered[0].content == "tool-less assistant update"
+
+
+@pytest.mark.asyncio
+async def test_process_update_chunk_ignores_invalid_last_message_payload(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session = _build_session(tmp_path)
+    session.renderer = SimpleNamespace(
+        render_assistant_message=lambda *args, **kwargs: pytest.fail("should not render"),
+        render_tool_call=lambda *args, **kwargs: pytest.fail("should not render"),
+        render_tool_message=lambda *args, **kwargs: pytest.fail("should not render"),
+    )
+    dispatcher = MessageDispatcher(session)
+
+    async def fake_update_token_tracking(_node_data: dict[str, Any]) -> None:
+        return None
+
+    monkeypatch.setattr(dispatcher, "_update_token_tracking", fake_update_token_tracking)
+
+    await dispatcher._process_update_chunk(
+        {"agent": {"messages": ["not-a-message"]}},
+        (),
+        set(),
+        None,
+        {},
+        {},
+    )
 
 
 @pytest.mark.asyncio
