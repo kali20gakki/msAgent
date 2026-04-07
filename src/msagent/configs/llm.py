@@ -58,7 +58,7 @@ class LLMConfig(VersionedConfig):
     base_url: str | None = Field(
         default=None,
         description=(
-            "Optional base URL for compatible providers or full request URL for custom"
+            "Optional base URL override for compatible providers or proxies"
         ),
     )
     max_tokens: int = Field(description="The maximum number of tokens to generate")

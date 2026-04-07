@@ -82,7 +82,7 @@ def create_legacy_parser() -> argparse.ArgumentParser:
     )
     config_parser.add_argument(
         "--llm-base-url",
-        help="Custom provider base URL, or full request URL for custom",
+        help="Custom provider base URL for a compatible service or proxy",
     )
     config_parser.add_argument("--llm-model", "-m", help="Model name")
     config_parser.add_argument(

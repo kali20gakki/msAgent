@@ -1,30 +1,27 @@
 <h1 align="center">🚀 msAgent</h1>
 
-<p align="center"><strong>面向 Ascend NPU 场景的性能问题定位助手</strong></p>
+<p align="center"><strong>面向 Ascend NPU 场景的一站式调试调优 Agent</strong></p>
 
-**msAgent** 聚焦“发现瓶颈 -> 定位根因 -> 给出建议”的分析闭环。  
-它结合 LLM 推理能力与可扩展工具链，帮助你把复杂 Profiling 信息快速转化为可执行的优化决策。
+**msAgent** 聚焦“发现问题 -> 定位根因 -> 给出建议 -> 辅助验证”的调试调优闭环。  
+它结合 LLM 推理能力与可扩展工具链，覆盖性能分析、文档走查、工具咨询等场景，帮助你把复杂问题快速转化为可执行的调试与优化决策。
 
 <p align="center">
-  <img src="https://github.com/luelueFLY/images/blob/main/img/agent-gif-05.gif" alt="msAgent">
+  <img src="https://github.com/luelueFLY/images/blob/main/img/msagent-hello.gif" alt="msAgent">
 </p>
 
-<p align="center">📌 文档导航：<a href="#最新消息">最新消息</a> ｜ <a href="#版本说明">版本说明</a> ｜ <a href="#使用效果展示">使用效果展示</a></p>
+<p align="center">📌 文档导航：<a href="#最新消息">最新消息</a> ｜ <a href="docs/configuration-and-extension.md">配置与扩展</a> ｜ <a href="docs/build-and-package.md">编译与打包</a> ｜ <a href="docs/version-and-compatibility.md">版本与兼容性</a></p>
 
 
 ## 最新消息
 
 - 2026-03-19：`mindstudio-agent` 已发布到 PyPI，推荐优先使用 `pip install -U mindstudio-agent` 安装
 
-## 🔍 支持的分析场景与扩展能力
+## 🤖 内置 Agent 与能力分工
 
-- ⚙️ 覆盖单卡、多卡到集群的性能分析
-- 🔎 支持算子热点、通信瓶颈、快慢卡、慢节点、下发调度等常见问题定位
-- 📊 支持 MFU 计算、快慢卡诊断等典型分析任务
-- 🖼️ 具体示例提示词和效果截图可参考下文的 [使用效果展示](#使用效果展示)
-- 🔌 支持 MCP 扩展，默认随 PyPI 包安装启用 [`msprof-mcp`](https://github.com/kali20gakki/msprof-mcp)
-- 🧠 支持 Skills 扩展；源码仓库中的内置 Skills 由 [`mindstudio-skills`](https://github.com/kali20gakki/mindstudio-skills) 子模块提供
-- 📝 内置 [`document-ux-review`](docs/document_ux_review.md) skill，可按真实 README / 安装文档步骤执行并输出文档上手体验审查报告
+| Agent 形象 | 名称 | 领域定位 | Agent 说明 |
+|---|---|---|---|
+| <img src="docs/images/Hermes.png" alt="Hermes" width="120"> | **Hermes** | 性能调优：聚焦 Ascend Profiling 分析，覆盖单卡、多卡、集群等场景，擅长快慢卡、慢节点、MFU、通信瓶颈、算子热点、下发调度等性能问题定位与优化建议。 | [查看 Hermes 说明](docs/agents/Hermes.md) |
+| <img src="docs/images/Minos.png" alt="Minos" width="120"> | **Minos** | 文档体验与上手审查：聚焦 README 走查、安装流程验证、Quick Start 体验、新手 onboarding 和文档可用性评估，帮助发现文档阻塞点并输出改进建议。 | [查看 Minos 说明](docs/agents/Minos.md) |
 ---
 
 ## ⚡ 快速上手
@@ -37,39 +34,19 @@
 - glibc >= 2.34 (msprof-mcp trace_processor binary required)
 
 ### 2) 📦 安装
-Linux / macOS / WSL 用户推荐优先使用 **curl 一键安装**；它会自动安装 `uv`，再通过 `uv tool install` 安装 `mindstudio-agent`，并一并暴露 `msprof-mcp` 命令。  
-如果你更习惯手动安装，可继续使用 **PyPI 安装**。如果你需要跟踪最新源码、参与开发，或同步最新内置 Skills，再使用**源码运行**方式。
+推荐优先使用 **PyPI 安装**。如果你需要跟踪最新源码、参与开发，或同步最新内置 Skills，再使用 **源码运行** 方式。
 
 说明：
 - 下文中的 `msagent` 默认指已安装的命令行入口
 - 如果采用源码运行，请将示例中的 `msagent` 替换为 `uv run msagent`
 
-#### 方式一：curl 一键安装（Linux / macOS / WSL 推荐）
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/kali20gakki/msAgent/main/scripts/install.sh | bash
-```
-
-安装完成后，建议先确认命令可用：
-
-```bash
-msagent --version
-```
-
-如果你想指定 Python 版本或安装特定包版本，可以在 `bash` 前覆盖环境变量：
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/kali20gakki/msAgent/main/scripts/install.sh | MSAGENT_PYTHON=3.12 bash
-curl -fsSL https://raw.githubusercontent.com/kali20gakki/msAgent/main/scripts/install.sh | MSAGENT_PACKAGE_SPEC="mindstudio-agent==0.1.2" bash
-```
-
-#### 方式二：PyPI 安装
+#### 方式一：PyPI 安装
 
 ```bash
 pip install -U mindstudio-agent
 ```
 
-#### 方式三：源码运行（开发 / 跟踪最新代码）
+#### 方式二：源码运行（开发 / 跟踪最新代码）
 
 拉取源码并进入目录：
 
@@ -124,11 +101,14 @@ msagent -v
 
 ### 3) 🔐 配置 LLM
 
-当前 `config` 子命令直接支持的 Provider 是：`openai`、`anthropic`、`gemini`、`google`、`custom`。
+当前 `config` 子命令直接支持的 Provider 是：`openai`、`anthropic`、`google`。
 
 选型建议：
 - OpenAI 兼容接口：使用 `openai`
-- 非 OpenAI 兼容、自定义 HTTP 接口：使用 `custom`
+- Anthropic 兼容接口：使用 `anthropic`
+- Google / Gemini 接口：使用 `google`
+
+对于用户自部署或经由网关转发的服务，不再单独区分 `custom` provider；请根据接口协议兼容性复用上述三种 provider，并通过 `--llm-base-url` 指定自定义服务地址。
 
 下面命令使用 Linux / macOS 的环境变量写法；Windows CMD 请改成 `set KEY=value`，PowerShell 请改成 `$env:KEY = "value"`。
 
@@ -153,23 +133,34 @@ msagent config --llm-provider openai --llm-base-url "http://127.0.0.1:8000/v1" -
 - `OPENAI_API_KEY` 只需任意非空字符串，不需要是真实密钥
 - `--llm-base-url` 对于 vLLM 一般填写服务根路径，例如 `http://127.0.0.1:8000/v1`
 
-#### 自定义 HTTP 接口
+#### 自定义服务地址示例
 
-如果你的服务不是 OpenAI 兼容协议，而是直接请求某个自定义 HTTP 接口，请改用 `custom` provider：
+如果你使用的是自部署服务、企业网关或代理层，请按协议兼容性选择 provider，并通过 `--llm-base-url` 指向你的服务地址。
 
-```bash
-export CUSTOM_API_KEY="your-key"
-msagent config --llm-provider custom --llm-base-url "https://example.com/chat/completions" --llm-model "my-model"
-```
+#### Anthropic 兼容服务
 
-如果你的自建接口不需要 API Key，可以不设置 `CUSTOM_API_KEY`，或先将其清空：
+例如自部署或代理后的 Claude / Anthropic 兼容接口：
 
 ```bash
-unset CUSTOM_API_KEY
-msagent config --llm-provider custom --llm-base-url "http://127.0.0.1:8000/v1/chat/completions" --llm-model "your-model"
+export ANTHROPIC_API_KEY="your-key"
+msagent config --llm-provider anthropic --llm-base-url "https://example.com/anthropic" --llm-model "claude-sonnet-4-20250514"
 ```
 
-- `custom` provider 在未设置 `CUSTOM_API_KEY` 时，不会自动附带 `Authorization` 请求头
+#### Google / Gemini 服务
+
+例如 Google AI Studio、Vertex AI 网关，或兼容 Gemini 协议的服务：
+
+```bash
+export GOOGLE_API_KEY="your-key"
+msagent config --llm-provider google --llm-base-url "https://example.com/google" --llm-model "gemini-2.5-pro"
+```
+
+说明：
+
+- 自部署服务请选择与其协议兼容的 provider，而不是使用不存在的 `custom` provider
+- `--llm-base-url` 用于覆盖默认官方地址，指向你自己的服务入口或代理网关
+- 对于不校验 API Key 的兼容服务，通常仍建议设置一个非空占位值，例如 `dummy`
+- 历史配置里的 `gemini` 会被兼容处理为 `google`，但新配置建议统一使用 `google`
 
 #### 查看当前配置
 
@@ -192,7 +183,7 @@ msagent --agent Hermes
 msagent --agent Minos
 ```
 
-### 4.1) 🌐 启动 Web UI（复用官方 `deep-agents-ui`）
+### 4.1) 🌐 启动 Web UI（可选，Beta功能）
 
 启动：
 
@@ -235,244 +226,75 @@ msagent web --no-ui
 ```
 
 
-### 5) 📊 与 msAgent 一起性能调优
+### 5) 📚 按 Agent 查看说明与示例
 
+不同能力的说明与示例已经按 Agent 拆分：
 
-把 Profiling 目录路径和问题一起发给 msAgent，目前已有能力请参考：[使用效果展示](#使用效果展示)
+- `Hermes`：性能调优与 Profiling 分析 Agent 页面，见 [docs/agents/Hermes.md](docs/agents/Hermes.md)
+- `Minos`：文档体验与上手审查 Agent 页面，见 [docs/agents/Minos.md](docs/agents/Minos.md)
+---
 
+## 🛠️ 参考文档
+
+后续的配置、扩展、构建和版本说明已经拆分到独立文档，避免首页信息过载，也方便按代码演进单独维护：
+
+- [配置与扩展](docs/configuration-and-extension.md)
+  项目本地配置目录、MCP 配置、Skills 扩展与加载顺序。
+- [编译与打包](docs/build-and-package.md)
+  wheel 构建流程、构建脚本行为、常用构建参数与手动构建方式。
+- [版本与兼容性](docs/version-and-compatibility.md)
+  当前版本、Python 要求、内置 MCP 版本与 Provider 支持情况。
 
 ---
 
-## 使用效果展示
+## ⌨️ 会话常见操作
 
-| 场景 | 示例提示词                                                           | 效果展示                                                                                                                 |
-|---|-----------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------|
-| MFU 计算 | `请基于/path/to/kernel_details.csv计算matmul的MFU（910B3），并说明各项计算依据。`        | <img src="https://github.com/luelueFLY/images/blob/main/img/kernel-details-mfu-file.png" alt="MFU 计算示例" width="800"> |
-| 快慢卡诊断 | `请分析 /path/to/cluster_profiling/ 中是否存在快慢卡问题，定位异常 rank，并给出可能原因。` | <img src="https://github.com/luelueFLY/images/blob/main/img/slow-rank-detect.png" alt="快慢卡诊断示例" width="800">         |
-| profiling数据检查 | `请分析 /path/to/xxx_ascend_pt/ 数据是否采集正常。`                         | <img src="https://github.com/luelueFLY/images/blob/main/img/profiler-data-check.jpg" alt="数据完整性验证示例" width="800">    |
-| msprof工具使用类咨询 | `msprof怎么编译出run包？`                                              | <img src="https://github.com/luelueFLY/images/blob/main/img/msprof-build.jpg" alt="工具咨询示例" width="800">              |
-| db自定义内容转csv | `基于ascend_pytorch_profiler_0.db，帮我提取各个算子类型的总耗时并按降序输出到csv。`      | <img src="https://github.com/luelueFLY/images/blob/main/img/db-export.png" alt="数据导出示例" width="800">                 |
----
+进入交互式会话后，可以直接输入问题，也可以配合 `/` 命令和快捷键提升效率。
 
-## 🛠️ 参考：配置与扩展
+### `/` 命令
 
-### 📁 项目本地配置目录
+当前交互式会话支持以下 slash commands：
 
-当前实现使用“项目本地配置”，所有运行时文件都放在：
-
-```text
-<working-dir>/.msagent/
-```
-
-首次运行时，`msAgent` 会把 `resources/configs/default/` 里的默认模板复制到该目录。常见文件如下：
-
-| 文件 | 作用 |
+| 命令 | 说明 |
 |---|---|
-| `.msagent/config.llms.yml` | 当前项目默认模型配置；`msagent config` 直接写这里 |
-| `.msagent/llms/*.yml` | 附带的模型别名集合 |
-| `.msagent/agents/*.yml` | Agent 定义，例如 `general`、`code-reviewer` |
-| `.msagent/subagents/*.yml` | SubAgent 定义 |
-| `.msagent/checkpointers/*.yml` | Checkpointer 配置 |
-| `.msagent/sandboxes/*.yml` | 沙箱配置模板 |
-| `.msagent/config.mcp.json` | MCP 服务器配置 |
-| `.msagent/config.approval.json` | 工具审批规则 |
-| `.msagent/config.checkpoints.db` | 会话 checkpoint 数据库 |
-| `.msagent/.history` | 输入历史 |
-| `.msagent/memory.md` | 用户偏好和项目上下文记忆 |
+| `/help` | 查看当前支持的命令列表。 |
+| `/hotkeys` | 查看键盘快捷键说明。 |
+| `/agents` | 打开 Agent 选择器。 |
+| `/model` | 打开模型选择器。 |
+| `/threads` | 浏览并恢复历史会话线程。 |
+| `/tools` | 查看当前可用工具。 |
+| `/skills` | 浏览当前可用 Skills。 |
+| `/mcp` | 管理 MCP 服务启用状态。 |
+| `/offload` | 压缩并卸载较早的会话消息。 |
+| `/tool-output` | 打开最近一次可展开的工具输出。 |
+| `/clear` | 清屏并开启新线程。 |
+| `/exit` | 退出当前会话。 |
 
-### 🔌 MCP 配置
+### 输入区快捷键
 
-默认模板会启用 `msprof-mcp`，并直接调用随当前 Python 环境安装的 `msprof-mcp` 可执行程序启动。
-
-当前代码中的 MCP 使用方式是：
-
-- 用 `/mcp` 在会话里切换已有服务的启用状态
-- 用编辑器直接修改 `.msagent/config.mcp.json` 来新增、删除或细调服务器定义
-
-配置文件格式示例：
-
-```json
-{
-  "mcpServers": {
-    "filesystem": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/workspace"],
-      "transport": "stdio",
-      "env": {},
-      "include": [],
-      "exclude": [],
-      "enabled": true,
-      "stateful": false
-    }
-  }
-}
-```
-
-常用字段：
-
-- `command` / `url`
-- `args`
-- `transport`
-- `env`
-- `include` / `exclude`
-- `enabled`
-- `stateful`
-- `repair_command` / `repair_timeout`
-- `timeout` / `sse_read_timeout` / `invoke_timeout`
-
-超时字段说明：
-
-- `repair_command`：可选的“自动补救命令”。它不是正常的 MCP 启动命令，而是在 MCP 服务初始化失败时，额外执行的一条补救指令。
-- 可以把它理解成“兜底修复步骤”。例如首次启动失败后，先执行一次安装依赖、拉起前置服务或修复环境的命令，然后再重新尝试连接 MCP。
-- `repair_timeout`：上面这条补救命令的最长允许执行时间，单位秒。它只约束 `repair_command` 本身，不影响正常 tool 调用。
-- `invoke_timeout`：每次 MCP tool 调用的超时时间，单位秒。这个才是日常最常用的 tool 调用超时控制。
-- 如果没有配置 `repair_command`，那么 `repair_timeout` 不会实际触发，可以理解为一个暂未使用的预留字段。
-- 对于 `msprof-mcp` 这类本地 `stdio` MCP，通常主要关注 `invoke_timeout`；只有你确实设计了“启动失败后自动修一下再重试”的流程时，才需要关心 `repair_command` / `repair_timeout`。
-
-对于像 `msprof-mcp` 这类本地 `stdio` MCP，默认更推荐：
-
-- `stateful: true`，避免每次工具调用都重新拉起服务进程
-- 如果你是通过 `pip install mindstudio-agent` 或安装已构建的发布包使用，保持默认的 `"command": "msprof-mcp"` 即可
-- 如需把 `msprof-mcp` 与当前环境解耦，仍可改成 `uvx --isolated --from msprof-mcp==0.1.4 msprof-mcp` 启动
-- 只在需要强制刷新远端版本时才临时使用 `uvx --refresh`，不要把它作为常驻默认参数
-
-### 🧠 Skills
-
-Skills 会按以下候选目录自动加载：
-
-- `<working-dir>/skills`
-- 内置 Skills（源码仓库中对应 `resources/configs/default/skills/` 子模块）
-- `<working-dir>/.msagent/skills`
-
-源码仓库中的内置 Skills 来源于 `mindstudio-skills` 子模块：
-
-- 子模块路径：`resources/configs/default/skills/`
-- 上游仓库：`https://github.com/kali20gakki/mindstudio-skills`
-
-如果你是 `git clone` 后从源码运行，建议至少执行一次以下命令初始化 Skills：
-
-```bash
-git submodule sync --recursive
-git submodule update --init --recursive resources/configs/default/skills
-```
-
-如果你要同步 `mindstudio-skills` 的最新上游提交，请执行：
-
-```bash
-git submodule sync --recursive
-git submodule update --init --recursive --remote resources/configs/default/skills
-```
-
-说明：
-
-- 不带 `--remote`：同步到当前 `msAgent` 仓库记录的 Skills 版本，适合复现和保持版本一致。
-- 带 `--remote`：同步到 `mindstudio-skills` 上游默认分支的最新提交。
-- 执行 `--remote` 后，主仓库里的 submodule 指针会变更；如果你希望固定这个版本，记得一起提交该变更。
-
-支持两种目录结构：
-
-```text
-skills/
-  my-skill/
-    SKILL.md
-```
-
-```text
-skills/
-  profiling/
-    my-skill/
-      SKILL.md
-```
-
-其中 `SKILL.md` 需要包含 frontmatter，至少提供：
-
-```yaml
----
-name: my-skill
-description: 这个技能做什么
----
-```
-
-当前仓库里已经包含示例技能 `op-mfu-calculator`，会在无项目自定义 Skill 时作为兜底能力之一被加载。
-
----
-
-## 🏗️ 编译与打包
-
-### 打包 wheel（可直接 pip install）
-
-Linux / macOS：
-
-```bash
-bash scripts/build_whl.sh
-```
-
-Windows（CMD）：
-
-```cmd
-git submodule sync --recursive
-git submodule update --init --recursive --remote --force --depth 1 resources/configs/default/skills
-uv build --wheel --out-dir dist .
-```
-
-如果你的 Windows 环境安装了 Git Bash / WSL，也可以直接执行 `bash scripts/build_whl.sh`。
-
-构建脚本会默认执行 `git submodule update --init --recursive --remote --force --depth 1 resources/configs/default/skills`，同步 `mindstudio-skills` 上游最新提交后再打入 wheel 包。
-如果你需要按主仓库里固定的 submodule 提交构建，可以临时设置 `SYNC_SKILLS_REMOTE=0`。
-
-打包完成后会在 `dist/` 目录生成 `mindstudio_agent-*.whl`，可直接安装：
-
-Linux / macOS：
-
-```bash
-pip install dist/mindstudio_agent-<version>-py3-none-any.whl
-```
-
-Windows（CMD）：
-
-```cmd
-pip install .\dist\mindstudio_agent-<version>-py3-none-any.whl
-```
-
-请将上面的 `<version>` 替换为实际构建出的 wheel 文件名。
-
-从 TestPyPI 安装时，建议同时添加 PyPI 作为依赖源（部分依赖仅发布在 PyPI）：
-
-```bash
-pip install -i https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ mindstudio-agent==0.1.0
-```
-
----
-
----
-
-## 版本说明
-
-| 项目 | 说明 |
+| 快捷键 | 说明 |
 |---|---|
-| 当前版本 | `0.1.0`（首个 PyPI 发布版本） |
-| 发布方式 | 支持通过 `pip install -U mindstudio-agent` 直接安装 |
-| 包名 | `mindstudio-agent` |
-| 命令行入口 | `msagent` |
-| Python 要求 | `>=3.11` |
-| 默认内置扩展 | `msprof-mcp==0.1.4` |
-| 版本策略 | 遵循语义化版本（SemVer），补丁版本以兼容性修复为主，次版本新增功能保持向后兼容，主版本包含不兼容变更。 |
+| `Ctrl+C` | 有输入时清空输入框；连续按两次退出会话。 |
+| `Ctrl+J` | 插入换行，便于多行输入。 |
+| `Shift+Tab` | 循环切换审批模式。 |
+| `Ctrl+B` | 切换 bash mode。 |
+| `Ctrl+K` | 直接打开快捷键说明。 |
+| `Ctrl+O` | 打开最近一次可展开的工具输出。 |
+| `Tab` | 应用第一个补全项。 |
+| `Enter` | 提交输入；如果当前选中了补全项，则先应用补全。 |
 
-### `0.1.0` 能力概览
+### 工具输出查看器
 
-- 支持通过 CLI 直接分析 Profiling 数据，既可进入交互式会话，也可执行单轮问题分析
-- 支持单卡、多卡到集群的性能定位，覆盖算子热点、通信瓶颈、快慢卡、慢节点、下发调度等常见问题
-- 支持 MFU 计算、快慢卡诊断、Profiling 数据检查等典型任务，具体示例可参考上文的 [使用效果展示](#使用效果展示)
-- 支持 OpenAI 兼容 API 与 `custom` HTTP 接口配置，可按项目写入默认模型
-- 支持 MCP 扩展，默认随安装启用 `msprof-mcp`
-- 支持 Skills 扩展；源码仓库中的内置 Skills 由 [`mindstudio-skills`](https://github.com/kali20gakki/mindstudio-skills) 子模块提供
-- 内置 [`document-ux-review`](docs/document_ux_review.md) skill，可按 README 和安装文档真实步骤执行，并输出结构化的文档上手体验审查报告
+当某次工具调用支持展开查看时，可用 `Ctrl+O` 或 `/tool-output` 打开工具输出查看器。查看器内支持：
 
-可通过以下命令查看本地安装版本：
-
-```bash
-msagent --version
-```
+| 快捷键 | 说明 |
+|---|---|
+| `Ctrl+O` / `Enter` | 展开或折叠当前工具输出。 |
+| `Left` / `Right` | 在不同 tool call 之间切换。 |
+| `Up` / `Down` | 按行滚动。 |
+| `PageUp` / `PageDown` | 按页滚动。 |
+| `Home` / `End` | 跳到顶部或底部。 |
+| `Esc` / `Ctrl+C` | 关闭查看器。 |
 
 ---
 
@@ -483,9 +305,3 @@ msagent --version
 <a href="https://applink.feishu.cn/client/chat/chatter/add_by_link?link_token=854v5833-c03a-484e-8aac-0637f0303dc4&qr_code=true">
   <img src="https://img.shields.io/badge/Feishu-3370FF?style=for-the-badge&logo=lark&logoColor=white" alt="Feishu Group"></a>
 
----
-
-
-## 🙏 引用与致谢
-
-本项目在架构设计与实现思路上参考了 [`langrepl`](https://github.com/midodimori/langrepl) 项目，在此向其作者与贡献者表示感谢。
