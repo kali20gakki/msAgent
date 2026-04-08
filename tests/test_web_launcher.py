@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import tarfile
 from pathlib import Path
+from typing import Any, cast
 
 import pytest
 
@@ -43,10 +44,14 @@ def test_build_ui_environment_sets_default_config_env() -> None:
     env = web_ui.build_ui_environment(
         deployment_url="http://127.0.0.1:2024",
         assistant_id="msagent",
+        host="127.0.0.1",
+        port=3000,
     )
 
     assert env[web_ui.ENV_UI_DEPLOYMENT_URL] == "http://127.0.0.1:2024"
     assert env[web_ui.ENV_UI_ASSISTANT_ID] == "msagent"
+    assert env[web_ui.ENV_UI_HOST] == "127.0.0.1"
+    assert env[web_ui.ENV_UI_PORT] == "3000"
 
 
 def test_ensure_ui_default_config_support_patches_page(tmp_path: Path) -> None:
@@ -274,6 +279,15 @@ def test_build_ui_dev_command_uses_npm() -> None:
     ]
 
 
+def test_build_ui_standalone_command_uses_node() -> None:
+    command = web_ui.build_ui_standalone_command()
+
+    assert command == [
+        web_ui.shutil.which("node"),
+        "server.js",
+    ]
+
+
 def test_ensure_ui_checkout_prefers_bundled_archive(monkeypatch, tmp_path: Path) -> None:
     checkout_dir = tmp_path / "ui"
     extracted: list[Path] = []
@@ -296,6 +310,28 @@ def test_ensure_ui_checkout_prefers_bundled_archive(monkeypatch, tmp_path: Path)
     assert web_ui.ensure_ui_checkout() == checkout_dir
     assert extracted == [checkout_dir]
     assert (checkout_dir / "package.json").exists()
+
+
+def test_ensure_ui_standalone_checkout_prefers_bundled_archive(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    checkout_dir = tmp_path / "standalone"
+    extracted: list[Path] = []
+
+    def _fake_extract(target_dir: Path) -> bool:
+        extracted.append(target_dir)
+        target_dir.mkdir(parents=True, exist_ok=True)
+        (target_dir / "server.js").write_text("console.log('msagent');\n", encoding="utf-8")
+        return True
+
+    monkeypatch.setattr(web_ui, "ensure_node_runtime_available", lambda: None)
+    monkeypatch.setattr(web_ui, "ui_standalone_dir", lambda: checkout_dir)
+    monkeypatch.setattr(web_ui, "extract_bundled_ui_standalone", _fake_extract)
+
+    assert web_ui.ensure_ui_standalone_checkout() == checkout_dir
+    assert extracted == [checkout_dir]
+    assert (checkout_dir / "server.js").exists()
 
 
 def test_ensure_ui_checkout_falls_back_to_git_clone_when_bundle_missing(
@@ -332,7 +368,7 @@ def test_extract_ui_archive_restores_checkout_from_tarball(tmp_path: Path) -> No
         archive.add(archive_root, arcname=archive_root.name)
 
     checkout_dir = tmp_path / "checkout"
-    web_ui._extract_ui_archive(archive_path, checkout_dir)
+    web_ui._extract_ui_archive(archive_path, checkout_dir, marker_path=Path("package.json"))
 
     assert (checkout_dir / "package.json").exists()
     assert (checkout_dir / "src" / "app" / "page.tsx").read_text(encoding="utf-8").startswith(
@@ -442,6 +478,7 @@ async def test_launch_langgraph_dev_server_invokes_subprocess(
     monkeypatch.setattr(launcher, "_wait_for_processes", _fake_wait_for_processes)
     opened: list[str] = []
     monkeypatch.setattr(launcher, "_open_browser", opened.append)
+    monkeypatch.setattr(web_ui, "has_bundled_ui_standalone", lambda: False)
     monkeypatch.setattr(web_ui, "ensure_ui_checkout", lambda: tmp_path / "ui")
     monkeypatch.setattr(web_ui, "ensure_ui_customizations", lambda checkout_dir: None)
     monkeypatch.setattr(web_ui, "ensure_ui_dependencies", lambda checkout_dir: None)
@@ -502,6 +539,89 @@ async def test_launch_langgraph_dev_server_invokes_subprocess(
 
 
 @pytest.mark.asyncio
+async def test_launch_langgraph_dev_server_prefers_bundled_standalone_ui(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    spawned: list[dict[str, object]] = []
+
+    class _Proc:
+        def __init__(self, name: str):
+            self.name = name
+            self.returncode: int | None = None
+
+        def poll(self):
+            return self.returncode
+
+        def terminate(self):
+            self.returncode = 0
+
+        def wait(self, timeout=None):
+            del timeout
+            self.returncode = 0
+            return 0
+
+        def kill(self):
+            self.returncode = 1
+
+    async def _fake_spawn_process(*, command, cwd, env):
+        name = "ui" if command == [web_ui.shutil.which("node"), "server.js"] else "api"
+        proc = _Proc(name)
+        spawned.append(
+            {
+                "name": name,
+                "command": command,
+                "cwd": cwd,
+                "env": env,
+                "proc": proc,
+            }
+        )
+        return proc
+
+    async def _fake_wait_for_processes(*, api_process, ui_process):
+        del ui_process
+        api_process.returncode = 0
+        return 0
+
+    async def _fake_wait_for_http_service(*, process, host, port, service_name, timeout_seconds=30.0):
+        del process, host, port, service_name, timeout_seconds
+        return None
+
+    monkeypatch.setattr(
+        launcher,
+        "resolve_langgraph_runner",
+        lambda: ["uv", "run", "--offline", "--with", "langgraph-cli[inmem]", "langgraph"],
+    )
+    monkeypatch.setattr(launcher, "project_root", lambda: tmp_path)
+    monkeypatch.setattr(launcher, "_is_port_open", lambda host, port: False)
+    monkeypatch.setattr(launcher, "_spawn_process", _fake_spawn_process)
+    monkeypatch.setattr(launcher, "_wait_for_http_service", _fake_wait_for_http_service)
+    monkeypatch.setattr(launcher, "_wait_for_processes", _fake_wait_for_processes)
+    monkeypatch.setattr(launcher, "_open_browser", lambda url: None)
+    (tmp_path / "langgraph.json").write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(web_ui, "has_bundled_ui_standalone", lambda: True)
+    monkeypatch.setattr(web_ui, "ensure_ui_standalone_checkout", lambda: tmp_path / "standalone-ui")
+
+    exit_code = await launcher.launch_langgraph_dev_server(
+        host="127.0.0.1",
+        port=2024,
+        ui_port=3000,
+        working_dir=tmp_path / "workspace",
+        agent=None,
+        model=None,
+    )
+
+    assert exit_code == 0
+    ui_spawn = next(item for item in spawned if item["name"] == "ui")
+    assert ui_spawn["cwd"] == tmp_path / "standalone-ui"
+    assert ui_spawn["command"] == [web_ui.shutil.which("node"), "server.js"]
+    ui_env = ui_spawn["env"]
+    assert isinstance(ui_env, dict)
+    assert ui_env[web_ui.ENV_UI_HOST] == "127.0.0.1"
+    assert ui_env[web_ui.ENV_UI_PORT] == "3000"
+
+
+@pytest.mark.asyncio
 async def test_wait_for_processes_cleans_up_both_children_on_keyboard_interrupt() -> None:
     terminated: list[str] = []
 
@@ -520,7 +640,7 @@ async def test_wait_for_processes_cleans_up_both_children_on_keyboard_interrupt(
         terminated.append(process.name)
 
     original_sleep = launcher.asyncio.sleep
-    launcher.asyncio.sleep = _fake_sleep
+    launcher.asyncio.sleep = cast(Any, _fake_sleep)
     try:
         api = _Proc("api")
         ui = _Proc("ui")
@@ -528,8 +648,8 @@ async def test_wait_for_processes_cleans_up_both_children_on_keyboard_interrupt(
         launcher._terminate_process = _fake_terminate_process
         try:
             exit_code = await launcher._wait_for_processes(
-                api_process=api,
-                ui_process=ui,
+                api_process=cast(Any, api),
+                ui_process=cast(Any, ui),
             )
         finally:
             launcher._terminate_process = original_terminate
@@ -578,6 +698,7 @@ async def test_launch_langgraph_dev_server_errors_when_ui_port_is_busy(
     monkeypatch.setattr(launcher, "_spawn_process", _fake_spawn_process)
     monkeypatch.setattr(launcher, "_wait_for_http_service", _fake_wait_for_http_service)
     monkeypatch.setattr(launcher, "_open_browser", lambda url: None)
+    monkeypatch.setattr(web_ui, "has_bundled_ui_standalone", lambda: False)
     monkeypatch.setattr(web_ui, "ensure_ui_checkout", lambda: tmp_path / "ui")
     monkeypatch.setattr(web_ui, "ensure_ui_customizations", lambda checkout_dir: None)
     monkeypatch.setattr(web_ui, "ensure_ui_dependencies", lambda checkout_dir: None)
@@ -636,6 +757,7 @@ async def test_launch_langgraph_dev_server_stops_before_ui_when_api_start_fails(
     monkeypatch.setattr(launcher, "_wait_for_http_service", _fake_wait_for_http_service)
     monkeypatch.setattr(launcher, "_open_browser", lambda url: None)
     (tmp_path / "langgraph.json").write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(web_ui, "has_bundled_ui_standalone", lambda: False)
     monkeypatch.setattr(web_ui, "ensure_ui_checkout", lambda: tmp_path / "ui")
     monkeypatch.setattr(web_ui, "ensure_ui_customizations", lambda checkout_dir: None)
     monkeypatch.setattr(web_ui, "ensure_ui_dependencies", lambda checkout_dir: None)
@@ -701,6 +823,7 @@ async def test_launch_langgraph_dev_server_cleans_started_processes_on_startup_e
     monkeypatch.setattr(launcher, "_terminate_process", _fake_terminate_process)
     monkeypatch.setattr(launcher, "_open_browser", lambda url: None)
     (tmp_path / "langgraph.json").write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(web_ui, "has_bundled_ui_standalone", lambda: False)
     monkeypatch.setattr(web_ui, "ensure_ui_checkout", lambda: tmp_path / "ui")
     monkeypatch.setattr(web_ui, "ensure_ui_customizations", lambda checkout_dir: None)
     monkeypatch.setattr(web_ui, "ensure_ui_dependencies", lambda checkout_dir: None)
@@ -763,6 +886,7 @@ async def test_launch_langgraph_dev_server_can_skip_browser_open(
     monkeypatch.setattr(launcher, "_wait_for_processes", _fake_wait_for_processes)
     monkeypatch.setattr(launcher, "_open_browser", opened.append)
     (tmp_path / "langgraph.json").write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(web_ui, "has_bundled_ui_standalone", lambda: False)
     monkeypatch.setattr(web_ui, "ensure_ui_checkout", lambda: tmp_path / "ui")
     monkeypatch.setattr(web_ui, "ensure_ui_customizations", lambda checkout_dir: None)
     monkeypatch.setattr(web_ui, "ensure_ui_dependencies", lambda checkout_dir: None)

@@ -1,6 +1,7 @@
 """Rich styles and formatting utilities with theme support."""
 
 import os
+from typing import Literal
 
 from rich.console import Console
 
@@ -11,7 +12,7 @@ class ThemedConsole:
     """Console wrapper with configurable theme."""
 
     def __init__(self, console_theme: BaseTheme):
-        color_system = None
+        color_system: Literal["truecolor"] | None = None
         if (
             os.getenv("COLORTERM", "").lower() in {"truecolor", "24bit"}
             or os.getenv("WT_SESSION")

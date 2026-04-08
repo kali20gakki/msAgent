@@ -182,7 +182,14 @@ msagent --agent Hermes
 msagent --agent Minos
 ```
 
-### 4.1) 🌐 启动 Web UI（可选，Beta功能）
+<details>
+<summary>4.1) 🌐 启动 Web UI（可选，Beta功能）</summary>
+
+<br />
+
+前置依赖：
+
+- 本机需要已安装 `node`（wheel 安装后的 Web UI 运行时依赖）
 
 启动：
 
@@ -199,6 +206,7 @@ http://127.0.0.1:3000
 说明：
 
 - 通过 `pip install -U mindstudio-agent` 安装后，也可以直接使用 `msagent web`
+- wheel 安装默认内置预编译 Web UI，运行时只需要本机有 `node`，不再要求额外执行 `npm install` 或单独安装 `next`
 - `msagent web` 默认会同时启动：
   - API：`http://127.0.0.1:2024`
   - UI：`http://127.0.0.1:3000`
@@ -223,6 +231,8 @@ msagent web --port 2025 --ui-port 3001
 msagent web --no-open
 msagent web --no-ui
 ```
+
+</details>
 
 
 ### 5) 📚 按 Agent 查看说明与示例
@@ -303,4 +313,3 @@ msagent web --no-ui
 
 <a href="https://applink.feishu.cn/client/chat/chatter/add_by_link?link_token=854v5833-c03a-484e-8aac-0637f0303dc4&qr_code=true">
   <img src="https://img.shields.io/badge/Feishu-3370FF?style=for-the-badge&logo=lark&logoColor=white" alt="Feishu Group"></a>
-

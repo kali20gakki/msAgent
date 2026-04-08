@@ -176,6 +176,8 @@ async def launch_langgraph_dev_server(
     ui_env = ui.build_ui_environment(
         deployment_url=api_url,
         assistant_id=LANGGRAPH_GRAPH_ID,
+        host=host,
+        port=ui_port,
     )
 
     _print_startup_status(
@@ -278,16 +280,22 @@ async def _spawn_ui_server_process(
     port: int,
     env: dict[str, str],
 ) -> subprocess.Popen[bytes]:
-    """Prepare and spawn the cached deep-agents-ui dev server."""
-    ui_checkout = await asyncio.to_thread(ui.ensure_ui_checkout)
-    await asyncio.to_thread(ui.ensure_ui_customizations, ui_checkout)
-    await asyncio.to_thread(ui.ensure_ui_dependencies, ui_checkout)
+    """Prepare and spawn the cached deep-agents-ui server."""
     if _is_port_open(host, port):
         raise RuntimeError(
             f"UI port {port} is already in use. Stop the existing process or pass a different `--ui-port`."
         )
-    await asyncio.to_thread(ui.clear_stale_dev_lock, ui_checkout)
-    ui_command = ui.build_ui_dev_command(host=host, port=port)
+
+    if ui.has_bundled_ui_standalone():
+        ui_checkout = await asyncio.to_thread(ui.ensure_ui_standalone_checkout)
+        ui_command = ui.build_ui_standalone_command()
+    else:
+        ui_checkout = await asyncio.to_thread(ui.ensure_ui_checkout)
+        await asyncio.to_thread(ui.ensure_ui_customizations, ui_checkout)
+        await asyncio.to_thread(ui.ensure_ui_dependencies, ui_checkout)
+        await asyncio.to_thread(ui.clear_stale_dev_lock, ui_checkout)
+        ui_command = ui.build_ui_dev_command(host=host, port=port)
+
     return await _spawn_process(
         command=ui_command,
         cwd=ui_checkout,

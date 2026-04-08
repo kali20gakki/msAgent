@@ -17,11 +17,14 @@ DEEP_AGENTS_UI_REPO = "https://github.com/langchain-ai/deep-agents-ui"
 DEEP_AGENTS_UI_DIRNAME = "deep-agents-ui"
 BUNDLED_UI_ARCHIVE_PACKAGE = "msagent.web.vendor"
 BUNDLED_UI_ARCHIVE_NAME = "deep-agents-ui.tar.gz"
+BUNDLED_UI_STANDALONE_ARCHIVE_NAME = "deep-agents-ui-standalone.tar.gz"
 DEFAULT_UI_PORT = 3000
 DEFAULT_CONFIG_MARKER = "msagent-default-config"
 BRANDING_MARKER = "msagent-branding"
 ENV_UI_DEPLOYMENT_URL = "NEXT_PUBLIC_MSAGENT_DEPLOYMENT_URL"
 ENV_UI_ASSISTANT_ID = "NEXT_PUBLIC_MSAGENT_ASSISTANT_ID"
+ENV_UI_HOST = "HOSTNAME"
+ENV_UI_PORT = "PORT"
 UI_PAGE_PATH = Path("src") / "app" / "page.tsx"
 
 
@@ -36,6 +39,11 @@ def cache_root() -> Path:
 def ui_checkout_dir() -> Path:
     """Return the directory used to cache the official UI checkout."""
     return cache_root() / "web" / DEEP_AGENTS_UI_DIRNAME
+
+
+def ui_standalone_dir() -> Path:
+    """Return the directory used to cache the bundled standalone UI."""
+    return cache_root() / "web" / f"{DEEP_AGENTS_UI_DIRNAME}-standalone"
 
 
 def _resolve_tool_command(command: str) -> str:
@@ -62,10 +70,23 @@ def build_ui_dev_command(*, host: str, port: int) -> list[str]:
     ]
 
 
+def build_ui_standalone_command() -> list[str]:
+    """Build the command used to launch the bundled standalone UI."""
+    return [
+        _resolve_tool_command("node"),
+        "server.js",
+    ]
+
+
 def ensure_node_available() -> None:
     """Ensure Node.js package manager commands are available for the UI."""
     _resolve_tool_command("npm")
     _resolve_tool_command("npx")
+
+
+def ensure_node_runtime_available() -> None:
+    """Ensure Node.js is available for running the prebuilt standalone UI."""
+    _resolve_tool_command("node")
 
 
 def ensure_ui_checkout() -> Path:
@@ -87,6 +108,21 @@ def ensure_ui_checkout() -> Path:
         ["git", "clone", "--depth", "1", DEEP_AGENTS_UI_REPO, str(checkout_dir)],
         check=True,
     )
+    return checkout_dir
+
+
+def ensure_ui_standalone_checkout() -> Path:
+    """Materialize the bundled standalone UI runtime."""
+    ensure_node_runtime_available()
+
+    checkout_dir = ui_standalone_dir()
+    if (checkout_dir / "server.js").exists():
+        return checkout_dir
+
+    if not extract_bundled_ui_standalone(checkout_dir):
+        raise RuntimeError(
+            "Bundled standalone web UI is not available in this installation."
+        )
     return checkout_dir
 
 
@@ -114,17 +150,25 @@ def ensure_ui_dependencies(checkout_dir: Path) -> None:
 
 def extract_bundled_ui_checkout(checkout_dir: Path) -> bool:
     """Seed the cached checkout from the bundled UI archive when available."""
-    archive_resource = _bundled_ui_archive_resource()
-    if archive_resource is None:
-        return False
+    return _extract_bundled_archive(
+        archive_name=BUNDLED_UI_ARCHIVE_NAME,
+        checkout_dir=checkout_dir,
+        marker_path=Path("package.json"),
+    )
 
-    if checkout_dir.exists():
-        shutil.rmtree(checkout_dir)
-    checkout_dir.parent.mkdir(parents=True, exist_ok=True)
 
-    with as_file(archive_resource) as archive_path:
-        _extract_ui_archive(archive_path, checkout_dir)
-    return True
+def has_bundled_ui_standalone() -> bool:
+    """Return whether a bundled standalone UI artifact is available."""
+    return _bundled_ui_archive_resource(BUNDLED_UI_STANDALONE_ARCHIVE_NAME) is not None
+
+
+def extract_bundled_ui_standalone(checkout_dir: Path) -> bool:
+    """Seed the cached runtime from the bundled standalone UI archive."""
+    return _extract_bundled_archive(
+        archive_name=BUNDLED_UI_STANDALONE_ARCHIVE_NAME,
+        checkout_dir=checkout_dir,
+        marker_path=Path("server.js"),
+    )
 
 
 def ensure_ui_customizations(checkout_dir: Path) -> None:
@@ -242,15 +286,34 @@ def clear_stale_dev_lock(checkout_dir: Path) -> None:
     lock_file.unlink(missing_ok=True)
 
 
-def _bundled_ui_archive_resource():
+def _bundled_ui_archive_resource(archive_name: str):
     try:
-        archive = files(BUNDLED_UI_ARCHIVE_PACKAGE).joinpath(BUNDLED_UI_ARCHIVE_NAME)
+        archive = files(BUNDLED_UI_ARCHIVE_PACKAGE).joinpath(archive_name)
     except ModuleNotFoundError:
         return None
     return archive if archive.is_file() else None
 
 
-def _extract_ui_archive(archive_path: Path, checkout_dir: Path) -> None:
+def _extract_bundled_archive(
+    *,
+    archive_name: str,
+    checkout_dir: Path,
+    marker_path: Path,
+) -> bool:
+    archive_resource = _bundled_ui_archive_resource(archive_name)
+    if archive_resource is None:
+        return False
+
+    if checkout_dir.exists():
+        shutil.rmtree(checkout_dir)
+    checkout_dir.parent.mkdir(parents=True, exist_ok=True)
+
+    with as_file(archive_resource) as archive_path:
+        _extract_ui_archive(archive_path, checkout_dir, marker_path=marker_path)
+    return True
+
+
+def _extract_ui_archive(archive_path: Path, checkout_dir: Path, *, marker_path: Path) -> None:
     with tempfile.TemporaryDirectory(
         prefix="msagent-ui-",
         dir=str(checkout_dir.parent),
@@ -258,7 +321,7 @@ def _extract_ui_archive(archive_path: Path, checkout_dir: Path) -> None:
         temp_dir = Path(temp_dir_str)
         with tarfile.open(archive_path, "r:gz") as archive:
             _safe_extract_tar(archive, temp_dir)
-        source_dir = _find_extracted_ui_root(temp_dir)
+        source_dir = _find_extracted_ui_root(temp_dir, marker_path=marker_path)
         shutil.move(str(source_dir), str(checkout_dir))
 
 
@@ -271,28 +334,36 @@ def _safe_extract_tar(archive: tarfile.TarFile, destination: Path) -> None:
     archive.extractall(destination)
 
 
-def _find_extracted_ui_root(extract_dir: Path) -> Path:
+def _find_extracted_ui_root(extract_dir: Path, *, marker_path: Path) -> Path:
     direct_candidates = [extract_dir]
     direct_candidates.extend(path for path in extract_dir.iterdir() if path.is_dir())
     for candidate in direct_candidates:
-        if (candidate / "package.json").exists():
+        if (candidate / marker_path).exists():
             return candidate
 
-    package_json_candidates = list(extract_dir.rglob("package.json"))
-    if len(package_json_candidates) == 1:
-        return package_json_candidates[0].parent
+    marker_candidates = list(extract_dir.rglob(str(marker_path)))
+    if len(marker_candidates) == 1:
+        return marker_candidates[0].parent if marker_path.name == str(marker_path) else marker_candidates[0].parents[len(marker_path.parts) - 1]
 
-    raise RuntimeError("Bundled deep-agents-ui archive did not contain a package.json file")
+    raise RuntimeError(
+        f"Bundled deep-agents-ui archive did not contain {marker_path.as_posix()}"
+    )
 
 
 def build_ui_environment(
     *,
     deployment_url: str,
     assistant_id: str,
+    host: str | None = None,
+    port: int | None = None,
 ) -> dict[str, str]:
     """Build the environment used to launch deep-agents-ui."""
     env = dict(os.environ)
     env.setdefault("NEXT_TELEMETRY_DISABLED", "1")
     env[ENV_UI_DEPLOYMENT_URL] = deployment_url
     env[ENV_UI_ASSISTANT_ID] = assistant_id
+    if host:
+        env[ENV_UI_HOST] = host
+    if port is not None:
+        env[ENV_UI_PORT] = str(port)
     return env
