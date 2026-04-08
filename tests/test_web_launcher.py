@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import tarfile
 from pathlib import Path
 
 import pytest
@@ -271,6 +272,72 @@ def test_build_ui_dev_command_uses_npm() -> None:
         "--port",
         "3000",
     ]
+
+
+def test_ensure_ui_checkout_prefers_bundled_archive(monkeypatch, tmp_path: Path) -> None:
+    checkout_dir = tmp_path / "ui"
+    extracted: list[Path] = []
+
+    def _fake_extract(target_dir: Path) -> bool:
+        extracted.append(target_dir)
+        target_dir.mkdir(parents=True, exist_ok=True)
+        (target_dir / "package.json").write_text("{}", encoding="utf-8")
+        return True
+
+    def _unexpected_clone(*args, **kwargs):
+        del args, kwargs
+        raise AssertionError("git clone should not run when a bundled UI archive is available")
+
+    monkeypatch.setattr(web_ui, "ensure_node_available", lambda: None)
+    monkeypatch.setattr(web_ui, "ui_checkout_dir", lambda: checkout_dir)
+    monkeypatch.setattr(web_ui, "extract_bundled_ui_checkout", _fake_extract)
+    monkeypatch.setattr(web_ui.subprocess, "run", _unexpected_clone)
+
+    assert web_ui.ensure_ui_checkout() == checkout_dir
+    assert extracted == [checkout_dir]
+    assert (checkout_dir / "package.json").exists()
+
+
+def test_ensure_ui_checkout_falls_back_to_git_clone_when_bundle_missing(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    checkout_dir = tmp_path / "ui"
+    commands: list[list[str]] = []
+
+    def _fake_run(command, **kwargs):
+        del kwargs
+        commands.append(command)
+
+    monkeypatch.setattr(web_ui, "ensure_node_available", lambda: None)
+    monkeypatch.setattr(web_ui, "ui_checkout_dir", lambda: checkout_dir)
+    monkeypatch.setattr(web_ui, "extract_bundled_ui_checkout", lambda target_dir: False)
+    monkeypatch.setattr(web_ui.subprocess, "run", _fake_run)
+
+    assert web_ui.ensure_ui_checkout() == checkout_dir
+    assert commands == [
+        ["git", "clone", "--depth", "1", web_ui.DEEP_AGENTS_UI_REPO, str(checkout_dir)]
+    ]
+
+
+def test_extract_ui_archive_restores_checkout_from_tarball(tmp_path: Path) -> None:
+    archive_root = tmp_path / "archive-root" / "deep-agents-ui-main"
+    page_path = archive_root / "src" / "app" / "page.tsx"
+    page_path.parent.mkdir(parents=True)
+    (archive_root / "package.json").write_text("{}", encoding="utf-8")
+    page_path.write_text("export default function Home() { return null; }\n", encoding="utf-8")
+
+    archive_path = tmp_path / "deep-agents-ui.tar.gz"
+    with tarfile.open(archive_path, "w:gz") as archive:
+        archive.add(archive_root, arcname=archive_root.name)
+
+    checkout_dir = tmp_path / "checkout"
+    web_ui._extract_ui_archive(archive_path, checkout_dir)
+
+    assert (checkout_dir / "package.json").exists()
+    assert (checkout_dir / "src" / "app" / "page.tsx").read_text(encoding="utf-8").startswith(
+        "export default function Home()"
+    )
 
 
 def test_ensure_ui_dependencies_uses_resolved_npm_command(monkeypatch, tmp_path: Path) -> None:

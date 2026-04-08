@@ -78,6 +78,8 @@ build-backend = "hatchling.build"
 packages = ["src/msagent", "resources"]
 force-include = { "src/msagent/py.typed" = "msagent/py.typed" }
 
+[tool.hatch.build.targets.wheel.hooks.custom]
+
 [tool.hatch.build.targets.sdist]
 only-include = [
     ".python-version",
@@ -92,6 +94,8 @@ only-include = [
     "tests",
     "uv.lock",
 ]
+
+[tool.hatch.build.targets.sdist.hooks.custom]
 
 [dependency-groups]
 dev = [
