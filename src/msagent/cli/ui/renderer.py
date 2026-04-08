@@ -67,13 +67,16 @@ def _render_welcome_ascii(
     def _lerp(a: int, b: int, t: float) -> int:
         return int(a + (b - a) * t)
 
-    def _interpolate_palette(palette: list[str], width: int) -> list[str]:
-        if width <= 1:
+    def _smoothstep(t: float) -> float:
+        return t * t * (3 - 2 * t)
+
+    def _interpolate_palette(palette: list[str], steps: int) -> list[str]:
+        if steps <= 1:
             return [palette[0]]
         out: list[str] = []
-        steps_total = width - 1
-        for x in range(width):
-            pos = x / steps_total
+        steps_total = steps - 1
+        for x in range(steps):
+            pos = _smoothstep(x / steps_total)
             seg = min(int(pos * (len(palette) - 1)), len(palette) - 2)
             seg_start = seg / (len(palette) - 1)
             seg_end = (seg + 1) / (len(palette) - 1)
@@ -102,16 +105,28 @@ def _render_welcome_ascii(
         palette = list(reversed(palette))
 
     width = max(len(line) for line in lines) if lines else 0
-    ramp = _interpolate_palette(palette, width)
+    active_columns = [
+        column
+        for column in range(width)
+        if any(column < len(line) and line[column] != " " for line in lines)
+    ]
+    ramp = _interpolate_palette(palette, len(active_columns))
+    column_colors = {
+        column: ramp[index]
+        for index, column in enumerate(active_columns)
+    }
 
     result = Text()
     for line in lines:
         padded = line.ljust(width)
-        for j, ch in enumerate(padded):
+        for column, ch in enumerate(padded):
             if ch == " ":
                 result.append(ch)
             else:
-                result.append(ch, Style(color=ramp[j], bold=True))
+                result.append(
+                    ch,
+                    Style(color=column_colors.get(column, palette[0]), bold=True),
+                )
         result.append("\n")
     return result
 

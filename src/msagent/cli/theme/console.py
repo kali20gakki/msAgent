@@ -1,5 +1,7 @@
 """Rich styles and formatting utilities with theme support."""
 
+import os
+
 from rich.console import Console
 
 from msagent.cli.theme.base import BaseTheme
@@ -9,9 +11,19 @@ class ThemedConsole:
     """Console wrapper with configurable theme."""
 
     def __init__(self, console_theme: BaseTheme):
+        color_system = None
+        if (
+            os.getenv("COLORTERM", "").lower() in {"truecolor", "24bit"}
+            or os.getenv("WT_SESSION")
+            or os.getenv("TERM_PROGRAM") in {"vscode", "WarpTerminal"}
+            or os.getenv("WSL_DISTRO_NAME")
+        ):
+            color_system = "truecolor"
+
         self.console = Console(
             theme=console_theme.rich_theme,
             force_terminal=True,
+            color_system=color_system,
         )
 
     def print(self, *args, style: str = "default", **kwargs):

@@ -9,6 +9,7 @@ checkpointer: sqlite
 default: true
 subagents:
   - explorer
+  - general-purpose
 recursion_limit: 1000
 tools:
   patterns:
