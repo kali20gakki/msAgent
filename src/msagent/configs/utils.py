@@ -8,12 +8,23 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import yaml  # type: ignore[import-untyped]
+from msagent.core.constants import CONFIG_VERSION_TOKEN
 
 if TYPE_CHECKING:
     from msagent.configs.base import VersionedConfig
 
 logger = logging.getLogger(__name__)
 TEXT_ENCODING = "utf-8"
+
+
+def _resolve_config_item_version(item: dict, latest_version: str) -> dict:
+    """Resolve template version tokens to the current runtime version."""
+    current_version = item.get("version")
+    if current_version == CONFIG_VERSION_TOKEN:
+        resolved = dict(item)
+        resolved["version"] = latest_version
+        return resolved
+    return item
 
 
 def _migrate_items(
@@ -31,6 +42,7 @@ def _migrate_items(
     latest_version = config_class.get_latest_version()
 
     for item in items:
+        item = _resolve_config_item_version(item, latest_version)
         current_version = item.get("version", "0.0.0")
 
         if pkg_version.parse(current_version) < pkg_version.parse(latest_version):

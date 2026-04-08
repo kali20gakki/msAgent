@@ -1,4 +1,4 @@
-version: 0.1.2
+version: __APP_VERSION__
 name: Minos
 description: Documentation onboarding and GitCode PR review agent with document-ux-review and gitcode-code-reviewer workflows
 prompt:

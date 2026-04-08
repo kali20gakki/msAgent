@@ -63,6 +63,7 @@ TOOL_CATEGORY_INTERNAL = "internal"
 
 # Keep config schema versions aligned with the packaged msagent version so
 # default resources and runtime migrations follow a single source of truth.
+CONFIG_VERSION_TOKEN = "__APP_VERSION__"
 AGENT_CONFIG_VERSION = APP_VERSION
 LLM_CONFIG_VERSION = APP_VERSION
 CHECKPOINTER_CONFIG_VERSION = APP_VERSION

@@ -9,6 +9,7 @@ from msagent.core.constants import (
     AGENT_CONFIG_VERSION,
     APP_VERSION,
     CHECKPOINTER_CONFIG_VERSION,
+    CONFIG_VERSION_TOKEN,
     LLM_CONFIG_VERSION,
     SANDBOX_CONFIG_VERSION,
 )
@@ -41,6 +42,12 @@ def _iter_default_config_versions() -> list[tuple[Path, str]]:
     return versions
 
 
+def _resolve_default_config_version(version: str, project_version: str) -> str:
+    if version == CONFIG_VERSION_TOKEN:
+        return project_version
+    return version
+
+
 def test_runtime_version_uses_project_version() -> None:
     project_version = _project_version()
 
@@ -62,11 +69,15 @@ def test_default_resource_config_versions_match_project_version() -> None:
     config_versions = _iter_default_config_versions()
 
     assert config_versions
-    assert all(version == project_version for _, version in config_versions), (
+    assert all(
+        _resolve_default_config_version(version, project_version) == project_version
+        for _, version in config_versions
+    ), (
         "Found config versions that do not match project version: "
         + ", ".join(
             f"{path.relative_to(PROJECT_ROOT)}={version}"
             for path, version in config_versions
-            if version != project_version
+            if _resolve_default_config_version(version, project_version)
+            != project_version
         )
     )

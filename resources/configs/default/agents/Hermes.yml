@@ -1,4 +1,4 @@
-version: 0.1.2
+version: __APP_VERSION__
 name: Hermes
 description: Ascend NPU profiling analysis agent with msprof-mcp-first workflow
 prompt:

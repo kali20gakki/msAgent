@@ -1,4 +1,4 @@
-- version: 0.1.2
+- version: __APP_VERSION__
   model: gpt-5-mini-2025-08-07
   alias: gpt-5-mini-thinking
   provider: openai

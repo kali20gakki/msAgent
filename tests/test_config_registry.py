@@ -6,7 +6,7 @@ import yaml
 import pytest
 
 from msagent.configs.registry import ConfigRegistry
-from msagent.core.constants import CONFIG_APPROVAL_FILE_NAME
+from msagent.core.constants import CONFIG_APPROVAL_FILE_NAME, LLM_CONFIG_VERSION
 
 
 def _load_default_msprof_server() -> dict:
@@ -95,6 +95,18 @@ async def test_config_registry_bootstraps_default_layout(tmp_path: Path) -> None
     assert hermes["skills"]["patterns"] == default_hermes["skills"]["patterns"]
     assert minos["name"] == "Minos"
     assert minos["skills"]["patterns"] == default_minos["skills"]["patterns"]
+
+
+@pytest.mark.asyncio
+async def test_config_registry_resolves_template_version_tokens_on_load(
+    tmp_path: Path,
+) -> None:
+    registry = ConfigRegistry(tmp_path)
+
+    llms = await registry.load_llms()
+
+    assert llms.llms
+    assert all(llm.version == LLM_CONFIG_VERSION for llm in llms.llms)
 
 
 def test_default_agent_skill_bindings_are_split_between_hermes_and_minos() -> None:

@@ -1,4 +1,4 @@
-version: "0.1.2"
+version: "__APP_VERSION__"
 name: rw-offline-linux
 type: bubblewrap
 os: linux

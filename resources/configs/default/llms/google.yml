@@ -1,4 +1,4 @@
-- version: 0.1.2
+- version: __APP_VERSION__
   model: gemini-3-pro-preview
   alias: gemini-3-pro
   provider: google
@@ -8,7 +8,7 @@
   input_cost_per_mtok: 2.00
   output_cost_per_mtok: 12.00
 
-- version: 0.1.2
+- version: __APP_VERSION__
   model: gemini-2.5-pro
   alias: gemini-2.5-pro
   provider: google
@@ -18,7 +18,7 @@
   input_cost_per_mtok: 0.10
   output_cost_per_mtok: 0.40
 
-- version: 0.1.2
+- version: __APP_VERSION__
   model: gemini-2.5-pro
   alias: gemini-2.5-pro-thinking
   provider: google
