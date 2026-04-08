@@ -30,8 +30,9 @@ class _DummyGraph:
 
 def _patch_deepagent_entrypoints(monkeypatch: pytest.MonkeyPatch) -> None:
     class _DummyBackend:
-        def __init__(self, root_dir: str):
+        def __init__(self, root_dir: str, **kwargs):
             self.root_dir = root_dir
+            self.kwargs = kwargs
 
     monkeypatch.setattr(factory_module, "LocalShellBackend", _DummyBackend)
     monkeypatch.setattr(
@@ -231,8 +232,9 @@ async def test_agent_factory_maps_retry_config_to_deepagents_primitives(
     captured: dict[str, object] = {}
 
     class _DummyBackend:
-        def __init__(self, root_dir: str):
+        def __init__(self, root_dir: str, **kwargs):
             self.root_dir = root_dir
+            self.kwargs = kwargs
 
     def _fake_create_deep_agent(**kwargs):
         captured.update(kwargs)
@@ -300,8 +302,9 @@ async def test_agent_factory_disables_retry_when_flag_off(
     captured: dict[str, object] = {}
 
     class _DummyBackend:
-        def __init__(self, root_dir: str):
+        def __init__(self, root_dir: str, **kwargs):
             self.root_dir = root_dir
+            self.kwargs = kwargs
 
     def _fake_create_deep_agent(**kwargs):
         captured.update(kwargs)
@@ -357,8 +360,9 @@ async def test_agent_factory_adds_tool_result_eviction_middleware_when_output_li
     captured: dict[str, object] = {}
 
     class _DummyBackend:
-        def __init__(self, root_dir: str):
+        def __init__(self, root_dir: str, **kwargs):
             self.root_dir = root_dir
+            self.kwargs = kwargs
 
     def _fake_create_deep_agent(**kwargs):
         captured.update(kwargs)
@@ -397,8 +401,9 @@ def test_build_composite_backend_persists_conversation_history_under_workdir(
     tmp_path,
 ) -> None:
     class _DummyLocalBackend:
-        def __init__(self, root_dir: str):
+        def __init__(self, root_dir: str, **kwargs):
             self.root_dir = root_dir
+            self.kwargs = kwargs
 
     class _DummyFilesystemBackend:
         def __init__(self, *, root_dir, virtual_mode):
@@ -423,6 +428,37 @@ def test_build_composite_backend_persists_conversation_history_under_workdir(
     assert conversation_history_backend.virtual_mode is True
 
 
+def test_build_composite_backend_inherits_parent_environment(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+) -> None:
+    captured: dict[str, object] = {}
+
+    class _DummyLocalBackend:
+        def __init__(self, root_dir: str, **kwargs):
+            captured["root_dir"] = root_dir
+            captured.update(kwargs)
+
+    class _DummyFilesystemBackend:
+        def __init__(self, *, root_dir, virtual_mode):
+            self.root_dir = root_dir
+            self.virtual_mode = virtual_mode
+
+    class _DummyCompositeBackend:
+        def __init__(self, *, default, routes):
+            self.default = default
+            self.routes = routes
+
+    monkeypatch.setattr(factory_module, "LocalShellBackend", _DummyLocalBackend)
+    monkeypatch.setattr(factory_module, "FilesystemBackend", _DummyFilesystemBackend)
+    monkeypatch.setattr(factory_module, "CompositeBackend", _DummyCompositeBackend)
+
+    AgentFactory._build_composite_backend(tmp_path)
+
+    assert captured["root_dir"] == str(tmp_path)
+    assert captured["inherit_env"] is True
+
+
 @pytest.mark.asyncio
 async def test_agent_factory_injects_local_environment_placeholder_into_system_prompt(
     monkeypatch,
@@ -430,8 +466,9 @@ async def test_agent_factory_injects_local_environment_placeholder_into_system_p
     captured: dict[str, object] = {}
 
     class _DummyBackend:
-        def __init__(self, root_dir: str):
+        def __init__(self, root_dir: str, **kwargs):
             self.root_dir = root_dir
+            self.kwargs = kwargs
 
     def _fake_create_deep_agent(**kwargs):
         captured.update(kwargs)

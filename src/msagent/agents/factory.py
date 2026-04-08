@@ -512,7 +512,10 @@ class AgentFactory:
 
     @staticmethod
     def _build_composite_backend(working_dir: Path) -> CompositeBackend:
-        local_backend = LocalShellBackend(root_dir=str(working_dir))
+        local_backend = LocalShellBackend(
+            root_dir=str(working_dir),
+            inherit_env=True,
+        )
         large_results_backend = FilesystemBackend(
             root_dir=tempfile.mkdtemp(prefix="msagent_large_tool_results_"),
             virtual_mode=True,
