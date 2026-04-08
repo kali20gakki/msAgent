@@ -1,6 +1,6 @@
 [project]
 name = "mindstudio-agent"
-version = "0.1.2"
+version = "0.1.3"
 description = "AI assistant for Ascend NPU profiling analysis, bottleneck diagnosis, and optimization guidance"
 readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.11"
