@@ -2,15 +2,13 @@
 
 <p align="center"><strong>面向 Ascend NPU 场景的一站式调试调优 Agent</strong></p>
 
-**msAgent** 聚焦“发现问题 -> 定位根因 -> 给出建议 -> 辅助验证”的调试调优闭环。  
-它结合 LLM 推理能力与可扩展工具链，覆盖性能分析、文档走查、GitCode PR 审查、工具咨询等场景，帮助你把复杂问题快速转化为可执行的调试与优化决策。
-
 <p align="center">
   <img src="https://github.com/luelueFLY/images/blob/main/img/msagent-hello.gif" alt="msAgent">
 </p>
 
 ## 📢 最新消息
 
+- 2026-04-08：`v0.1.3` 发布，完成 DeepAgents 重构更快更好用，并增强 `Hermes` / `Minos` Agent，新增 `msagent web` 能力。
 - 2026-03-19：`mindstudio-agent` 已发布到 PyPI，推荐优先使用 `pip install -U mindstudio-agent` 安装
 
 ## 🤖 内置 Agent 与能力分工
