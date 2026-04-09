@@ -1,0 +1,19 @@
+# Documentation build outputs
+docs/_build/
+docs/_autosummary/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+venv/
+env/
+.env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
