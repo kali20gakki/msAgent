@@ -23,7 +23,9 @@
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = 'MindStudio Agent'
+# pylint: disable=redefined-builtin
 copyright = '2025, Huawei Technologies Co.,Ltd'
+# pylint: enable=redefined-builtin
 author = 'MindStudio Insight Team'
 release = '0.1.0'
 
