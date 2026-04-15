@@ -14,7 +14,6 @@ recursion_limit: 1000
 tools:
   patterns:
     - impl:deepagents:*
-    - mcp:msprof-mcp:*
   use_catalog: false
   output_max_tokens: 10000
 skills:
