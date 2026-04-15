@@ -41,7 +41,7 @@ repos:
             "-L",
             "CANN,cann,NNAL,nnal,ASCEND,ascend,EnQue,CopyIn,ArchType,AND,ND,tbe,copyin,alog",
             "--skip",
-            "*.py,*.cpp,*.hpp,*.c,*.h",
+            "*.py,*.cpp,*.hpp,*.c,*.h,pre-commit/typos.toml",
           ]
 
   # pylint：指定 pre-commit/pyproject.toml
@@ -84,4 +84,3 @@ repos:
           - "--verbose"
           - "-i"
         exclude: ^build/|tests/third_party/
-
