@@ -1,0 +1,46 @@
+version: __APP_VERSION__
+name: Zephyr
+description: msModelSlim model analysis and adaptation assistant
+prompt:
+  - prompts/agents/Zephyr.md
+  - prompts/suffixes/environments.md
+llm: default
+checkpointer: sqlite
+default: true
+subagents:
+  - explorer
+  - general-purpose
+recursion_limit: 1000
+tools:
+  patterns:
+    - impl:deepagents:*
+  use_catalog: false
+  output_max_tokens: 10000
+skills:
+  patterns:
+    - default:msmodelslim-model-adapt
+    - default:msmodelslim-model-analysis
+  use_catalog: false
+compression:
+  auto_compress_enabled: true
+  auto_compress_threshold: 0.8
+  llm: default
+  prompt:
+    - prompts/shared/general_compression.md
+    - prompts/suffixes/environments.md
+retry:
+  enabled: true
+  model:
+    enabled: true
+    max_retries: 5
+    timeout: 120.0
+  tool:
+    enabled: true
+    max_retries: 5
+    tools: null
+    retry_on: null
+    on_failure: continue
+    backoff_factor: 2.0
+    initial_delay: 5.0
+    max_delay: 60.0
+    jitter: true
