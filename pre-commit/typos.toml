@@ -18,8 +18,8 @@ identifier-leading-digits = false
 locale = "en"
 extend-ignore-identifiers-re = [".*Unc.*", ".*_thw",
     ".*UE8M0.*", ".*[UE4M3|ue4m3].*", ".*eles.*", ".*fo.*", ".*ba.*",
-    ".*ot.*", ".*[Tt]h[rR].*"]
-extend-ignore-words-re = ["CANN", "cann","ND","alog"]
+    ".*ot.*", ".*[Tt]h[rR].*", "nd", "Nd"]
+extend-ignore-words-re = ["CANN", "cann","ND","alog", "dout", "ser", "modul", "egals", "usig", "egal", "flate", "nd", "Nd", "stap", "ot", "windo"]
 extend-ignore-re = []
 
 [default.extend-identifiers]

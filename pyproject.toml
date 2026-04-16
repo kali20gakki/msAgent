@@ -1,0 +1,107 @@
+[project]
+name = "mindstudio-agent"
+version = "0.1.3"
+description = "AI assistant for Ascend NPU profiling analysis, bottleneck diagnosis, and optimization guidance"
+readme = { file = "README.md", content-type = "text/markdown" }
+requires-python = ">=3.11"
+
+dependencies = [
+    "aiofiles~=25.1.0",
+    "aiosqlite~=0.22.1",
+    "deepagents>=0.4.0",
+    "httpx>=0.28.0,<1.0.0",
+    "json-repair>=0.54.3,<0.59.0",
+    "langchain~=1.2.0",
+    "langchain-anthropic~=1.3.0",
+    "langchain-core~=1.2.4",
+    "langchain-google-genai>=4.1.2,<4.3.0",
+    "langchain-mcp-adapters~=0.2.1",
+    "langchain-openai~=1.1.6",
+    "langgraph~=1.0.5",
+    "langgraph-prebuilt==1.0.8",
+    "langgraph-cli[inmem]>=0.4.16,<0.5.0",
+    "langgraph-checkpoint-sqlite~=3.0.1",
+    "markdown-it-py~=4.0.0",
+    "mdformat~=1.0.0",
+    "packaging>=24.0,<26.0",
+    "pathspec>=0.12.1,<1.1.0",
+    "prompt-toolkit~=3.0.52",
+    "pydantic~=2.12.5",
+    "pydantic-settings>=2.12,<2.14",
+    "pyfiglet>=0.8",
+    "pygments-cache~=0.1.3",
+    "python-dotenv~=1.2.1",
+    "pyyaml~=6.0.3",
+    "rich>=14.2,<14.4",
+    "tiktoken>=0.9.0,<1.0.0",
+    "msprof-mcp==0.1.6",
+]
+
+[project.scripts]
+msagent = "msagent.cli.bootstrap.app:cli"
+
+[tool.mypy]
+python_version = "3.11"
+mypy_path = ["src"]
+
+[[tool.mypy.overrides]]
+module = [
+    "langchain_mcp_adapters.*",
+    "pygments_cache.*",
+]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["yaml", "yaml.*", "aiofiles", "aiofiles.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "msagent.mcp.factory"
+disable_error_code = ["assignment", "index", "typeddict-unknown-key", "arg-type"]
+
+[tool.pytest.ini_options]
+pythonpath = [".", "src"]
+testpaths = ["tests"]
+markers = [
+    "integration: mark test as integration test with real HTTP connections",
+]
+filterwarnings = [
+    "ignore:LangSmith now uses UUID v7:UserWarning:pydantic.v1.main",
+    "ignore:Using fallback GPT-2 tokenizer.*:UserWarning",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/msagent", "resources"]
+force-include = { "src/msagent/py.typed" = "msagent/py.typed" }
+
+[tool.hatch.build.targets.wheel.hooks.custom]
+
+[tool.hatch.build.targets.sdist]
+only-include = [
+    ".python-version",
+    ".gitmodules",
+    "README.md",
+    "langgraph.json",
+    "pyproject.toml",
+    "resources",
+    "run.py",
+    "scripts",
+    "src",
+    "tests",
+    "uv.lock",
+]
+
+[tool.hatch.build.targets.sdist.hooks.custom]
+
+[dependency-groups]
+dev = [
+    "black>=25.12,<26.2",
+    "mypy~=1.19.1",
+    "pytest~=9.0.2",
+    "pytest-asyncio~=1.3.0",
+    "ruff>=0.12.0,<0.14.0",
+]

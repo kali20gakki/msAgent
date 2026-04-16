@@ -1,0 +1,80 @@
+#!/usr/bin/python3
+# -*- coding: utf-8 -*-
+# -------------------------------------------------------------------------
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
+# This file is part of the MindStudio project.
+#
+# MindStudio is licensed under Mulan PSL v2.
+# You can use this software according to the terms and conditions of the Mulan PSL v2.
+# You may obtain a copy of Mulan PSL v2 at:
+#
+#    http://license.coscl.org.cn/MulanPSL2
+#
+# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+# EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+# MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+# See the Mulan PSL v2 for more details.
+# -------------------------------------------------------------------------
+
+"""Agent context for template rendering and runtime state."""
+
+from __future__ import annotations
+
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
+import os
+from pathlib import Path
+from typing import Any, Literal
+
+from langchain_core.tools import BaseTool
+from pydantic import BaseModel, ConfigDict, Field
+
+from msagent.configs import ApprovalMode
+from msagent.skills.factory import Skill
+
+
+@dataclass(frozen=True, slots=True)
+class RetryNotice:
+    """Runtime-only retry notice emitted for TUI feedback."""
+
+    notice_id: str
+    scope: Literal["llm", "tool"]
+    attempt: int
+    max_retries: int
+    delay: float
+    target_name: str | None = None
+    phase: Literal["scheduled", "cleared"] = "scheduled"
+
+
+class AgentContext(BaseModel):
+    """Context passed to agent for template rendering."""
+
+    approval_mode: ApprovalMode = Field(default=ApprovalMode.ACTIVE)
+    working_dir: Path = Field(
+        default_factory=lambda: Path(os.getenv("MSAGENT_WEB_WORKING_DIR", "").strip() or Path.cwd()).resolve()
+    )
+    platform: str = Field(default="")
+    os_version: str = Field(default="")
+    current_date_time_zoned: str = Field(default="")
+    local_environment_context: str = Field(default="")
+    mcp_servers: str = Field(default="")
+    user_memory: str = Field(default="")
+    tool_catalog: list[BaseTool] = Field(default_factory=list, exclude=True)
+    skill_catalog: list[Skill] = Field(default_factory=list, exclude=True)
+    tool_output_max_tokens: int | None = None
+    retry_notice_handler: Callable[[RetryNotice], None | Awaitable[None]] | None = Field(default=None, exclude=True)
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    @property
+    def template_vars(self) -> dict[str, Any]:
+        """Get template variables for prompt rendering."""
+        return {
+            "working_dir": str(self.working_dir),
+            "platform": self.platform,
+            "os_version": self.os_version,
+            "current_date_time_zoned": self.current_date_time_zoned,
+            "local_environment_context": self.local_environment_context,
+            "mcp_servers": self.mcp_servers,
+            "user_memory": self.user_memory,
+        }

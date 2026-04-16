@@ -16,6 +16,8 @@ repos:
       - id: check-yaml
         args: ["--allow-multiple-documents"]
       - id: check-added-large-files
+        args: ["--maxkb=5000"]
+        exclude: ^docs/images/
       - id: check-merge-conflict
       - id: detect-private-key
       - id: check-json
@@ -39,7 +41,7 @@ repos:
       - id: codespell
         args: [
             "-L",
-            "CANN,cann,NNAL,nnal,ASCEND,ascend,EnQue,CopyIn,ArchType,AND,ND,tbe,copyin,alog",
+            "CANN,cann,NNAL,nnal,ASCEND,ascend,EnQue,CopyIn,ArchType,AND,ND,tbe,copyin,alog,dout,ser,modul,egals,usig,egal,flate,stap,ot,windo,eles,fo,subtile,nd,Nd",
             "--skip",
             "*.py,*.cpp,*.hpp,*.c,*.h,pre-commit/typos.toml",
           ]

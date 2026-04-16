@@ -1,0 +1,8 @@
+{
+  "dependencies": [
+    "."
+  ],
+  "graphs": {
+    "msagent": "./src/msagent/web/graph.py:graph"
+  }
+}
