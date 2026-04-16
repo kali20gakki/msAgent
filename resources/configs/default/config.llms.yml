@@ -1,0 +1,10 @@
+llms:
+  - version: __APP_VERSION__
+    provider: openai
+    alias: default
+    model: gpt-4o-mini
+    max_tokens: 0
+    temperature: 0.7
+    streaming: true
+    api_key_env: OPENAI_API_KEY
+    context_window: 128000

@@ -1,0 +1,110 @@
+#!/usr/bin/python3
+# -*- coding: utf-8 -*-
+# -------------------------------------------------------------------------
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
+# This file is part of the MindStudio project.
+#
+# MindStudio is licensed under Mulan PSL v2.
+# You can use this software according to the terms and conditions of the Mulan PSL v2.
+# You may obtain a copy of Mulan PSL v2 at:
+#
+#    http://license.coscl.org.cn/MulanPSL2
+#
+# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+# EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+# MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+# See the Mulan PSL v2 for more details.
+# -------------------------------------------------------------------------
+
+import os
+
+from dotenv import load_dotenv
+from pydantic import BaseModel, Field, SecretStr
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+try:
+    load_dotenv(".env")
+except PermissionError:
+    pass  # Sandbox may block .env access
+
+if os.getenv("SUPPRESS_GRPC_WARNINGS", "true").lower() == "true":
+    os.environ["GRPC_VERBOSITY"] = "NONE"
+
+
+class LLMSettings(BaseModel):
+    openai_api_key: SecretStr = Field(default=SecretStr("dummy"), description="The OpenAI API key")
+    anthropic_api_key: SecretStr = Field(default=SecretStr("dummy"), description="The Anthropic API key")
+    google_api_key: SecretStr = Field(default=SecretStr("dummy"), description="The Google API key")
+    http_proxy: SecretStr = Field(
+        default=SecretStr(os.getenv("HTTP_PROXY", os.getenv("http_proxy", ""))),
+        description="HTTP proxy URL",
+    )
+    https_proxy: SecretStr = Field(
+        default=SecretStr(os.getenv("HTTPS_PROXY", os.getenv("https_proxy", ""))),
+        description="HTTPS proxy URL",
+    )
+
+
+class ToolSettings(BaseModel):
+    # Grep settings
+    max_columns: int = Field(default=1500, description="The maximum number of columns to show")
+    context_lines: int = Field(default=2, description="The number of context lines to show")
+    search_limit: int = Field(default=25, description="The number of results to show")
+
+    def model_dump(self, hide_secret_str: bool = True, *args, **kwargs):
+        dump = super().model_dump(*args, **kwargs)
+        if hide_secret_str:
+            return dump
+        else:
+            return dump | {key: value.get_secret_value() for key, value in dump.items() if isinstance(value, SecretStr)}
+
+
+class CLISettings(BaseModel):
+    """CLI-specific settings."""
+
+    # Appearance settings
+    theme: str | None = Field(default=None, description="UI theme (auto-detect if None)")
+    prompt_style: str = Field(default="> ", description="Prompt style")
+
+    # Behavior settings
+    enable_word_wrap: bool = Field(default=True, description="Enable word wrap")
+
+    # Autocomplete settings
+    max_autocomplete_suggestions: int = Field(
+        default=10, description="Maximum number of autocomplete suggestions to show"
+    )
+
+
+class ServerSettings(BaseModel):
+    """LangGraph server settings."""
+
+    langgraph_server_url: str = Field(default="http://localhost:2024", description="LangGraph server URL")
+
+
+class Settings(BaseSettings):
+    log_level: str = Field(
+        default="INFO",
+        description="The log level",
+        validation_alias="MSAGENT_LOG_LEVEL",
+    )
+    suppress_grpc_warnings: bool = Field(default=True, description="Suppress gRPC warnings")
+    llm: LLMSettings = Field(default_factory=LLMSettings, description="The LLM settings")
+    tool_settings: ToolSettings = Field(default_factory=ToolSettings, description="The tool settings")
+    cli: CLISettings = Field(default_factory=CLISettings, description="The CLI settings")
+    server: ServerSettings = Field(default_factory=ServerSettings, description="The server settings")
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_nested_delimiter="__",
+        case_sensitive=False,
+        extra="allow",
+        frozen=True,
+        env_file_encoding="utf-8",
+    )
+
+
+try:
+    settings = Settings()
+except PermissionError:
+    # Sandbox may block .env access, use defaults
+    settings = Settings(_env_file=None)  # type: ignore[call-arg]

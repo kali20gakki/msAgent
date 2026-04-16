@@ -1,0 +1,84 @@
+#!/usr/bin/python3
+# -*- coding: utf-8 -*-
+# -------------------------------------------------------------------------
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
+# This file is part of the MindStudio project.
+#
+# MindStudio is licensed under Mulan PSL v2.
+# You can use this software according to the terms and conditions of the Mulan PSL v2.
+# You may obtain a copy of Mulan PSL v2 at:
+#
+#    http://license.coscl.org.cn/MulanPSL2
+#
+# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+# EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+# MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+# See the Mulan PSL v2 for more details.
+# -------------------------------------------------------------------------
+
+"""Checkpointer configuration classes."""
+
+from __future__ import annotations
+
+from enum import Enum
+from pathlib import Path
+
+from pydantic import BaseModel, Field
+
+from msagent.configs.base import VersionedConfig
+from msagent.configs.utils import (
+    _load_dir_items,
+    _load_single_file,
+    _validate_no_duplicates,
+)
+from msagent.core.constants import CHECKPOINTER_CONFIG_VERSION
+
+
+class CheckpointerProvider(str, Enum):
+    SQLITE = "sqlite"
+    MEMORY = "memory"
+
+
+class CheckpointerConfig(VersionedConfig):
+    version: str = Field(default=CHECKPOINTER_CONFIG_VERSION, description="Config schema version")
+    type: CheckpointerProvider = Field(description="The checkpointer type")
+    connection_string: str | None = Field(default=None, description="Connection string for database checkpointer")
+
+    @classmethod
+    def get_latest_version(cls) -> str:
+        return CHECKPOINTER_CONFIG_VERSION
+
+
+class BatchCheckpointerConfig(BaseModel):
+    checkpointers: list[CheckpointerConfig] = Field(description="The checkpointer configurations")
+
+    @property
+    def checkpointer_names(self) -> list[str]:
+        return [cp.type for cp in self.checkpointers]
+
+    def get_checkpointer_config(self, checkpointer_name: str) -> CheckpointerConfig | None:
+        return next((cp for cp in self.checkpointers if cp.type == checkpointer_name), None)
+
+    @classmethod
+    async def from_yaml(
+        cls,
+        file_path: Path | None = None,
+        dir_path: Path | None = None,
+    ) -> BatchCheckpointerConfig:
+        checkpointers = []
+
+        if file_path and file_path.exists():
+            checkpointers.extend(await _load_single_file(file_path, "checkpointers", CheckpointerConfig))
+
+        if dir_path:
+            checkpointers.extend(
+                await _load_dir_items(
+                    dir_path,
+                    key="type",
+                    config_type="Checkpointer",
+                    config_class=CheckpointerConfig,
+                )
+            )
+
+        _validate_no_duplicates(checkpointers, key="type", config_type="Checkpointer")
+        return cls.model_validate({"checkpointers": checkpointers})

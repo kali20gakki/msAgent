@@ -1,0 +1,48 @@
+{
+  "interrupt_on": {
+    "execute": {
+      "allowed_decisions": [
+        "approve",
+        "reject"
+      ],
+      "description": "Review shell command execution before running."
+    }
+  },
+  "decision_rules": [
+    {
+      "name": "execute",
+      "args": {
+        "command": "rm\\s+-rf.*"
+      },
+      "decision": "ask"
+    },
+    {
+      "name": "execute",
+      "args": {
+        "command": "git\\s+push.*"
+      },
+      "decision": "ask"
+    },
+    {
+      "name": "execute",
+      "args": {
+        "command": "git\\s+reset\\s+--hard.*"
+      },
+      "decision": "ask"
+    },
+    {
+      "name": "execute",
+      "args": {
+        "command": "sudo\\s+.*"
+      },
+      "decision": "ask"
+    },
+    {
+      "name": "execute",
+      "args": {
+        "command": ".*"
+      },
+      "decision": "always_approve"
+    }
+  ]
+}

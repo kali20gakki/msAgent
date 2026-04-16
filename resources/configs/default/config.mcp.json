@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "msprof-mcp": {
+      "command": "msprof-mcp",
+      "args": [],
+      "transport": "stdio",
+      "env": {},
+      "include": [],
+      "exclude": [],
+      "enabled": true,
+      "stateful": true,
+      "repair_timeout": 30,
+      "invoke_timeout": 3600.0
+    }
+  }
+}

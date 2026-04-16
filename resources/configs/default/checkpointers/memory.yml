@@ -1,0 +1,3 @@
+version: __APP_VERSION__
+type: memory
+# other options can be added here as needed
