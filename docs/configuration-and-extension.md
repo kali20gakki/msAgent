@@ -112,7 +112,7 @@
 当前 Skills 会按以下顺序扫描：
 
 1. `<working-dir>/skills`
-2. 内置 Skills 目录：`resources/configs/default/skills/`
+2. 内置 Skills 目录：优先使用仓库根目录 `skills/`；已安装 wheel 时使用打包后的 `resources/configs/default/skills/`
 3. `<working-dir>/.msagent/skills`
 
 同名 Skill 按“先加载优先”处理，因此当前优先级是：
@@ -149,28 +149,16 @@ description: 这个技能做什么
 
 ## 源码运行时的内置 Skills
 
-源码仓库中的内置 Skills 来自 `mindstudio-skills` 子模块，对应路径：
+内置 Skills 已直接合入 `msagent` 主仓库，源码运行时默认使用仓库根目录：
+
+```text
+skills/
+```
+
+构建 wheel 时，上述目录会被打包到：
 
 ```text
 resources/configs/default/skills/
 ```
 
-如果你是源码运行，建议至少执行一次：
-
-```bash
-git submodule sync --recursive
-git submodule update --init --recursive resources/configs/default/skills
-```
-
-如果你希望同步上游最新提交，可改用：
-
-```bash
-git submodule sync --recursive
-git submodule update --init --recursive --remote resources/configs/default/skills
-```
-
-说明：
-
-- 不带 `--remote`：同步到主仓库当前记录的 Skills 版本
-- 带 `--remote`：同步到 `mindstudio-skills` 上游默认分支的最新提交
-- 执行 `--remote` 后，子模块指针会变化；如果要固定版本，记得提交对应变更
+因此源码运行和安装运行共用同一份 Skills 内容，不再需要额外执行 `git submodule` 同步。

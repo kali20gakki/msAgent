@@ -48,16 +48,13 @@ pip install -U mindstudio-agent
 拉取源码并进入目录：
 
 ```bash
-git clone --recurse-submodules https://github.com/kali20gakki/msAgent.git
+git clone https://github.com/kali20gakki/msAgent.git
 cd msAgent
-git submodule sync --recursive
 ```
 
-如需同步 `mindstudio-skills` 上游最新版本，再执行：
+源码仓库已直接包含内置 Skills，无需额外同步子模块：
 
-```bash
-git submodule update --init --recursive --remote resources/configs/default/skills
-```
+鍐呯疆 Skills 宸茬洿鎺ユ斁鍦ㄤ粨搴撴牴鐩綍鐨?`skills/` 涓紝涓嶅啀闇€瑕?`git submodule` 鍚屾銆?
 
 如果你只需要使用当前仓库锁定的 Skills 版本，可以跳过这一步。
 

@@ -6,7 +6,7 @@ This directory stores project-local runtime configuration for `msagent`.
 - `config.llms.yml`: LLM aliases and provider settings
 - `config.mcp.json`: MCP server configuration, including `msprof-mcp`
 - `config.approval.json`: deepagents Human-in-the-Loop (`interrupt_on`) plus fine-grained `decision_rules`
-- `skills/`: project-local skills loaded in addition to default `mindstudio-skills`
+- `skills/`: project-local skills loaded in addition to the bundled default skills
 - `sandboxes/`: sandbox profiles used by tools and MCP servers
 
 These files are copied into `./.msagent/` on first run.

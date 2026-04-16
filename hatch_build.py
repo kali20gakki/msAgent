@@ -54,6 +54,8 @@ except ModuleNotFoundError:  # pragma: no cover - build dependency is not instal
 DEFAULT_UI_ARCHIVE_NAME = "deep-agents-ui.tar.gz"
 DEFAULT_UI_STANDALONE_ARCHIVE_NAME = "deep-agents-ui-standalone.tar.gz"
 DEFAULT_UI_ARCHIVE_URL_TEMPLATE = "https://codeload.github.com/langchain-ai/deep-agents-ui/tar.gz/{ref}"
+DEFAULT_SKILLS_SOURCE_DIR_NAME = "skills"
+DEFAULT_SKILLS_TARGET_DIR = "resources/configs/default/skills"
 ENV_BUNDLE_WEB_UI = "MSAGENT_BUNDLE_WEB_UI"
 ENV_UI_ARCHIVE_URL = "MSAGENT_UI_ARCHIVE_URL"
 ENV_UI_REF = "MSAGENT_UI_REF"
@@ -73,17 +75,40 @@ class CustomBuildHook(BuildHookInterface):
 
     def initialize(self, version: str, build_data: dict[str, object]) -> None:
         del version
-        if not _is_truthy(os.getenv(ENV_BUNDLE_WEB_UI, "1")):
-            return
-
         force_include = build_data.setdefault("force_include", {})
         if not isinstance(force_include, dict):
             raise TypeError("build_data.force_include must be a dict[str, str]")
+
+        bundled_skills_dir = self._ensure_bundled_skills_dir()
+        if bundled_skills_dir is not None:
+            force_include[str(bundled_skills_dir)] = DEFAULT_SKILLS_TARGET_DIR
+
+        if not _is_truthy(os.getenv(ENV_BUNDLE_WEB_UI, "1")):
+            return
 
         source_archive = self._ensure_ui_archive()
         standalone_archive = self._ensure_ui_standalone_archive(source_archive)
         force_include[str(source_archive)] = self._distribution_path(DEFAULT_UI_ARCHIVE_NAME)
         force_include[str(standalone_archive)] = self._distribution_path(DEFAULT_UI_STANDALONE_ARCHIVE_NAME)
+
+    def _ensure_bundled_skills_dir(self) -> Path | None:
+        if self.target_name != "wheel":
+            return None
+
+        source_dir = Path(self.root) / DEFAULT_SKILLS_SOURCE_DIR_NAME
+        if not source_dir.is_dir():
+            return None
+
+        generated_dir = Path(self.directory) / "msagent-build" / "skills"
+        shutil.rmtree(generated_dir, ignore_errors=True)
+
+        def _ignore(_path: str, names: list[str]) -> set[str]:
+            ignored = {name for name in names if name in {".git", "__pycache__"}}
+            ignored.update(name for name in names if name.endswith((".pyc", ".pyo")))
+            return ignored
+
+        shutil.copytree(source_dir, generated_dir, ignore=_ignore)
+        return generated_dir
 
     def _distribution_path(self, archive_name: str) -> str:
         if self.target_name == "sdist":

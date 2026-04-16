@@ -95,7 +95,7 @@ python -m build --sdist --outdir dist
 
 - 测试可以通过
 - wheel 能正常构建
-- `resources/configs/default/skills` 子模块内容已拉取完整
+- 仓库根目录 `skills/` 内容完整且非空
 
 ## 4. 提交版本变更
 
@@ -230,11 +230,6 @@ PyPI 不允许覆盖上传同一个版本号，遇到这种情况需要递增版
 
 ### 9.5 子模块内容缺失
 
-当前打包流程要求 `resources/configs/default/skills` 有有效内容。
+当前打包流程要求仓库根目录 `skills/` 有有效内容。
 
-如果缺失，可以先执行：
-
-```bash
-git submodule sync --recursive
-git submodule update --init --recursive resources/configs/default/skills
-```
+如果缺失，请先补齐仓库根目录 `skills/` 目录内容，再执行打包。

@@ -83,13 +83,13 @@ force-include = { "src/msagent/py.typed" = "msagent/py.typed" }
 [tool.hatch.build.targets.sdist]
 only-include = [
     ".python-version",
-    ".gitmodules",
     "README.md",
     "langgraph.json",
     "pyproject.toml",
     "resources",
     "run.py",
     "scripts",
+    "skills",
     "src",
     "tests",
     "uv.lock",
