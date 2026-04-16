@@ -5,14 +5,14 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 DIST_DIR="${DIST_DIR:-${REPO_ROOT}/dist}"
 PYPROJECT_PATH="${PYPROJECT_PATH:-${REPO_ROOT}/pyproject.toml}"
-DEFAULT_SKILLS_SUBMODULE_PATH="resources/configs/default/skills"
-SKILLS_SUBMODULE_PATH="${SKILLS_SUBMODULE_PATH:-}"
+DEFAULT_SKILLS_PATH="skills"
+SKILLS_PATH="${SKILLS_PATH:-${SKILLS_SUBMODULE_PATH:-}}"
 SKILLS_DIR=""
 REQUIRE_SKILLS_PAYLOAD="${REQUIRE_SKILLS_PAYLOAD:-auto}"
 VERIFY_WHEEL_INSTALL="${VERIFY_WHEEL_INSTALL:-0}"
-SYNC_SKILLS_REMOTE="${SYNC_SKILLS_REMOTE:-1}"
 SMOKE_IMPORT_MODULE="${SMOKE_IMPORT_MODULE:-}"
 SMOKE_RESOURCE_PATH="${SMOKE_RESOURCE_PATH:-resources/configs/default/config.mcp.json}"
+SMOKE_SKILL_PATH="${SMOKE_SKILL_PATH:-resources/configs/default/skills/README.md}"
 PROJECT_NAME=""
 REQUIRES_PYTHON=""
 MIN_PYTHON_MAJOR=3
@@ -106,6 +106,7 @@ PY
 )" || fail "Failed to parse project metadata from ${PYPROJECT_PATH}"
 
   while IFS='=' read -r key value; do
+    value="${value%$'\r'}"
     case "${key}" in
       PROJECT_NAME) PROJECT_NAME="${value}" ;;
       REQUIRES_PYTHON) REQUIRES_PYTHON="${value}" ;;
@@ -156,58 +157,16 @@ if sys.version_info < (required_major, required_minor):
 PY
 }
 
-detect_skills_submodule_path() {
-  if [[ -n "${SKILLS_SUBMODULE_PATH}" ]]; then
-    SKILLS_DIR="${REPO_ROOT}/${SKILLS_SUBMODULE_PATH}"
+detect_skills_path() {
+  if [[ -n "${SKILLS_PATH}" ]]; then
+    SKILLS_DIR="${REPO_ROOT}/${SKILLS_PATH}"
     return
   fi
 
-  if [[ -f "${REPO_ROOT}/.gitmodules" ]] && command_exists git; then
-    local detected
-    detected="$(
-      git -C "${REPO_ROOT}" config --file .gitmodules --get-regexp '^submodule\..*\.path$' \
-        | awk '{print $2}' \
-        | grep -E '(^|/)skills$' \
-        | head -n 1 \
-        || true
-    )"
-    if [[ -n "${detected}" ]]; then
-      SKILLS_SUBMODULE_PATH="${detected}"
-      SKILLS_DIR="${REPO_ROOT}/${SKILLS_SUBMODULE_PATH}"
-      return
-    fi
+  if [[ -d "${REPO_ROOT}/${DEFAULT_SKILLS_PATH}" ]]; then
+    SKILLS_PATH="${DEFAULT_SKILLS_PATH}"
+    SKILLS_DIR="${REPO_ROOT}/${SKILLS_PATH}"
   fi
-
-  if [[ -d "${REPO_ROOT}/${DEFAULT_SKILLS_SUBMODULE_PATH}" ]]; then
-    SKILLS_SUBMODULE_PATH="${DEFAULT_SKILLS_SUBMODULE_PATH}"
-    SKILLS_DIR="${REPO_ROOT}/${SKILLS_SUBMODULE_PATH}"
-  fi
-}
-
-skills_submodule_registered() {
-  [[ -n "${SKILLS_SUBMODULE_PATH}" ]] || return 1
-  [[ -f "${REPO_ROOT}/.gitmodules" ]] || return 1
-  command_exists git || return 1
-
-  git -C "${REPO_ROOT}" config --file .gitmodules --get-regexp '^submodule\..*\.path$' \
-    | awk '{print $2}' | grep -qx "${SKILLS_SUBMODULE_PATH}"
-}
-
-sync_skills_submodule() {
-  if ! skills_submodule_registered; then
-    return
-  fi
-
-  local update_args=(submodule update --init --recursive --force --depth 1)
-  if [[ "${SYNC_SKILLS_REMOTE}" == "1" ]]; then
-    update_args+=(--remote)
-    log "Syncing ${SKILLS_SUBMODULE_PATH} submodule to latest upstream..."
-  else
-    log "Syncing ${SKILLS_SUBMODULE_PATH} submodule to the pinned repository commit..."
-  fi
-
-  git -C "${REPO_ROOT}" submodule sync --recursive
-  git -C "${REPO_ROOT}" "${update_args[@]}" "${SKILLS_SUBMODULE_PATH}"
 }
 
 ensure_skills_payload() {
@@ -216,7 +175,7 @@ ensure_skills_payload() {
     1|true|required) required=1 ;;
     0|false|optional|off) required=0 ;;
     auto|"")
-      if [[ -n "${SKILLS_SUBMODULE_PATH}" ]]; then
+      if [[ -n "${SKILLS_PATH}" ]] || [[ -d "${REPO_ROOT}/${DEFAULT_SKILLS_PATH}" ]]; then
         required=1
       else
         required=0
@@ -227,9 +186,9 @@ ensure_skills_payload() {
       ;;
   esac
 
-  if [[ -z "${SKILLS_SUBMODULE_PATH}" ]]; then
+  if [[ -z "${SKILLS_PATH}" ]]; then
     if [[ "${required}" == "1" ]]; then
-      fail "Skills payload is required but SKILLS_SUBMODULE_PATH is not set and no skills directory was detected."
+      fail "Skills payload is required but no skills directory was detected. Set SKILLS_PATH or create ${DEFAULT_SKILLS_PATH}/."
     fi
     log "No skills payload configured; skipping skills payload checks."
     return
@@ -237,17 +196,17 @@ ensure_skills_payload() {
 
   if [[ ! -d "${SKILLS_DIR}" ]]; then
     if [[ "${required}" == "1" ]]; then
-      fail "Missing ${SKILLS_SUBMODULE_PATH}. Initialize submodules before building."
+      fail "Missing ${SKILLS_PATH}. Ensure the merged skills directory exists before building."
     fi
-    log "Optional skills payload ${SKILLS_SUBMODULE_PATH} was not found; skipping."
+    log "Optional skills payload ${SKILLS_PATH} was not found; skipping."
     return
   fi
 
   if ! find "${SKILLS_DIR}" -mindepth 1 -print -quit 2>/dev/null | grep -q .; then
     if [[ "${required}" == "1" ]]; then
-      fail "${SKILLS_SUBMODULE_PATH} is empty. Run git submodule update --init --recursive ${SKILLS_SUBMODULE_PATH}."
+      fail "${SKILLS_PATH} is empty. Add bundled skills before building."
     fi
-    log "Optional skills payload ${SKILLS_SUBMODULE_PATH} is empty; skipping."
+    log "Optional skills payload ${SKILLS_PATH} is empty; skipping."
   fi
 }
 
@@ -305,29 +264,16 @@ resolve_venv_python() {
   fail "Could not find a Python executable inside ${venv_dir}."
 }
 
-verify_wheel_install() {
+verify_resource_in_installed_wheel() {
   local python_bin="$1"
-  local wheel_path="$2"
-  local temp_dir
-  local venv_dir
-  local venv_python
+  local work_dir="$2"
+  local project_name="$3"
+  local import_module_name="$4"
+  local resource_path="$5"
 
-  [[ "${VERIFY_WHEEL_INSTALL}" == "1" ]] || return 0
-
-  temp_dir="$(mktemp -d)"
-  venv_dir="${temp_dir}/venv"
-
-  cleanup() {
-    rm -rf "${temp_dir}"
-  }
-  trap cleanup EXIT
-
-  log "Running isolated wheel smoke test..."
-  "${python_bin}" -m venv "${venv_dir}"
-  venv_python="$(resolve_venv_python "${venv_dir}")"
-  "${venv_python}" -m pip install --upgrade pip
-  "${venv_python}" -m pip install "${wheel_path}"
-  "${venv_python}" - "${PROJECT_NAME}" "${SMOKE_IMPORT_MODULE}" "${SMOKE_RESOURCE_PATH}" <<'PY'
+  (
+    cd "${work_dir}"
+    "${python_bin}" - "${project_name}" "${import_module_name}" "${resource_path}" <<'PY'
 import importlib
 import importlib.metadata
 import pathlib
@@ -352,6 +298,29 @@ if resource_path:
 
 print("wheel smoke test passed")
 PY
+  )
+}
+
+verify_wheel_install() {
+  local python_bin="$1"
+  local wheel_path="$2"
+  local temp_dir
+  local venv_dir
+
+  [[ "${VERIFY_WHEEL_INSTALL}" == "1" ]] || return 0
+
+  temp_dir="$(mktemp -d)"
+  venv_dir="${temp_dir}/venv"
+
+  log "Running isolated wheel smoke test..."
+  "${python_bin}" -m venv "${venv_dir}"
+  VENV_PYTHON="$(resolve_venv_python "${venv_dir}")"
+  export VENV_PYTHON
+  "${VENV_PYTHON}" -m pip install --upgrade pip
+  "${VENV_PYTHON}" -m pip install "${wheel_path}"
+  verify_resource_in_installed_wheel "${VENV_PYTHON}" "${temp_dir}" "${PROJECT_NAME}" "${SMOKE_IMPORT_MODULE}" "${SMOKE_RESOURCE_PATH}"
+  verify_resource_in_installed_wheel "${VENV_PYTHON}" "${temp_dir}" "${PROJECT_NAME}" "${SMOKE_IMPORT_MODULE}" "${SMOKE_SKILL_PATH}"
+  rm -rf "${temp_dir}"
 }
 
 main() {
@@ -359,17 +328,15 @@ main() {
   python_bin="$(resolve_python)"
   load_project_metadata "${python_bin}"
   ensure_supported_python "${python_bin}"
-  detect_skills_submodule_path
+  detect_skills_path
 
   if [[ -n "${SMOKE_RESOURCE_PATH}" ]] && [[ ! -f "${REPO_ROOT}/${SMOKE_RESOURCE_PATH}" ]]; then
     log "Smoke resource path ${SMOKE_RESOURCE_PATH} does not exist in repository; skipping resource check."
     SMOKE_RESOURCE_PATH=""
   fi
-
   log "Preparing wheel build in ${REPO_ROOT}"
   log "Project: ${PROJECT_NAME} (requires-python: ${REQUIRES_PYTHON:-unknown})"
   prepare_dist_dir
-  sync_skills_submodule
   ensure_skills_payload
   build_wheel "${python_bin}"
 

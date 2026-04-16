@@ -16,7 +16,7 @@
 ## 📌 使用前说明
 
 - 通过 `pip install` 安装 `mindstudio-agent` 时，版本需 `>= 0.1.3`
-- 如果是源码运行方式，一般可直接使用；建议同步上游 skills 依赖，确保 `resources/configs/default/skills` 内容是最新的
+- 如果是源码运行方式，一般可直接使用；内置 skills 已直接放在仓库根目录 `skills/` 下，无需再同步 submodule
 
 ## 🚀 msagent 安装配置
 

@@ -55,3 +55,4 @@ config.local.json
 test_data/
 .claude/
 .omx/
+.msagent/

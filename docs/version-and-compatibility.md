@@ -31,7 +31,7 @@
 - 内置 `Hermes` 与 `Minos` 两个 Agent
 - 支持 Ascend 性能调优、Profiling 分析、文档走查、工具咨询等场景
 - 支持 MCP 扩展，默认启用 `msprof-mcp`
-- 支持 Skills 扩展，源码仓库中的内置 Skills 由 `mindstudio-skills` 子模块提供
+- 支持 Skills 扩展，源码仓库中的内置 Skills 直接由仓库根目录 `skills/` 提供
 - 支持通过 `msagent web` 启动 Web UI
 
 ## 查看本地安装版本

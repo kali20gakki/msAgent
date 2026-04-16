@@ -102,7 +102,7 @@ content
 
 def test_initializer_resolves_default_skill_search_order(tmp_path: Path) -> None:
     init = Initializer()
-    default_skills = tmp_path / "resources" / "skills"
+    default_skills = tmp_path / "bundled-skills"
 
     init.skill_factory.get_default_skills_dir = lambda: default_skills
 
@@ -115,8 +115,24 @@ def test_initializer_resolves_default_skill_search_order(tmp_path: Path) -> None
     ]
 
 
-def test_skill_factory_default_skills_dir_uses_resources_package() -> None:
+def test_skill_factory_default_skills_dir_prefers_repo_root_skills() -> None:
     default_skills_dir = SkillFactory.get_default_skills_dir()
 
+    assert default_skills_dir == Path(__file__).resolve().parents[1] / "skills"
     assert default_skills_dir.name == "skills"
-    assert "resources" in default_skills_dir.as_posix()
+
+
+def test_skill_factory_default_skills_dir_falls_back_to_packaged_resources(monkeypatch) -> None:
+    packaged_skills = Path("/tmp/packaged-skills")
+    monkeypatch.setattr(
+        SkillFactory,
+        "get_repo_skills_dir",
+        staticmethod(lambda: Path("/tmp/missing-repo-skills")),
+    )
+    monkeypatch.setattr(
+        SkillFactory,
+        "get_packaged_skills_dir",
+        staticmethod(lambda: packaged_skills),
+    )
+
+    assert SkillFactory.get_default_skills_dir() == packaged_skills

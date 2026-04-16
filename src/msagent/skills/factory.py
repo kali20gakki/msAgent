@@ -95,8 +95,19 @@ class SkillFactory:
         return dict(self._module_map)
 
     @staticmethod
-    def get_default_skills_dir() -> Path:
+    def get_repo_skills_dir() -> Path:
+        return Path(__file__).resolve().parents[3] / "skills"
+
+    @staticmethod
+    def get_packaged_skills_dir() -> Path:
         return DEFAULT_CONFIG_DIR / "skills"
+
+    @classmethod
+    def get_default_skills_dir(cls) -> Path:
+        repo_skills_dir = cls.get_repo_skills_dir()
+        if repo_skills_dir.is_dir():
+            return repo_skills_dir
+        return cls.get_packaged_skills_dir()
 
     @staticmethod
     def _load_skill_file(skill_file: Path, *, base_dir: Path) -> Skill | None:
