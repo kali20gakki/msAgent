@@ -13,12 +13,12 @@
 
 ## 🤖 内置 Agent 与能力分工
 
-| 形象 | 名称 | 领域定位 | 说明 |
-|---|---|---|---|
-| <img src="docs/images/Hermes.png" alt="Hermes" width="120"> | **Hermes** | 性能调优：聚焦 Ascend Profiling 分析，覆盖单卡、多卡、集群等场景，擅长快慢卡、慢节点、MFU、通信瓶颈、算子热点、下发调度等性能问题定位与优化建议。 | [Hermes说明](docs/agents/Hermes.md) |
-| <img src="docs/images/Minos.png" alt="Minos" width="120"> | **Minos** | 文档体验与代码审查辅助：聚焦 README 走查、安装流程验证、Quick Start 体验、新手 onboarding、文档可用性评估，以及 GitCode PR 审查与评审意见整理。 | [Minos说明](docs/agents/Minos.md) |
-| Coming soon | **待定** | 精度分析与优化。 | Coming soon |
-| Coming soon | **待定** | 量化分析与优化。 | Coming soon |
+| 形象 | 名称           | 领域定位 | 说明 |
+|---|--------------|---|--|
+| <img src="docs/images/Hermes.png" alt="Hermes" width="120"> | **Hermes**   | 性能调优：聚焦 Ascend Profiling 分析，覆盖单卡、多卡、集群等场景，擅长快慢卡、慢节点、MFU、通信瓶颈、算子热点、下发调度等性能问题定位与优化建议。 | [Hermes说明](docs/agents/Hermes.md) |
+| <img src="docs/images/Minos.png" alt="Minos" width="120"> | **Minos**    | 文档体验与代码审查辅助：聚焦 README 走查、安装流程验证、Quick Start 体验、新手 onboarding、文档可用性评估，以及 GitCode PR 审查与评审意见整理。 | [Minos说明](docs/agents/Minos.md) |
+| Coming soon | **Accuracy** | 精度分析与优化。 | 精度调优：聚焦Ascend精度分析与优化，覆盖单卡，多卡，集群等场景，可处理RL训推一致性分析，loss/gnorm NaN分析等常见精度问题 |
+| Coming soon | **待定**       | 量化分析与优化。 | Coming soon |
 ---
 
 ## ⚡ 快速上手
@@ -175,6 +175,7 @@ msagent
 ```bash
 msagent --agent Hermes
 msagent --agent Minos
+msagent --agent Accuracy
 ```
 
 <details>
@@ -236,6 +237,7 @@ msagent web --no-ui
 
 - `Hermes`：性能调优与 Profiling 分析 Agent 页面，见 [docs/agents/Hermes.md](docs/agents/Hermes.md)
 - `Minos`：文档体验与 GitCode PR 审查 Agent 页面，见 [docs/agents/Minos.md](docs/agents/Minos.md)
+- `Accuracy`: 精度分析与优化 Agent 页面，见[docs/agents/Accuracy.md](docs/agents/Accuracy.md)
 ---
 
 ## 🛠️ 参考文档
