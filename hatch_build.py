@@ -83,7 +83,7 @@ class CustomBuildHook(BuildHookInterface):
         if bundled_skills_dir is not None:
             force_include[str(bundled_skills_dir)] = DEFAULT_SKILLS_TARGET_DIR
 
-        if not _is_truthy(os.getenv(ENV_BUNDLE_WEB_UI, "1")):
+        if not _is_truthy(os.getenv(ENV_BUNDLE_WEB_UI, "0")):
             return
 
         source_archive = self._ensure_ui_archive()
