@@ -1,5 +1,5 @@
 ---
-name: model-adapt
+name: msmodelslim-model-adapt
 description: 
   为 msModelSlim 创建基础 Transformers 模型适配器（Model Adapter）。
   包含创建适配器、实现必需接口及四步验证流程。
