@@ -30,6 +30,7 @@ from pydantic import SecretStr
 
 from msagent.configs.llm import LLMConfig
 from msagent.core.settings import LLMSettings
+from msagent.utils.langchain_openai_compat import patch_chat_openai_reasoning_content_support
 
 _SUPPORTED_PROVIDER_MAP: dict[str, str] = {
     "openai": "openai",
@@ -115,6 +116,7 @@ class LLMFactory:
                 kwargs[provider_api_key] = api_key
 
         if provider == "openai":
+            patch_chat_openai_reasoning_content_support()
             kwargs["use_responses_api"] = self._should_use_openai_responses_api(normalized_base_url)
             # Keep token usage metrics populated while streaming.
             kwargs["stream_usage"] = bool(cfg.streaming)

@@ -83,6 +83,35 @@ def test_llm_factory_injects_openai_timeout_and_stream_usage(monkeypatch) -> Non
     assert captured["kwargs"]["max_tokens"] == 2048
 
 
+def test_llm_factory_applies_openai_reasoning_content_patch(monkeypatch) -> None:
+    called = False
+
+    def fake_patch() -> None:
+        nonlocal called
+        called = True
+
+    def fake_init_chat_model(model_name: str, **kwargs):
+        return SimpleNamespace(model_name=model_name, kwargs=kwargs)
+
+    monkeypatch.setattr("msagent.llms.factory.patch_chat_openai_reasoning_content_support", fake_patch)
+    monkeypatch.setattr("msagent.llms.factory.init_chat_model", fake_init_chat_model)
+
+    config = LLMConfig(
+        provider="openai",
+        model="deepseek-v4-flash",
+        alias="default",
+        base_url="https://api.deepseek.com/v1",
+        max_tokens=0,
+        temperature=0.1,
+        streaming=True,
+        request_timeout_seconds=120,
+    )
+
+    LLMFactory().create(config)
+
+    assert called is True
+
+
 def test_llm_factory_disables_responses_api_for_openai_compatible_endpoint(
     monkeypatch,
 ) -> None:
