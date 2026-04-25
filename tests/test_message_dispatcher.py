@@ -1076,6 +1076,24 @@ def test_build_activity_renderable_keeps_tool_line_separate(tmp_path: Path) -> N
     assert "preview line" in output
 
 
+def test_merge_chunks_preserves_reasoning_content() -> None:
+    merged = message_module.MessageDispatcher._merge_chunks(
+        [
+            AIMessageChunk(
+                content="",
+                additional_kwargs={"reasoning_content": "inspect log -> "},
+            ),
+            AIMessageChunk(
+                content="done",
+                additional_kwargs={"reasoning_content": "replay tool call"},
+            ),
+        ]
+    )
+
+    assert merged.content == "done"
+    assert merged.additional_kwargs["reasoning_content"] == "inspect log -> replay tool call"
+
+
 def test_tool_activity_call_defaults_to_monotonic_clock() -> None:
     started = time.monotonic()
     call = message_module.ToolActivityCall(name="run_command", args={})
