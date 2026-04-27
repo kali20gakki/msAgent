@@ -1,0 +1,42 @@
+/* Use nearly the full main pane width instead of the RTD theme's fixed 800px content area. */
+.wy-nav-content {
+  max-width: none !important;
+  width: auto;
+  margin: 0;
+}
+
+.wy-nav-content-wrap {
+  margin-left: 300px;
+}
+
+/* Let large media scale with the viewport. */
+.wy-nav-content img,
+.wy-nav-content video,
+.wy-nav-content iframe {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Avoid wide tables overflowing the content area on smaller windows. */
+.wy-table-responsive table td,
+.wy-table-responsive table th,
+.rst-content table.docutils td,
+.rst-content table.docutils th {
+  white-space: normal;
+}
+
+.wy-table-responsive {
+  overflow-x: auto;
+}
+
+@media screen and (max-width: 768px) {
+  .wy-nav-content-wrap {
+    margin-left: 0;
+  }
+
+  .wy-nav-content {
+    max-width: 100% !important;
+    width: 100%;
+    padding: 1.25rem;
+  }
+}

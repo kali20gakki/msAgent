@@ -1,4 +1,4 @@
-# Zephyr
+# Zephyr 模型量化
 
 <p align="center">
   <img src="../images/Zephyr.jpg" alt="Zephyr" width="220">

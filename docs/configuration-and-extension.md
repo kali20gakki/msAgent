@@ -162,3 +162,129 @@ resources/configs/default/skills/
 ```
 
 因此源码运行和安装运行共用同一份 Skills 内容，不再需要额外执行 `git submodule` 同步。
+
+<a id="custom-skill-guide"></a>
+## 添加自定义 Skill
+
+如果你希望在当前项目里扩展一个新的 Skill，推荐直接放在仓库根目录：
+
+```text
+skills/
+  my-skill/
+    SKILL.md
+```
+
+也支持带分类的结构：
+
+```text
+skills/
+  profiling/
+    my-skill/
+      SKILL.md
+```
+
+这时：
+
+- `profiling` 是分类
+- `my-skill` 是 skill 名称
+
+### 编写 `SKILL.md`
+
+最小示例：
+
+```md
+---
+name: my-skill
+description: 用于处理某类固定任务的自定义 skill
+---
+
+# My Skill
+
+当用户提出这类需求时使用这个 skill：
+
+- 分析日志
+- 生成报告
+
+执行要求：
+
+1. 先检查输入是否完整。
+2. 优先读取项目内已有配置和样例。
+3. 输出结论、依据和建议。
+```
+
+说明：
+
+- `name` 不写时，默认取目录名
+- `description` 建议填写，便于在 `/skills` 中识别
+- 如果需要脚本或模板，可以继续放在 skill 目录下，例如 `scripts/`、`templates/`
+
+### 让 Agent 能看到它
+
+只创建文件还不够，当前 agent 还需要在配置里放开这个 skill。
+
+例如：
+
+```yaml
+skills:
+  patterns:
+    - default:my-skill
+  use_catalog: false
+```
+
+如果是带分类的 skill：
+
+```yaml
+skills:
+  patterns:
+    - profiling:my-skill
+  use_catalog: false
+```
+
+规则格式是：
+
+```text
+<category>:<name_pattern>
+```
+
+这部分更完整的匹配语义，可参考 [Agent / Tool / Skill 过滤规则](agent-tool-skill-filter-rules.md)。
+
+### 验证是否生效
+
+启动 `msagent` 后，可以这样检查：
+
+```text
+/skills
+```
+
+或者直接指定：
+
+```text
+/skills my-skill
+```
+
+如果有重名 skill，建议写全：
+
+```text
+/skills profiling/my-skill
+```
+
+<a id="custom-skill-faq"></a>
+## Skill 常见问题
+
+### `/skills` 看不到新 Skill
+
+通常优先检查这几项：
+
+- 路径是否正确，文件名是否是 `SKILL.md`
+- 当前 agent 是否配置了对应的 `skills.patterns`
+- 是否被更高优先级目录中的同名 skill 覆盖
+
+### Skill 明明存在，但 Agent 不会自动使用
+
+这通常是以下原因之一：
+
+- `description` 太泛，模型难以判断触发场景
+- agent 的 `skills.patterns` 没有放开对应 skill
+- 当前任务更匹配别的内置 skill，导致没有选中它
+
+建议先通过 `/skills` 确认可见性，再补充更明确的 `description` 和触发说明。
