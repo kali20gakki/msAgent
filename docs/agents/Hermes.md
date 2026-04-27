@@ -1,4 +1,4 @@
-# Hermes
+# Hermes 性能调优
 
 <p align="center">
   <img src="../images/Hermes.png" alt="Hermes" width="220">
@@ -30,8 +30,8 @@
 
 | 场景 | 示例提示词 | 效果展示 |
 |---|---|---|
-| MFU 计算 | `请基于/path/to/kernel_details.csv计算matmul的MFU（910B3），并说明各项计算依据。` | <img src="https://github.com/luelueFLY/images/blob/main/img/kernel-details-mfu-file.png" alt="MFU 计算示例" width="800"> |
-| 快慢卡诊断 | `请分析 /path/to/cluster_profiling/ 中是否存在快慢卡问题，定位异常 rank，并给出可能原因。` | <img src="https://github.com/luelueFLY/images/blob/main/img/slow-rank-detect.png" alt="快慢卡诊断示例" width="800"> |
-| profiling 数据检查 | `请分析 /path/to/xxx_ascend_pt/ 数据是否采集正常。` | <img src="https://github.com/luelueFLY/images/blob/main/img/profiler-data-check.jpg" alt="数据完整性验证示例" width="800"> |
-| msprof 工具使用类咨询 | `msprof怎么编译出run包？` | <img src="https://github.com/luelueFLY/images/blob/main/img/msprof-build.jpg" alt="工具咨询示例" width="800"> |
-| DB 自定义内容转 CSV | `基于ascend_pytorch_profiler_0.db，帮我提取各个算子类型的总耗时并按降序输出到csv。` | <img src="https://github.com/luelueFLY/images/blob/main/img/db-export.png" alt="数据导出示例" width="800"> |
+| MFU 计算 | `请基于/path/to/kernel_details.csv计算matmul的MFU（910B3），并说明各项计算依据。` | <img src="https://raw.githubusercontent.com/luelueFLY/images/main/img/kernel-details-mfu-file.png" alt="MFU 计算示例" width="800"> |
+| 快慢卡诊断 | `请分析 /path/to/cluster_profiling/ 中是否存在快慢卡问题，定位异常 rank，并给出可能原因。` | <img src="https://raw.githubusercontent.com/luelueFLY/images/main/img/slow-rank-detect.png" alt="快慢卡诊断示例" width="800"> |
+| profiling 数据检查 | `请分析 /path/to/xxx_ascend_pt/ 数据是否采集正常。` | <img src="https://raw.githubusercontent.com/luelueFLY/images/main/img/profiler-data-check.jpg" alt="数据完整性验证示例" width="800"> |
+| msprof 工具使用类咨询 | `msprof怎么编译出run包？` | <img src="https://raw.githubusercontent.com/luelueFLY/images/main/img/msprof-build.jpg" alt="工具咨询示例" width="800"> |
+| DB 自定义内容转 CSV | `基于ascend_pytorch_profiler_0.db，帮我提取各个算子类型的总耗时并按降序输出到csv。` | <img src="https://raw.githubusercontent.com/luelueFLY/images/main/img/db-export.png" alt="数据导出示例" width="800"> |

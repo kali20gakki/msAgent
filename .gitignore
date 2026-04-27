@@ -51,6 +51,7 @@ dmypy.json
 *.log
 config.local.json
 .langgraph_api/
+docs/_build/
 
 test_data/
 .claude/

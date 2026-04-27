@@ -37,6 +37,9 @@
 # For the full list of built-in configuration values, see the documentation:
 # https://www.sphinx-doc.org/en/master/usage/configuration.html
 
+from pathlib import Path
+import shutil
+
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
@@ -78,9 +81,25 @@ html_static_path = ['_static']
 # Theme options are theme-specific and customize the look and feel of a theme
 html_theme_options = {
     'logo_only': False,
-    'display_version': True,
     'prev_next_buttons_location': 'bottom',
     'style_external_links': False,
+    'includehidden': True,
     'navigation_depth': 4,
     'collapse_navigation': False,
+    'titles_only': True,
 }
+
+
+def _copy_docs_images(app, exception):
+    """Copy docs/images into the built site so repo-relative image links keep working."""
+    if exception is not None or app.builder.format != 'html':
+        return
+
+    src = Path(app.confdir) / 'images'
+    dst = Path(app.outdir) / 'images'
+    if src.exists():
+        shutil.copytree(src, dst, dirs_exist_ok=True)
+
+
+def setup(app):
+    app.connect('build-finished', _copy_docs_images)
