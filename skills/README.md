@@ -13,15 +13,17 @@
 
 ## 当前技能
 
-| Skill | 说明 | 典型输入 | 依赖 |
-| --- | --- | --- | --- |
-| [`ascend-profiler-db-explorer`](./ascend-profiler-db-explorer/SKILL.md) | 面向 Ascend PyTorch Profiler / msprof 数据库的 SQL 分析技能，把自然语言问题转成安全可执行 SQL，并结合表结构输出诊断结论 | `ascend_pytorch_profiler*.db` / `msprof_*.db` 路径，或“TopK 算子 / 通信耗时 / 下发分析 / schema 查询”等问题 | `sqlite3`、Python |
-| [`cluster-fast-slow-rank-detector`](./cluster-fast-slow-rank-detector/SKILL.md) | 面向 Ascend 集群 Profiling 的快慢卡诊断，区分 Host 下发慢、计算慢、通信慢等瓶颈类型 | 集群 profiling 根目录、慢卡/快卡分析诉求 | `msprof-analyze-advisor`、Python、`pandas` |
-| [`document-ux-review`](./document-ux-review/SKILL.md) | 像第一次接触项目的人一样按 README / quick start 真跑一遍，判断新人是否能走通并输出文档体验问题报告 | 仓库链接或本地仓库路径，以及“按 README 试一下 / 帮我检查文档能不能跑通”这类请求 | 目标项目所需运行环境、Shell、包管理工具 |
-| [`gitcode-code-reviewer`](./gitcode-code-reviewer/SKILL.md) | 审查 GitCode PR，结合 PR metadata、diff 和仓库上下文给出深度审查结论，并可按需发布逐行评论 | GitCode PR 链接，或“review this PR / 检视这个 PR / 检查 PR”这类请求 | Python、`git`、`GITCODE_TOKEN` 或 `git config --global gitcode.token ...` |
-| [`mindstudio_profiler_data_check`](./mindstudio_profiler_data_check/SKILL.md) | 对 MindStudio profiler / msprof 采集结果做前置体检，判断是否可进入后续分析 | profiler 结果目录 | `msprof`，离线解析时依赖 `torch_npu` 或 `mindspore` |
-| [`op-mfu-calculator`](./op-mfu-calculator/SKILL.md) | 计算 matmul / GEMM / FlashAttention 等算子的 MFU，并给出推导过程 | 算子类型、shape、执行时间、峰值算力 | 无额外脚本依赖 |
-| [`github-raw-fetch`](./github-raw-fetch/SKILL.md) | 读取 GitHub 仓库中的源码、配置、README、Markdown 与 docs；普通文件自动将 `blob` 链接转换为 raw，docs 场景会先读取同仓库同 `ref` 的 `agent_router.md` 再定位真实路径 | GitHub `blob` / raw 文件链接，或“读取某仓库某篇 docs”这类请求 | 支持网络抓取的 Agent / 工具，推荐 `curl` / `curl.exe` |
+| Skill | 说明                                                                                                    | 典型输入                                                                                     | 依赖                                                                     |
+| --- |-------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------|------------------------------------------------------------------------|
+| [`ascend-profiler-db-explorer`](./ascend-profiler-db-explorer/SKILL.md) | 面向 Ascend PyTorch Profiler / msprof 数据库的 SQL 分析技能，把自然语言问题转成安全可执行 SQL，并结合表结构输出诊断结论                     | `ascend_pytorch_profiler*.db` / `msprof_*.db` 路径，或“TopK 算子 / 通信耗时 / 下发分析 / schema 查询”等问题 | `sqlite3`、Python                                                       |
+| [`cluster-fast-slow-rank-detector`](./cluster-fast-slow-rank-detector/SKILL.md) | 面向 Ascend 集群 Profiling 的快慢卡诊断，区分 Host 下发慢、计算慢、通信慢等瓶颈类型                                                | 集群 profiling 根目录、慢卡/快卡分析诉求                                                               | `msprof-analyze-advisor`、Python、`pandas`                               |
+| [`document-ux-review`](./document-ux-review/SKILL.md) | 像第一次接触项目的人一样按 README / quick start 真跑一遍，判断新人是否能走通并输出文档体验问题报告                                          | 仓库链接或本地仓库路径，以及“按 README 试一下 / 帮我检查文档能不能跑通”这类请求                                           | 目标项目所需运行环境、Shell、包管理工具                                                 |
+| [`gitcode-code-reviewer`](./gitcode-code-reviewer/SKILL.md) | 审查 GitCode PR，结合 PR metadata、diff 和仓库上下文给出深度审查结论，并可按需发布逐行评论                                           | GitCode PR 链接，或“review this PR / 检视这个 PR / 检查 PR”这类请求                                    | Python、`git`、`GITCODE_TOKEN` 或 `git config --global gitcode.token ...` |
+| [`mindstudio_profiler_data_check`](./mindstudio_profiler_data_check/SKILL.md) | 对 MindStudio profiler / msprof 采集结果做前置体检，判断是否可进入后续分析                                                  | profiler 结果目录                                                                            | `msprof`，离线解析时依赖 `torch_npu` 或 `mindspore`                             |
+| [`op-mfu-calculator`](./op-mfu-calculator/SKILL.md) | 计算 matmul / GEMM / FlashAttention 等算子的 MFU，并给出推导过程                                                    | 算子类型、shape、执行时间、峰值算力                                                                     | 无额外脚本依赖                                                                |
+| [`github-raw-fetch`](./github-raw-fetch/SKILL.md) | 读取 GitHub 仓库中的源码、配置、README、Markdown 与 docs；普通文件自动将 `blob` 链接转换为 raw，docs 场景会先读取同仓库同 `ref` 的 `agent_router.md` 再定位真实路径 | GitHub `blob` / raw 文件链接，或“读取某仓库某篇 docs”这类请求                                             | 支持网络抓取的 Agent / 工具，推荐 `curl` / `curl.exe`                              |
+| [`ascendc-operator-performance-optim`](./ascendc-operator-performance-optim/SKILL.md) | 基于 msprof op 性能数据诊断 AscendC 算子性能瓶颈，给出代码优化建议，并参考 AscendC 高阶 API 文档生成优化后的代码                             | msprof op 性能数据目录、算子源码路径、AscendC API 文档链接                                                 | Python3                                                                |
+| [`msot-msopprof-operator-profiler`](./msot-msopprof-operator-profiler/SKILL.md) | 基于 msprof op 工具深度分析算子性能瓶颈，给出算子信息、关键性能数据、TOP5性能瓶颈、TOP5优化建议与报告总结，提升开发者算子性能优化效率  | 算子可执行程序、算子msprof op 性能数据目录                                                               | Python3                                                                |
 
 ## 目录结构
 
@@ -102,6 +104,12 @@
 - 如果目标是普通文本文件，按 `github.com/<owner>/<repo>/blob/<ref>/...` 到 `raw.githubusercontent.com/<owner>/<repo>/<ref>/...` 的规则直接转换并抓取
 - 如果目标属于 docs、FAQ、指南、Markdown 文档体系，必须先读取同仓库同 `ref` 的 `agent_router.md`，再根据其中的目录映射、别名或入口规则推导真实路径
 - 抓取 raw 内容时优先使用 `curl`；在 PowerShell 环境中优先使用 `curl.exe -L`
+
+对于 `ascendc-operator-performance-optim`：
+
+- 输入可以是 msprof op 性能数据目录（包含 ArithmeticUtilization.csv、L2Cache.csv 等文件）
+- 技能会自动诊断性能瓶颈（Vector/Scalar 利用率、L2 Cache、流水线、资源冲突等）
+- 结合算子源码给出具体的代码优化建议，并参考 AscendC 高阶 API 文档生成优化后的代码
 
 ## Skill 设计约定
 
