@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import json
 import shutil
 import textwrap
 from collections.abc import Callable
+from typing import Any
 
 from prompt_toolkit.formatted_text import FormattedText
 from prompt_toolkit.key_binding import KeyBindings
@@ -15,6 +17,7 @@ from prompt_toolkit.mouse_events import MouseEvent, MouseEventType
 
 from msagent.cli.core.tool_output import ToolOutputEntry
 from msagent.cli.theme import console, theme
+from msagent.cli.ui.tool_display import order_tool_arg_items
 from msagent.cli.ui.shared import (
     create_instruction,
     create_selector_application,
@@ -30,6 +33,65 @@ class ToolOutputHandler:
 
     def __init__(self, session) -> None:
         self.session = session
+
+    @staticmethod
+    def _stringify_tool_arg(value: Any) -> str:
+        """Convert tool args into readable viewer text."""
+        if isinstance(value, str):
+            return value.replace("\r\n", "\n")
+        if isinstance(value, (dict, list)):
+            return json.dumps(value, ensure_ascii=False, indent=2)
+        return str(value)
+
+    @classmethod
+    def _wrap_block(
+        cls,
+        text: str,
+        *,
+        width: int,
+        initial_indent: str = "",
+        subsequent_indent: str = "",
+    ) -> list[str]:
+        """Wrap multiline text while preserving explicit line breaks."""
+        wrapped: list[str] = []
+        for source_line in text.splitlines() or [text]:
+            chunks = textwrap.wrap(
+                source_line,
+                width=width,
+                replace_whitespace=False,
+                drop_whitespace=False,
+                initial_indent=initial_indent,
+                subsequent_indent=subsequent_indent,
+            )
+            if chunks:
+                wrapped.extend(chunks)
+            else:
+                wrapped.append(initial_indent.rstrip() if initial_indent else "")
+        return wrapped or ["(empty output)"]
+
+    @classmethod
+    def _build_body_lines(cls, entry: ToolOutputEntry, *, width: int) -> list[str]:
+        """Build viewer body lines including tool metadata and output."""
+        body = entry.full_content if entry.expanded else entry.preview_content
+        if not body:
+            body = "(empty output)"
+
+        lines = [f"Tool: {entry.tool_name}"]
+        if entry.tool_args:
+            lines.append("Args:")
+            for key, value in order_tool_arg_items(entry.tool_args):
+                prefix = f"  {key}: "
+                lines.extend(
+                    cls._wrap_block(
+                        cls._stringify_tool_arg(value),
+                        width=width,
+                        initial_indent=prefix,
+                        subsequent_indent=" " * len(prefix),
+                    )
+                )
+        lines.extend(["", "Output:"])
+        lines.extend(cls._wrap_block(body, width=width))
+        return lines
 
     async def handle(self) -> None:
         """Open the tool-output viewer when expandable results exist."""
@@ -54,23 +116,7 @@ class ToolOutputHandler:
 
         def body_lines() -> list[str]:
             width = max(20, shutil.get_terminal_size((120, 40)).columns - _VIEWER_BODY_PADDING)
-            body = current_entry().full_content if current_entry().expanded else current_entry().preview_content
-            if not body:
-                body = "(empty output)"
-
-            wrapped: list[str] = []
-            for source_line in body.splitlines() or [body]:
-                chunks = textwrap.wrap(
-                    source_line,
-                    width=width,
-                    replace_whitespace=False,
-                    drop_whitespace=False,
-                )
-                if chunks:
-                    wrapped.extend(chunks)
-                else:
-                    wrapped.append("")
-            return wrapped or ["(empty output)"]
+            return self._build_body_lines(current_entry(), width=width)
 
         def page_size() -> int:
             height = shutil.get_terminal_size((120, 40)).lines

@@ -7,6 +7,7 @@ from typing import Any, Mapping
 
 HIDDEN_TOOL_NAMES = frozenset({"write_todos"})
 SUBAGENT_ORIGIN_LABEL = "Subagent"
+PRIORITY_TOOL_ARG_KEYS = ("command", "cmd", "script", "cwd", "workdir", "timeout", "timeout_ms")
 
 
 def truncate_preview_text(text: str, max_length: int) -> str:
@@ -36,6 +37,14 @@ def stringify_tool_arg(value: Any, max_length: int) -> str:
 def build_tool_arg_items(tool_args: Mapping[str, Any], *, max_value_length: int) -> list[tuple[str, str]]:
     """Prepare compact key/value pairs for tool arg rendering."""
     return [(str(key), stringify_tool_arg(value, max_value_length)) for key, value in tool_args.items()]
+
+
+def order_tool_arg_items(tool_args: Mapping[str, Any]) -> list[tuple[str, Any]]:
+    """Keep command-like arguments first so shell invocations stay visible."""
+    priority_map = {name: index for index, name in enumerate(PRIORITY_TOOL_ARG_KEYS)}
+    indexed_items = [(index, str(key), value) for index, (key, value) in enumerate(tool_args.items())]
+    indexed_items.sort(key=lambda item: (priority_map.get(item[1], len(priority_map)), item[0]))
+    return [(key, value) for _, key, value in indexed_items]
 
 
 def resolve_origin_label(

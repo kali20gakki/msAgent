@@ -224,3 +224,28 @@ def test_session_like_tool_output_list_keeps_multiple_entries() -> None:
     assert [entry.tool_call_id for entry in tool_outputs] == ["call-1", "call-2"]
     assert latest_tool_output is tool_outputs[-1]
     assert [entry.sequence for entry in tool_outputs] == [1, 2]
+
+
+def test_tool_output_handler_body_lines_include_tool_name_and_args() -> None:
+    entry = ToolOutputEntry(
+        tool_call_id="call-1",
+        tool_name="execute",
+        preview_content="preview output",
+        full_content="full output",
+        tool_args={
+            "cwd": "/tmp/project",
+            "command": "bash scripts/run.sh --flag value",
+        },
+    )
+
+    lines = ToolOutputHandler._build_body_lines(entry, width=120)
+
+    assert lines[:6] == [
+        "Tool: execute",
+        "Args:",
+        "  command: bash scripts/run.sh --flag value",
+        "  cwd: /tmp/project",
+        "",
+        "Output:",
+    ]
+    assert lines[6] == "preview output"

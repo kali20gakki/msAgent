@@ -26,6 +26,7 @@ from msagent.cli.core.context import Context
 from msagent.cli.theme import console
 from msagent.cli.ui.markdown import wrap_html_in_code_blocks
 from msagent.cli.ui.shared import build_agent_prompt
+from msagent.cli.ui.tool_display import order_tool_arg_items
 from msagent.core.constants import UNKNOWN
 from msagent.core.settings import settings
 from msagent.agents.state import Todo
@@ -130,6 +131,7 @@ TOOL_ARG_KEY_STYLE = "muted"
 TOOL_ARG_VALUE_STYLE = "primary"
 TOOL_ARG_SEPARATOR_STYLE = "muted"
 TOOL_SUMMARY_VALUE_MAX = 72
+TOOL_COMMAND_VALUE_MAX = 240
 TOOL_MESSAGE_MAX_DISPLAY_CHARS = 200
 TOOL_MESSAGE_TOGGLE_HINT = "Ctrl+O /tool-output"
 SUBAGENT_ORIGIN_LABEL = "Subagent"
@@ -551,6 +553,15 @@ class Renderer:
         result.append("\n")
 
     @staticmethod
+    def _tool_arg_preview_limit(tool_name: str, key: str) -> int:
+        """Allow command-like arguments to stay visible in compact tool headers."""
+        if key in {"command", "cmd", "script"}:
+            return TOOL_COMMAND_VALUE_MAX
+        if tool_name in {"execute", "run_command"}:
+            return max(TOOL_SUMMARY_VALUE_MAX, 120)
+        return TOOL_SUMMARY_VALUE_MAX
+
+    @staticmethod
     def _strip_frontmatter_fences(content: str) -> str:
         """Remove leading Markdown frontmatter fences while preserving metadata."""
         stripped_leading = content.lstrip()
@@ -597,10 +608,13 @@ class Renderer:
         if tool_args:
             summary_arg_items = [
                 (
-                    str(key),
-                    Renderer._stringify_tool_arg(value, TOOL_SUMMARY_VALUE_MAX),
+                    key,
+                    Renderer._stringify_tool_arg(
+                        value,
+                        Renderer._tool_arg_preview_limit(str(tool_name), key),
+                    ),
                 )
-                for key, value in tool_args.items()
+                for key, value in order_tool_arg_items(tool_args)
             ]
             Renderer._append_tool_arg_block(
                 result,

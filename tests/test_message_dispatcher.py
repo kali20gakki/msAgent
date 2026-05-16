@@ -814,14 +814,24 @@ def test_remember_expandable_tool_output_tracks_latest_preview(tmp_path: Path) -
         name="run_command",
     )
 
-    dispatcher._remember_expandable_tool_output(tool_message, indent_level=2)
+    dispatcher._remember_expandable_tool_output(
+        tool_message,
+        indent_level=2,
+        tool_call={
+            "name": "execute",
+            "args": {"command": "bash run.sh", "cwd": "/tmp/project"},
+            "id": "call-1",
+            "type": "tool_call",
+        },
+    )
 
     assert len(remembered) == 1
     entry = remembered[0]
     assert entry.tool_call_id == "call-1"
-    assert entry.tool_name == "run_command"
+    assert entry.tool_name == "execute"
     assert entry.preview_content == "line 1\n... (truncated, original length: 20)"
     assert entry.full_content == "line 1\nline 2\nline 3"
+    assert entry.tool_args == {"command": "bash run.sh", "cwd": "/tmp/project"}
     assert entry.indent_level == 2
     assert entry.origin_label == "Subagent"
 

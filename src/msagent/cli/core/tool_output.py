@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Any
 
 
 @dataclass(slots=True)
@@ -13,6 +14,7 @@ class ToolOutputEntry:
     tool_name: str
     preview_content: str
     full_content: str
+    tool_args: dict[str, Any] = field(default_factory=dict)
     indent_level: int = 0
     origin_label: str | None = None
     expanded: bool = False

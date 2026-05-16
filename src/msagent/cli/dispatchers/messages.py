@@ -1316,12 +1316,16 @@ class MessageDispatcher:
             return
 
         if isinstance(message, ToolMessage):
-            self._render_pending_tool_header(
+            pending_header = self._render_pending_tool_header(
                 message,
                 indent_level=indent_level,
             )
             self.session.renderer.render_tool_message(message, indent_level=indent_level)
-            self._remember_expandable_tool_output(message, indent_level=indent_level)
+            self._remember_expandable_tool_output(
+                message,
+                indent_level=indent_level,
+                tool_call=pending_header.tool_call if pending_header is not None else None,
+            )
 
     @staticmethod
     def _extract_chunk_content(chunk: AIMessageChunk) -> str:
@@ -1397,15 +1401,15 @@ class MessageDispatcher:
             indent_level=indent_level,
         )
 
-    def _render_pending_tool_header(self, message: ToolMessage, indent_level: int) -> None:
+    def _render_pending_tool_header(self, message: ToolMessage, indent_level: int) -> DeferredToolHeader | None:
         """Render the deferred tool header immediately before its result."""
         tool_call_id = getattr(message, "tool_call_id", None)
         if not tool_call_id:
-            return
+            return None
 
         pending = self._pending_tool_headers.pop(str(tool_call_id), None)
         if pending is None:
-            return
+            return None
 
         if isinstance(pending, tuple):
             pending = DeferredToolHeader(
@@ -1420,7 +1424,7 @@ class MessageDispatcher:
         # Skip hidden tools (e.g., write_todos shown via panel)
         tool_name = tool_call.get("name", "")
         if tool_name in self._HIDDEN_ACTIVITY_TOOLS:
-            return
+            return pending
 
         duration = self._extract_tool_execution_duration(message)
         if duration is None:
@@ -1431,8 +1435,15 @@ class MessageDispatcher:
             duration=duration,
             origin_label=pending.origin_label,
         )
+        return pending
 
-    def _remember_expandable_tool_output(self, message: ToolMessage, *, indent_level: int) -> None:
+    def _remember_expandable_tool_output(
+        self,
+        message: ToolMessage,
+        *,
+        indent_level: int,
+        tool_call: dict[str, Any] | None = None,
+    ) -> None:
         """Store the latest tool output that has a richer full view."""
         remember = getattr(self.session, "remember_tool_output", None)
         if not callable(remember):
@@ -1443,13 +1454,14 @@ class MessageDispatcher:
             return
 
         tool_call_id = str(getattr(message, "tool_call_id", None) or getattr(message, "id", None) or "")
-        tool_name = str(getattr(message, "name", None) or "tool")
+        tool_name = str((tool_call or {}).get("name") or getattr(message, "name", None) or "tool")
         remember(
             ToolOutputEntry(
                 tool_call_id=tool_call_id,
                 tool_name=tool_name,
                 preview_content=display.preview_content,
                 full_content=display.full_content,
+                tool_args=dict((tool_call or {}).get("args") or {}),
                 indent_level=indent_level,
                 origin_label=(self._SUBAGENT_ORIGIN_LABEL if indent_level > 0 else None),
                 duration=self._extract_tool_execution_duration(message),

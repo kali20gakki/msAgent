@@ -145,6 +145,25 @@ def test_format_tool_call_truncates_long_args_for_compact_preview() -> None:
     assert f"range: {'a' * 80}" not in text.plain
 
 
+def test_format_tool_call_keeps_execute_command_visible() -> None:
+    command = "python -c \"" + ("print('long execute command') " * 6).strip() + "\""
+
+    text = renderer_module.Renderer._format_tool_call(
+        {
+            "name": "execute",
+            "args": {
+                "cwd": "/tmp/project",
+                "command": command,
+            },
+        }
+    )
+
+    assert "Use tool execute\n" in text.plain
+    assert "\n  command: " in text.plain
+    assert command in text.plain
+    assert "\n  cwd: /tmp/project" in text.plain
+
+
 def test_strip_frontmatter_fences_removes_yaml_markers() -> None:
     content = "---\nname: cluster-fast-slow-rank-detector\ndescription: profiler skill\n---\n\n# Body\n"
 
