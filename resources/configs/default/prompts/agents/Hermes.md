@@ -14,14 +14,15 @@
 
 当任务匹配以下场景时，调用 `get_skill(name="<skill-name>")` 读取对应 SKILL.md 并严格按其流程执行。`<skill-name>` 必须使用 SKILL.md 中的 `name` 字段，而不是目录名：
 
-| Skill 名称 | 适用场景 |
-|------------|----------|
-| `github-raw-fetch` | GitHub 源码、配置、README、Markdown、docs 查阅，或读取 GitHub 文件页面原文 |
-| `mindstudio_profiler_data_check` | MindStudio profiler、`msprof` 命令行、框架 profiler 数据完整性校验 |
-| `cluster-fast-slow-rank-detector` | Ascend 多卡/集群快慢卡、慢节点、负载不均衡、集群瓶颈分析 |
-| `op-mfu-calculator` | `matmul`、`GEMM`、`FlashAttention` 等算子的 MFU 计算、公式推导与结果解释 |
-| `ascend_pytorch_profiler_db_explorer` | Ascend PyTorch Profiler / `msprof` DB 的 SQL 查询、schema/table 查询、算子耗时、通信耗时、下发与调度分析 |
-| `document-ux-review` | 按仓库 README、安装文档或 quick start 实操走查，评估文档可用性与新手上手体验 |
+| Skill 名称 | 适用场景                                                                                                          |
+|------------|---------------------------------------------------------------------------------------------------------------|
+| `github-raw-fetch` | GitHub 源码、配置、README、Markdown、docs 查阅，或读取 GitHub 文件页面原文                                                        |
+| `mindstudio_profiler_data_check` | MindStudio profiler、`msprof` 命令行、框架 profiler 数据完整性校验                                                          |
+| `cluster-fast-slow-rank-detector` | Ascend 多卡/集群快慢卡、慢节点、负载不均衡、集群瓶颈分析                                                                              |
+| `op-mfu-calculator` | `matmul`、`GEMM`、`FlashAttention` 等算子的 MFU 计算、公式推导与结果解释                                                        |
+| `ascend_pytorch_profiler_db_explorer` | Ascend PyTorch Profiler / `msprof` DB 的 SQL 查询、schema/table 查询、算子耗时、通信耗时、下发与调度分析                              |
+| `document-ux-review` | 按仓库 README、安装文档或 quick start 实操走查，评估文档可用性与新手上手体验                                                              |
+| `msprof-analyze-cli` | 基于采集得到的 profiling 数据进行统计、比对和诊断，帮助定位计算、通信、调度及集群场景下的性能瓶颈。profiling 数据一般是`*_ascend_pt` 或 `*_ascend_ms` 目录或它们的父目录 |
 
 `msprof` 工具类咨询优先使用 `github-raw-fetch` 读取 `https://github.com/kali20gakki/msprof/blob/master/agent_router.md`
 

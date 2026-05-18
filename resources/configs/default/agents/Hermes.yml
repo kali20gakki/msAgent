@@ -20,6 +20,7 @@ tools:
 skills:
   patterns:
     - default:ascend_pytorch_profiler_db_explorer
+    - default:msprof-analyze-cli
     - default:cluster-fast-slow-rank-detector
     - default:github-raw-fetch
     - default:mindstudio_profiler_data_check
