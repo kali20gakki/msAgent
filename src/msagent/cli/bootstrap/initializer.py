@@ -98,8 +98,15 @@ class Initializer:
     async def update_default_agent(self, agent_name: str, working_dir: Path) -> None:
         await self.get_registry(working_dir).update_default_agent(agent_name)
 
+    async def add_agent_skill_pattern(self, agent_name: str, skill_pattern: str, working_dir: Path) -> bool:
+        return await self.get_registry(working_dir).add_agent_skill_pattern(agent_name, skill_pattern)
+
     async def load_user_memory(self, working_dir: Path) -> str:
         return await self.get_registry(working_dir).load_user_memory()
+
+    def resolve_skills_dirs(self, working_dir: Path) -> list[Path]:
+        """Resolve skill search directories in precedence order."""
+        return self._resolve_skills_dirs(working_dir)
 
     @asynccontextmanager
     async def get_checkpointer(self, agent: str, working_dir: Path) -> AsyncIterator[BaseCheckpointSaver]:

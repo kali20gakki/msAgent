@@ -1,5 +1,6 @@
 """Handlers for executing specific commands and workflows."""
 
+from msagent.cli.handlers.add_skill import AddSkillHandler
 from msagent.cli.handlers.agents import AgentHandler
 from msagent.cli.handlers.compress import CompressionHandler
 from msagent.cli.handlers.interrupts import InterruptHandler
@@ -11,6 +12,7 @@ from msagent.cli.handlers.threads import ThreadsHandler
 from msagent.cli.handlers.tools import ToolsHandler
 
 __all__ = [
+    "AddSkillHandler",
     "AgentHandler",
     "CompressionHandler",
     "InterruptHandler",

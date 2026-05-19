@@ -50,6 +50,7 @@ def test_command_dispatcher_removes_resume_and_replay_commands() -> None:
     assert "/graph" not in dispatcher.commands
     assert "/offload" in dispatcher.commands
     assert "/threads" in dispatcher.commands
+    assert "/add-skill" in dispatcher.commands
 
 
 def test_command_dispatcher_offload_delegates_to_compression_handler(monkeypatch) -> None:

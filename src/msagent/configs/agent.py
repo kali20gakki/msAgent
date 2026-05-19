@@ -1,21 +1,3 @@
-#!/usr/bin/python3
-# -*- coding: utf-8 -*-
-# -------------------------------------------------------------------------
-# Copyright (c) 2026 Huawei Technologies Co., Ltd.
-# This file is part of the MindStudio project.
-#
-# MindStudio is licensed under Mulan PSL v2.
-# You can use this software according to the terms and conditions of the Mulan PSL v2.
-# You may obtain a copy of Mulan PSL v2 at:
-#
-#    http://license.coscl.org.cn/MulanPSL2
-#
-# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
-# EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
-# MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-# See the Mulan PSL v2 for more details.
-# -------------------------------------------------------------------------
-
 """Agent configuration classes."""
 
 from __future__ import annotations
@@ -545,6 +527,55 @@ class BatchAgentConfig(BaseBatchConfig):
                 agent["default"] = agent.get("name") == agent_name
             yaml_str = yaml.dump(data, default_flow_style=False, sort_keys=False)
             await asyncio.to_thread(file_path.write_text, yaml_str, encoding="utf-8")
+
+    @staticmethod
+    async def add_agent_skill_pattern(
+        file_path: Path,
+        agent_name: str,
+        skill_pattern: str,
+        dir_path: Path | None = None,
+    ) -> bool:
+        def add_pattern(data: dict) -> bool:
+            if data.get("name") != agent_name:
+                return False
+
+            skills_cfg = data.setdefault("skills", {})
+            patterns = skills_cfg.setdefault("patterns", [])
+            if skill_pattern in patterns:
+                return False
+            patterns.append(skill_pattern)
+            return True
+
+        if dir_path and dir_path.exists():
+            agent_file = dir_path / f"{agent_name}.yml"
+            if agent_file.exists():
+                yaml_content = await asyncio.to_thread(agent_file.read_text, encoding="utf-8")
+                data = yaml.safe_load(yaml_content) or {}
+                changed = add_pattern(data)
+                if changed:
+                    yaml_str = yaml.dump(data, default_flow_style=False, sort_keys=False)
+                    await asyncio.to_thread(agent_file.write_text, yaml_str, encoding="utf-8")
+                return changed
+
+        if file_path.exists():
+            yaml_content = await asyncio.to_thread(file_path.read_text, encoding="utf-8")
+            data = yaml.safe_load(yaml_content) or {}
+            agents: list[dict] = data.get("agents", [])
+            changed = False
+            for agent in agents:
+                if agent.get("name") == agent_name:
+                    skills_cfg = agent.setdefault("skills", {})
+                    patterns = skills_cfg.setdefault("patterns", [])
+                    if skill_pattern not in patterns:
+                        patterns.append(skill_pattern)
+                        changed = True
+                    break
+            if changed:
+                yaml_str = yaml.dump(data, default_flow_style=False, sort_keys=False)
+                await asyncio.to_thread(file_path.write_text, yaml_str, encoding="utf-8")
+            return changed
+
+        return False
 
     @classmethod
     async def from_yaml(

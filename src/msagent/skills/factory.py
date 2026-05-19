@@ -24,6 +24,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import yaml  # type: ignore[import-untyped]
+from yaml import YAMLError  # type: ignore[import-untyped]
 
 from msagent.core.constants import DEFAULT_CONFIG_DIR
 
@@ -110,20 +111,37 @@ class SkillFactory:
         return cls.get_packaged_skills_dir()
 
     @staticmethod
+    def parse_frontmatter(content: str) -> dict[str, object]:
+        frontmatter: dict[str, object] = {}
+        body = content.lstrip()
+        if not body.startswith("---"):
+            return frontmatter
+
+        parts = body.split("---", 2)
+        if len(parts) < 3:
+            raise ValueError("Invalid frontmatter: missing closing delimiter")
+
+        try:
+            parsed = yaml.safe_load(parts[1]) or {}
+        except YAMLError as exc:
+            raise ValueError(f"Invalid frontmatter: {exc}") from exc
+
+        if not isinstance(parsed, dict):
+            raise ValueError("Invalid frontmatter: expected a YAML mapping")
+
+        return parsed
+
+    @staticmethod
     def _load_skill_file(skill_file: Path, *, base_dir: Path) -> Skill | None:
         try:
             content = skill_file.read_text(encoding="utf-8")
         except Exception:
             return None
 
-        frontmatter: dict[str, object] = {}
-        body = content.lstrip()
-        if body.startswith("---"):
-            parts = body.split("---", 2)
-            if len(parts) >= 3:
-                parsed = yaml.safe_load(parts[1]) or {}
-                if isinstance(parsed, dict):
-                    frontmatter = parsed
+        try:
+            frontmatter = SkillFactory.parse_frontmatter(content)
+        except ValueError:
+            return None
 
         name = str(frontmatter.get("name") or skill_file.parent.name).strip()
         description = str(frontmatter.get("description") or "").strip()

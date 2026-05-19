@@ -6,6 +6,7 @@ from collections.abc import Callable
 
 from msagent.cli.bootstrap.initializer import initializer
 from msagent.cli.handlers import (
+    AddSkillHandler,
     AgentHandler,
     CompressionHandler,
     MCPHandler,
@@ -28,6 +29,7 @@ class CommandDispatcher:
         """Initialize with reference to CLI session."""
         self.session = session
         self.commands = self._register_commands()
+        self.add_skill_handler = AddSkillHandler(session)
         self.agent_handler = AgentHandler(session)
         self.model_handler = ModelHandler(session)
         self.mcp_handler = MCPHandler(session)
@@ -47,6 +49,7 @@ class CommandDispatcher:
             "/threads": self.cmd_threads,
             "/tools": self.cmd_tools,
             "/skills": self.cmd_skills,
+            "/add-skill": self.cmd_add_skill,
             "/mcp": self.cmd_mcp,
             "/offload": self.cmd_offload,
             "/tool-output": self.cmd_tool_output,
@@ -117,6 +120,10 @@ class CommandDispatcher:
     async def cmd_skills(self, args: list[str]) -> None:
         """Browse skills or run a specific skill via `/skills <skill> [task...]`."""
         await self.skills_handler.handle(initializer.cached_agent_skills, args)
+
+    async def cmd_add_skill(self, args: list[str]) -> None:
+        """Install a custom skill from a local path via `/add-skill <path>`."""
+        await self.add_skill_handler.handle(args)
 
     async def cmd_mcp(self, args: list[str]) -> None:
         """Handle MCP management command."""
