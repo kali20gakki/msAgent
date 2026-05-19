@@ -25,6 +25,7 @@
 | [`github-raw-fetch`](./github-raw-fetch/SKILL.md) | 读取 GitHub 仓库中的源码、配置、README、Markdown 与 docs；普通文件自动将 `blob` 链接转换为 raw，docs 场景会先读取同仓库同 `ref` 的 `agent_router.md` 再定位真实路径 | GitHub `blob` / raw 文件链接，或“读取某仓库某篇 docs”这类请求                                             | 支持网络抓取的 Agent / 工具，推荐 `curl` / `curl.exe`                              |
 | [`ascendc-operator-performance-optim`](./ascendc-operator-performance-optim/SKILL.md) | 基于 msprof op 性能数据诊断 AscendC 算子性能瓶颈，给出代码优化建议，并参考 AscendC 高阶 API 文档生成优化后的代码                             | msprof op 性能数据目录、算子源码路径、AscendC API 文档链接                                                 | Python3                                                                |
 | [`msot-msopprof-operator-profiler`](./msot-msopprof-operator-profiler/SKILL.md) | 基于 msprof op 工具深度分析算子性能瓶颈，给出算子信息、关键性能数据、TOP5性能瓶颈、TOP5优化建议与报告总结，提升开发者算子性能优化效率  | 算子可执行程序、算子msprof op 性能数据目录                                                               | Python3                                                                |
+| [`nan-overflow-detection`](./nan-overflow-detection/SKILL.md) | 多卡分布式训练 loss/gnorm 精度溢出检测与根因追溯，跨 rank 定位源卡并追溯根因算子                                              | 包含 rank 子目录（`rank0/`, `rank1/`, ...）的 step0 目录                                          | Python3                                                                |
 
 ## 目录结构
 
@@ -58,6 +59,11 @@
 │   └── scripts/
 │       ├── offline_parse_mindspore.py
 │       └── offline_parse_pytorch.py
+├── nan-overflow-detection/
+│   ├── SKILL.md
+│   └── scripts/
+│       ├── cross_rank_analyzer.py
+│       └── single_rank_tracer.py
 ├── op-mfu-calculator/
 │   └── SKILL.md
 ```

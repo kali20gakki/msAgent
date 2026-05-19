@@ -72,4 +72,3 @@
 export MSAGENT_LOG_LEVEL=DEBUG
 msagent -v
 ```
-

@@ -18,6 +18,7 @@ tools:
 skills:
   patterns:
     - default:rl-consistency-analysis
+    - default:nan-overflow-detection
   use_catalog: false
 compression:
   auto_compress_enabled: true

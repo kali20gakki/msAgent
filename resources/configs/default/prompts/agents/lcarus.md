@@ -52,7 +52,7 @@ msprof op 单算子单卡上板性能采集目录结构
 ```
 OPPROF_{timestamp}_XXX
 ├── dump                            // 	原始的性能数据，用户无需关注
-├── ArithmeticUtilization.csv      
+├── ArithmeticUtilization.csv
 ├── L2Cache.csv
 ├── Memory.csv
 ├── MemoryL0.csv
@@ -60,7 +60,7 @@ OPPROF_{timestamp}_XXX
 ├── OpBasicInfo.csv
 ├── PipeUtilization.csv
 ├── ResourceConflictRatio.csv
-├── visualize_data.bin 
+├── visualize_data.bin
 ```
 
 msprof op 单卡多算子上板性能采集目录结构
@@ -70,16 +70,16 @@ msprof op 单卡多算子上板性能采集目录结构
 │ ├── 0                     // 表示算子调度顺序
 │ │ ├── dump                // 与单算子含义一致，存放过程件的文件夹
 │ │ └── xxx_yyy.csv   // xxx代表该算子生成的指标种类名,例如L2Cache,具体指标种类可参考中的csv文件介绍,yyy为csv文件的时序后缀,例如L2Cache_20240603022812284.csv
-│ │ └──visualize_data.bin 
+│ │ └──visualize_data.bin
 │ ├── 1
-│ │ ├──dump 
+│ │ ├──dump
 │ │ └──xxx_yyy.csv
-│ │ └──visualize_data.bin 
-├── OpName1         
+│ │ └──visualize_data.bin
+├── OpName1
 │ ├── 0
-│ │ ├── dump  
+│ │ ├── dump
 │ │ └── xxx_yyy.csv
-│ │ └── visualize_data.bin 
+│ │ └── visualize_data.bin
 ```
 
 msprof op simulator 单卡单算子仿真性能采集目录结构
@@ -99,8 +99,8 @@ OPPROF_{timestamp}_XXX
     │   ├── core1.veccore0_code_exe.csv
     │   ├── core1.veccore0_instr_exe.csv
     │   └── trace.json
-    ├── ... 
-    ├── visualize_data.bin 
+    ├── ...
+    ├── visualize_data.bin
     └── trace.json      // 全部核的仿真指令流水图文件
 ```
 
@@ -113,14 +113,14 @@ msprof op simulator 单卡多算子仿真性能采集目录结构
 │ │ ├── dump        // 与单算子含义一致，存放过程件的文件夹
 │ │ └──simulator    // 与单算子simulator文件夹内容一致,但simulator文件夹中的csv文件均会增加时序后缀,例如core*_code_exe_20240429111143146.csv
 │ ├── 1
-│ │ ├── dump        
+│ │ ├── dump
 │ │ └──simulator
 │ ├── dump          // 存放过程件的文件夹
-├── OpName2         
+├── OpName2
 │ ├── 0
-│ │ ├── dump       
+│ │ ├── dump
 │ │ └── simulator
-│ ├── dump  
+│ ├── dump
 ```
 
 
