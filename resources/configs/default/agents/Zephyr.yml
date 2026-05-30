@@ -20,6 +20,10 @@ skills:
   patterns:
     - default:msmodelslim-model-adapt
     - default:msmodelslim-model-analysis
+    - default:msmodelslim-adapter-verification
+    - default:msmodelslim-layer-wise-quantization
+    - default:msmodelslim-model-dequant
+    - default:msmodelslim-quick-quant
   use_catalog: false
 compression:
   auto_compress_enabled: true

@@ -13,6 +13,7 @@
 - [ ] `generate_model_visit` 与 `generate_model_forward` 遍历的层一致
 - [ ] 遍历顺序一致
 - [ ] 层间输入输出传递一致
+- [ ] 检查 tokenizer 的 `pad_token` / `pad_token_id`：若为 `None`，已在适配器中重写 `_load_tokenizer` 并设置 `pad_token = eos_token`
 
 ## 注册检查
 

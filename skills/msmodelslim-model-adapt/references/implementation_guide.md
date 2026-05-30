@@ -33,22 +33,22 @@ msmodelslim/model/<model_type>/
 
 - **推荐继承**：`TransformersModel + ModelSlimPipelineInterfaceV1`（`ModelInfoInterface` 可选但建议）
 - **必须实现**（5 个）：`handle_dataset`、`init_model`、`generate_model_visit`、`generate_model_forward`、`enable_kv_cache`
-- **模板中常见辅助方法**（非框架强制，但多数模型需要）：`generate_decoder_layer`、`_decoder_layer_prefix`、`_load_decoder_if_not_exist`、`_create_model_instance`
+- **模板中常见辅助方法**（非框架强制）：`_create_model_instance` 等模型初始化辅助函数
 
 ### VLM（多模态理解，仅图文理解）
 
 - **推荐继承**：`VLMBaseModelAdapter + ModelSlimPipelineInterfaceV1`（`ModelInfoInterface` 可选但建议）
 - **必须实现**（5 个）：`handle_dataset`、`init_model`、`generate_model_visit`、`generate_model_forward`、`enable_kv_cache`
-- **模板中常见辅助方法**（非框架强制，但多数模型需要）：`generate_decoder_layer`、`_load_decoder_if_not_exist`、`_create_model_instance`
+- **模板中常见辅助方法**（非框架强制）：`_create_model_instance` 等模型初始化辅助函数
 
 ## 特殊情况（需要单独处理）
 
 ### LLM 特殊情况
 
 - **decoder 路径不一致**：不一定是 `model.layers`，也可能是 `model.decoder.layers` 或其他路径；必须改 `_decoder_layer_prefix`。
-- **层构造参数差异**：有些 block 构造器不接收 `layer_idx`，需改 `_load_decoder_if_not_exist` 的实例化方式。
 - **MoE packed 权重**：若为 3D packed experts，需先 unpack，再替换为线性层专家模块。
 - **非标准配置字段**：若无 `num_hidden_layers` 或字段名不同，`init_model` 要按目标 config 改写。
+- **tokenizer 无 pad_token**：若 `tokenizer.pad_token` / `pad_token_id` 为 `None`，Step2 全回退量化会在 `padding=True` 时报错。需在适配器中重写 `_load_tokenizer`，将 `pad_token` 回退为 `eos_token`（或模型官方推荐 pad token）。
 
 ### VLM 特殊情况
 
@@ -73,7 +73,7 @@ msmodelslim/model/<model_type>/
 - **职责**：初始化并返回可参与量化流程的模型实例。
 - **输入**：目标设备（NPU/CPU）。
 - **输出**：`nn.Module`（`eval()` 状态）。
-- **实现建议**：按模型真实结构加载；大模型可采用分层/懒加载，确保后续 visit/forward 可访问到目标层。
+- **实现建议**：按模型真实结构加载，确保后续 visit/forward 可访问到目标层。
 - **完成判定**：返回模型后，`generate_model_visit` 能遍历目标量化层，且前向可执行。
 
 #### 3) `generate_model_visit(model) -> Generator[ProcessRequest, Any, None]`
@@ -122,7 +122,7 @@ msmodelslim/model/<model_type>/
 
 ### 4) MoE 融合结构优先按“unpack 后纯线性层”适配
 
-很多新模型的 MoE 使用融合/打包权重（常见为 3D 张量），而量化与逐层处理通常更适合 `nn.Linear` 形式的专家实现。
+很多新模型的 MoE 使用融合/打包权重（常见为 3D 张量），而量化流程通常更适合 `nn.Linear` 形式的专家实现。
 
 实现要求：
 - 先判断原始实现是否为 3D packed experts（不要假设所有 MoE 都一样）
@@ -135,3 +135,8 @@ msmodelslim/model/<model_type>/
 示例代码请参考：
 - `references/moe_unpacked_module_example.py`
 - `references/moe_unpacked_adapter_example.py`
+
+## 可选高阶特性
+
+逐层量化（按层加载/懒加载）相关实现、工作流与示例已迁移到独立 Skill：
+- `msmodelslim-layer-wise-quantization`
