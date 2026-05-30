@@ -54,6 +54,11 @@ description: 为 msModelSlim 适配流程注入反量化能力。先识别模型
 - 提供 `convert_*` 主转换函数（必须带可见进度条与异常提示）
 - 脚本只需覆盖当前模型确认的量化模式（可仅实现 per-block）
 - 将结果统一转换到 `torch.bfloat16`（或项目默认浮点 dtype）
+- 参数回写必须 dtype-safe（强约束）：
+  - 若原始权重存储 dtype 为 FP8，禁止直接将反量化得到的 BF16/F16 张量回写到该 FP8 存储；否则会发生静默类型回退
+  - 必须先将“原参数存储”提升到目标浮点 dtype（如 BF16），再执行赋值/拷贝
+  - 允许不同代码风格实现（原地改写或整体替换），但必须保证 dtype 与 device 一致
+  - 回写后必须有显式校验（断言或日志）确认最终参数 dtype 已是目标浮点类型，而非 FP8
 - 对 index 与 safetensors 不匹配场景给出 warning 并安全跳过
 - 进度条要求：
   - 必须使用 `tqdm`（或等价方案）显示转换进度，禁止仅打印日志让用户等待
@@ -79,6 +84,16 @@ def decode_fp8_per_block(weight: torch.Tensor, scale: torch.Tensor, block_size: 
     m, n = weight.shape
     scale_expanded = scale.repeat_interleave(block_size, dim=0).repeat_interleave(block_size, dim=1)[:m, :n]
     return (weight.float() * scale_expanded.float()).to(torch.bfloat16)
+```
+
+参数回写（通用伪代码）：
+
+```python
+dequant_weight = dequantize(fp8_weight, scale_info)   # dequant_weight: BF16/F16
+if original_param_storage_is_fp8:
+    promote_original_param_storage_to_target_float_dtype()
+assign_or_copy_with_device_dtype_alignment(dequant_weight)
+verify_param_dtype_is_target_float_dtype_not_fp8()
 ```
 
 可选工具脚本（用于判定权重/scale 形状）：
@@ -121,6 +136,7 @@ def init_model(...):
 - 校验接入：adapter 初始化路径已触发自动转换函数
 - 校验回退：非量化权重或不匹配键时不报致命错误
 - 校验模式：输出明确 `per-block` 或 `per-channel` 判定结果
+- 校验赋值安全：确认未出现“BF16 copy_ 到 FP8 存储后仍为 FP8”的回退问题
 
 ## 阻塞话术（必须原样遵循语义）
 
