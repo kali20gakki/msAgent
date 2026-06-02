@@ -60,7 +60,7 @@ description:
   - 详见：[适配器实现指南](references/implementation_guide.md)
 
 ### 4. 注册与安装
-- 在 `config/config.ini` 注册模型与入口，并执行 `bash install.sh`。
+- 在 `config/config.ini` 注册模型与入口，并执行 `bash install.sh` 安装msModelSlim。
 - 详见：[适配器注册指南](references/registration_guide.md)
 
 ### 5. 功能性验证（独立 Skill）

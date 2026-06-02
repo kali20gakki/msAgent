@@ -1,28 +1,32 @@
 # Zephyr 模型量化
 
-`Zephyr` 是面向 msModelSlim 模型分析与适配场景的 Agent，负责协助用户完成接入量化/压缩流程前的可行性评估、实现来源与结构性风险排查，并在分析通过后按约定完成模型适配器（Model Adapter）的开发与验证。
+`Zephyr` 是面向 msModelSlim 模型分析与适配场景的 Agent，负责协助用户完成新模型接入量化/压缩流程前的可行性评估、实现来源与结构性风险排查，并在分析通过后按约定完成模型适配器（Model Adapter）的开发与验证。
 
 ## Agent 定位
 
-- 面向大语言模型 (LLM) 和视觉语言模型 (VLM) 的 msModelSlim 适配场景
+- 面向大语言模型 (LLM) 的 msModelSlim 适配场景
 - 聚焦接入前可行性分析、模型结构解析、适配器代码生成及关键验证
 - 适合处理基础 Transformers 模型适配，以及应对 MoE packed 权重拆解、超大模型逐层加载等复杂模型接入需求
 
 ## 核心能力
 
 - 评估模型实现来源、结构特征及量化接入的可行性风险
-- 为 Decoder-only LLM 或理解类 VLM 创建基于 Transformers 的适配器
+- 为 Decoder-only LLM 创建基于 Transformers 的适配器
 - 为超大模型提供逐层加载（懒加载）等解决方案以规避内存瓶颈
 - 严格遵循门禁规则与多步验证流程，确保结论由实际证据（配置、日志、命令输出）支撑
+
+## 环境准备
+
+- 请准备推理运行环境，推荐使用 vllm-ascend 镜像，使用 Docker 安装vllm-ascend指导：[vllm-ascend安装](https://docs.vllm.ai/projects/vllm-ascend-cn/zh-cn/latest/installation.html#set-up-using-docker)，推荐在容器内安装msagent并使用Zephyr
+- 请根据模型安装合适的transformers版本
 
 ## 推荐使用方式
 
 - 开始前请先下载 [msModelSlim 代码仓](https://gitcode.com/Ascend/msmodelslim)
 - 模型权重请用户自行准备并下载到本地可访问路径，再将模型名称或路径提供给 Zephyr
 - 在开始适配前，提供模型名称或路径，让 Zephyr 先进行模型分析和风险评估
-- 如果明确模型涉及 MoE，或在适配中由于规模过大导致 OOM，请直接向 Zephyr 提出“需要进行 MoE 权重拆解”或“实现按层加载/逐层加载”的诉求
-- 明确当前环境和任务类型，确保仅在风险评估通过的前提下，再让 Zephyr 生成适配器代码并进行验证测试
-- Agent生成模型适配器后，请重新安装msModelslim，具体操作可[安装指导](https://gitcode.com/Ascend/msmodelslim/blob/master/docs/zh/getting_started/install_guide.md)，安装完成后使用一键量化生成量化权重，具体操作可参考[一键量化使用指导](https://gitcode.com/Ascend/msmodelslim/blob/master/docs/zh/feature_guide/quick_quantization_v1/usage.md)
+- Agent生成模型适配器后，请重新源码安装msModelSlim，执行install.sh安装脚本，具体操作可参考[安装指导](https://gitcode.com/Ascend/msmodelslim/blob/master/docs/zh/getting_started/install_guide.md#23-%E6%BA%90%E7%A0%81%E5%AE%89%E8%A3%85)，安装完成后使用一键量化生成量化权重，具体操作可参考[一键量化使用指导](https://gitcode.com/Ascend/msmodelslim/blob/master/docs/zh/feature_guide/quick_quantization_v1/usage.md)
+- 若量化过程出现报错，可以将报错信息复制给agent，由agent定位并解决问题
 - 推荐使用以下量化配置生成w8a8量化权重
 ```yaml
 apiversion: modelslim_v1
@@ -55,6 +59,7 @@ spec:
 
 ## 使用注意
 - 当前生成的模型适配器仅支持LLM的w8a8、LLM结构中的MOE的w4a8量化等线性层量化，暂不支持离群值抑制系列算法和FA3量化等复杂算法的适配。
+- Agent在模型分析过程若发现较难适配的风险点，会中断开发适配器，提前告知风险，需要用户确认风险，并告知继续开发适配器后，才会继续开发模型适配器。
 
 ## 典型使用场景
 
