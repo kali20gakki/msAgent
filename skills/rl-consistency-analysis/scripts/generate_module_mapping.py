@@ -10,7 +10,9 @@ from typing import Any, Dict, List, Optional, Tuple
 
 
 EPS = 1e-12
-
+MODULE_PREFIX_PATTERN = r"^Module(\.\d+|\.module)*\.module\."
+MODEL_PREFIX_PATTERN = r"^Module(\.\d+|\.model)*\.model\."
+MODULE_OR_MODEL_PREFIX_PATTERN = f"{MODULE_PREFIX_PATTERN}|{MODEL_PREFIX_PATTERN}"
 
 def load_json(path: Path) -> Dict[str, Any]:
     with path.open("r", encoding="utf-8") as f:
@@ -34,9 +36,9 @@ def detect_side(train_path: Path, rollout_path: Path, train_dump: Dict[str, Any]
         if "rollout" in p:
             s -= 2
         keys = [k for k in dump.get("data", {}).keys() if isinstance(k, str)]
-        if any(k.startswith("Module.model") for k in keys):
+        if any(re.match(MODEL_PREFIX_PATTERN, k) for k in keys):
             s -= 1
-        if any(k.startswith("Module.module") for k in keys):
+        if any(re.match(MODULE_PREFIX_PATTERN, k) for k in keys):
             s += 1
         return s
 
@@ -68,10 +70,8 @@ def infer_block(key: str) -> str:
 def fragment_for_output2(key: str) -> str:
     """Strip Module / layers.N / trace suffixes; keep native naming (no train↔rollout canonicalization)."""
     s = key
-    for p in ("Module.model.", "Module.module.module.", "Module.module."):
-        if s.startswith(p):
-            s = s[len(p) :]
-            break
+    # 匹配开头所有的 Module + 任意层 数字/module|model 组合，全部替换为空
+    s = re.sub(MODULE_OR_MODEL_PREFIX_PATTERN, "", s)
     s = re.sub(r"\.layers\.\d+\.", ".", s)
     s = re.sub(r"^layers\.\d+\.", "", s)
     s = s.strip(".")
@@ -93,8 +93,7 @@ def normalize_key_for_match(key: str) -> str:
         return key  # unique string, won't collide with any rollout norm
     s = key
     # Drop varying prefixes
-    for p in ("Module.model.", "Module.module.module.", "Module.module."):
-        s = s.replace(p, "")
+    s = re.sub(MODULE_OR_MODEL_PREFIX_PATTERN, "", s)
     # Strip decoder. prefix (train: decoder.layers.i... vs rollout: layers.i...)
     s = re.sub(r"^decoder\.", "", s)
     # Flatten core_attention. nesting (train: core_attention.indexer.X vs rollout: indexer.X)
