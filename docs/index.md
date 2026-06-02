@@ -1,369 +1,71 @@
-<h1 align="center">🚀 MindStudio-Agent </h1>
+# MindStudio-Agent 文档
 
-<p align="center"><strong>面向 Ascend NPU 场景的一站式调试调优 Agent</strong></p>
+MindStudio-Agent 是面向 Ascend NPU 场景的一站式调试调优 Agent。中文文档统一维护在 `docs/zh/` 下，按新用户上手、日常使用、Agent 能力和开发维护四类组织。
 
-<p align="center">
-  <img src="https://raw.githubusercontent.com/luelueFLY/images/main/img/msagent-hello.gif" alt="msAgent">
-</p>
+```{toctree}
+:maxdepth: 2
+:caption: 快速入门
+
+zh/getting_started/install_guide
+zh/getting_started/quick_start
+```
+
+```{toctree}
+:maxdepth: 2
+:caption: Agent 指南
+
+zh/agent_guide/Hermes
+zh/agent_guide/Accuracy
+zh/agent_guide/Zephyr
+zh/agent_guide/Minos
+zh/agent_guide/Icarus
+```
+
+```{toctree}
+:maxdepth: 2
+:caption: 用户指南
+
+zh/user_guide/faq
+zh/user_guide/configuration-and-extension
+zh/user_guide/document-ux-review
+zh/user_guide/context-compaction-guide
+zh/user_guide/retry-middleware-guide
+zh/user_guide/agent-tool-skill-filter-rules
+```
+
+```{toctree}
+:maxdepth: 2
+:caption: 开发指南
+
+zh/developer_guide/contributing
+zh/developer_guide/build-and-package
+zh/developer_guide/version-and-compatibility
+zh/developer_guide/arch_overview
+zh/developer_guide/tag-release
+zh/developer_guide/readthedocs-local-build
+```
 
 ```{toctree}
 :maxdepth: 1
-:hidden:
-:titlesonly:
-:caption: 首页
+:caption: 法律与声明
 
-MindStudio Agent <self>
+zh/legal/index
+zh/legal/SECURITY
+zh/legal/DISCLAIMER
 ```
 
-```{toctree}
-:maxdepth: 2
-:hidden:
-:titlesonly:
-:caption: 使用指南
+## 内置 Agent 与能力分工
 
-agents/Hermes
-agents/Accuracy
-agents/Zephyr
-agents/Minos
-faq
-```
+| 名称 | 领域定位 | 说明 |
+|---|---|---|
+| **Hermes** | 性能调优 | 聚焦 Ascend Profiling 分析，覆盖单卡、多卡、集群等场景，擅长快慢卡、慢节点、MFU、通信瓶颈、算子热点、下发调度等性能问题定位与优化建议。详见 [Hermes 说明](zh/agent_guide/Hermes.md)。 |
+| **Accuracy** | 精度调优 | 聚焦 Ascend 精度分析与优化，覆盖 RL 训推一致性分析、loss / gnorm NaN 分析等常见精度问题。详见 [Accuracy 说明](zh/agent_guide/Accuracy.md)。 |
+| **Zephyr** | 模型量化 | 聚焦 msModelSlim 量化与压缩场景，协助完成模型适配可行性、结构风险评估与基础适配器开发。详见 [Zephyr 说明](zh/agent_guide/Zephyr.md)。 |
+| **Minos** | 文档体验与代码审查 | 聚焦 README 走查、安装流程验证、Quick Start 体验、新手 onboarding、文档可用性评估，以及 GitCode PR 审查与评审意见整理。详见 [Minos 说明](zh/agent_guide/Minos.md)。 |
+| **Icarus** | 算子调优 | 聚焦 Ascend NPU 算子性能调优，包括算子性能深度分析、端到端算子性能优化，辅助提升调优效率并降低开发难度。详见 [Icarus 说明](zh/agent_guide/Icarus.md)。 |
 
-```{toctree}
-:maxdepth: 2
-:hidden:
-:titlesonly:
-:caption: 开发指南
+## 推荐阅读路径
 
-build-and-package
-configuration-and-extension
-agent-tool-skill-filter-rules
-context-compaction-guide
-retry-middleware-guide
-```
+新用户建议先阅读 [入门安装指南](zh/getting_started/install_guide.md)，完成安装后再按 [快速入门指导](zh/getting_started/quick_start.md) 配置模型并启动会话。
 
-
-## 📢 最新消息
-
-- 2026-04-27： `v26.1.0.alpha1`发布：新增`Accuracy` / `Zephyr` Agent，辅助精度调优、模型量化。
-- 2026-04-08：`v0.1.3` 发布，完成 DeepAgents 重构更快更好用，并增强 `Hermes` / `Minos` Agent，新增 `msagent web` 能力。
-- 2026-03-19：`mindstudio-agent` 已发布到 PyPI，推荐优先使用 `pip install -U mindstudio-agent` 安装
-
-## 🤖 内置 Agent 与能力分工
-
-| 形象                                                           | 名称           | 领域定位                                                                                          | 说明                                 |
-|--------------------------------------------------------------|--------------|-----------------------------------------------------------------------------------------------|------------------------------------|
-| <img src="./images/Hermes.png" alt="Hermes" width="120">     | **Hermes**   | 性能调优：聚焦 Ascend Profiling 分析，覆盖单卡、多卡、集群等场景，擅长快慢卡、慢节点、MFU、通信瓶颈、算子热点、下发调度等性能问题定位与优化建议。           | [Hermes说明](./agents/Hermes.md)     |
-| <img src="./images/Accuracy.png" alt="Accuracy" width="120"> | **Accuracy** | 精度调优：聚焦Ascend精度分析与优化，覆盖单卡，多卡，集群等场景，可处理RL训推一致性分析，loss/gnorm NaN分析等常见精度问题。                      | [Accuracy说明](./agents/Accuracy.md) |
-| <img src="./images/Zephyr.jpg" alt="Minos" width="120">      | **Zephyr**   | 模型量化：聚焦 msModelSlim 量化与压缩场景，协助完成模型适配可行性与结构风险评估，辅助完成基础适配器开发。                                   | [Zephyr说明](./agents/Zephyr.md)     |
-| <img src="./images/Minos.png" alt="Minos" width="120">       | **Minos**    | 文档体验与代码审查辅助：聚焦 README 走查、安装流程验证、Quick Start 体验、新手 onboarding、文档可用性评估，以及 GitCode PR 审查与评审意见整理。 | [Minos说明](./agents/Minos.md)       |
-
----
-
-## ⚡ 快速上手
-
-### 1) 🧰 准备环境
-
-- Python `3.11+`
-- 推荐使用 `uv`
-- 至少准备一个可用的 LLM API Key
-- glibc >= 2.34 (`msprof-mcp` 的 `trace_processor` 二进制依赖)
-
-### 2) 📦 安装
-
-推荐优先使用 **PyPI 安装**。如果你需要跟踪最新源码、参与开发，或同步最新内置 Skills，再使用 **源码运行** 方式。
-
-说明：
-
-- 下文中的 `msagent` 默认指已安装的命令行入口
-- 如果采用源码运行，请将示例中的 `msagent` 替换为 `uv run msagent`
-
-#### 方式一：PyPI 安装
-
-```bash
-pip install -U mindstudio-agent
-```
-
-#### 方式二：源码运行（开发 / 跟踪最新代码）
-
-拉取源码并进入目录：
-
-```bash
-git clone https://gitcode.com/Ascend/msagent.git
-cd msagent
-```
-
-源码仓库已直接包含内置 Skills，无需额外同步子模块。
-
-如果你只需要使用当前仓库锁定的 Skills 版本，可以跳过这一步。
-
-安装依赖并启动：
-
-```bash
-uv sync
-uv run msagent
-```
-
-#### 常用命令
-
-检查版本：
-
-```bash
-msagent --version
-```
-
-开启详细日志：
-
-```bash
-msagent -v
-```
-
-启用后日志会写入当前工作目录下的 `./.msagent/logs/app.log`，同时终端会提示日志文件位置。
-
-#### 日志级别环境变量
-
-通过 `MSAGENT_LOG_LEVEL` 环境变量可调整日志详细程度，默认值为 `INFO`：
-
-```bash
-# 调试模式，记录最详细日志
-export MSAGENT_LOG_LEVEL=DEBUG
-msagent -v
-```
-
-支持的级别从低到高依次为：`DEBUG` < `INFO` < `WARNING` < `ERROR` < `CRITICAL`
-
-### 3) 🔐 配置 LLM
-
-当前 `config` 子命令直接支持的 Provider 是：`openai`、`anthropic`、`google`。
-
-选型建议：
-
-- OpenAI 兼容接口：使用 `openai`
-- Anthropic 兼容接口：使用 `anthropic`
-- Google / Gemini 接口：使用 `google`
-
-对于用户自部署或经由网关转发的服务，不再单独区分 `custom` provider；请根据接口协议兼容性复用上述三种 provider，并通过 `--llm-base-url` 指定自定义服务地址。
-
-下面命令使用 Linux / macOS 的环境变量写法；Windows CMD 请改成 `set KEY=value`，PowerShell 请改成 `$env:KEY = "value"`。
-
-#### OpenAI 兼容接口
-
-以 DeepSeek `deepseek-chat` 为例：
-
-```bash
-export OPENAI_API_KEY="your-key"
-msagent config --llm-provider openai --llm-base-url "https://api.deepseek.com/v1" --llm-model "deepseek-chat"
-```
-
-#### 本地 OpenAI 兼容服务
-
-如果是本地部署的 OpenAI 兼容服务，例如 **vLLM** 暴露的 OpenAI-compatible API，即使服务端不校验 API Key，也可以继续使用 `openai` provider：
-
-```bash
-export OPENAI_API_KEY="dummy"
-msagent config --llm-provider openai --llm-base-url "http://127.0.0.1:8000/v1" --llm-model "your-model"
-```
-
-- `OPENAI_API_KEY` 只需任意非空字符串，不需要是真实密钥
-- `--llm-base-url` 对于 vLLM 一般填写服务根路径，例如 `http://127.0.0.1:8000/v1`
-
-#### 自定义服务地址示例
-
-如果你使用的是自部署服务、企业网关或代理层，请按协议兼容性选择 provider，并通过 `--llm-base-url` 指向你的服务地址。
-
-#### Anthropic 兼容服务
-
-例如自部署或代理后的 Claude / Anthropic 兼容接口：
-
-```bash
-export ANTHROPIC_API_KEY="your-key"
-msagent config --llm-provider anthropic --llm-base-url "https://example.com/anthropic" --llm-model "claude-sonnet-4-20250514"
-```
-
-#### Google / Gemini 服务
-
-例如 Google AI Studio、Vertex AI 网关，或兼容 Gemini 协议的服务：
-
-```bash
-export GOOGLE_API_KEY="your-key"
-msagent config --llm-provider google --llm-base-url "https://example.com/google" --llm-model "gemini-2.5-pro"
-```
-
-说明：
-
-- 自部署服务请选择与其协议兼容的 provider，而不是使用不存在的 `custom` provider
-- `--llm-base-url` 用于覆盖默认官方地址，指向你自己的服务入口或代理网关
-- 对于不校验 API Key 的兼容服务，通常仍建议设置一个非空占位值，例如 `dummy`
-- 历史配置里的 `gemini` 会被兼容处理为 `google`，但新配置建议统一使用 `google`
-
-#### 查看当前配置
-
-```bash
-msagent config --show
-```
-
-### 4) 🖥️ 启动会话
-
-进入交互式会话：
-
-```bash
-msagent
-```
-
-手动指定启动 agent：
-
-```bash
-msagent --agent Hermes
-msagent --agent Minos
-msagent --agent Accuracy
-msagent --agent Zephyr
-```
-
-<details>
-<summary>4.1) 🌐 启动 Web UI（可选，Beta功能）</summary>
-
-<br />
-
-前置依赖：
-
-- 本机需要已安装 `node`（wheel 安装后的 Web UI 运行时依赖）
-
-启动：
-
-```bash
-msagent web
-```
-
-打开：
-
-```text
-http://127.0.0.1:3000
-```
-
-说明：
-
-- 通过 `pip install -U mindstudio-agent` 安装后，也可以直接使用 `msagent web`
-- wheel 安装默认内置预编译 Web UI，运行时只需要本机有 `node`，不再要求额外执行 `npm install` 或单独安装 `next`
-- `msagent web` 默认会同时启动：
-  - API：`http://127.0.0.1:2024`
-  - UI：`http://127.0.0.1:3000`
-- 启动成功后会自动打开默认浏览器进入 UI
-- 浏览器访问 UI 地址，不是 API 地址
-- 首次打开时会自动预填：
-  - `Deployment URL` = `http://127.0.0.1:2024`
-  - `Assistant ID` = `msagent`
-- 如果端口冲突，改端口启动即可
-- 如果本地残留了旧的 Web 进程，可先手动清理：
-
-```bash
-pkill -f "next dev --turbopack" || true
-pkill -f "langgraph dev" || true
-```
-
-常用命令：
-
-```bash
-msagent web --host 127.0.0.1 --port 2024 --ui-port 3000
-msagent web --port 2025 --ui-port 3001
-msagent web --no-open
-msagent web --no-ui
-```
-
-</details>
-
-### 5) 📚 按 Agent 查看说明与示例
-
-不同能力的说明与示例已经按 Agent 拆分：
-
-- `Hermes`：性能调优与 Profiling 分析 Agent 页面，见 [agents/Hermes.md](agents/Hermes.md)
-- `Minos`：文档体验与 GitCode PR 审查 Agent 页面，见 [agents/Minos.md](agents/Minos.md)
-- `Accuracy`：精度分析与优化 Agent 页面，见 [agents/Accuracy.md](agents/Accuracy.md)
-- `Zephyr`：msModelSlim 模型分析与适配 Agent 页面，见 [agents/Zephyr.md](agents/Zephyr.md)
-
----
-
-## 🛠️ 参考文档
-
-文档现在按“使用指南”和“开发指南”拆分维护，方便按角色浏览。
-
-### 使用指南
-
-- [配置与扩展](configuration-and-extension.md)
-  项目本地配置目录、MCP 配置、Skills 扩展与加载顺序。
-- [版本与兼容性](version-and-compatibility.md)
-  当前版本、Python 要求、内置 MCP 版本与 Provider 支持情况。
-- [上下文压缩指南](context-compaction-guide.md)
-  介绍 `/offload`、自动压缩策略和会话历史卸载机制。
-- [文档体验审查示例](document-ux-review.md)
-  介绍 `document-ux-review` skill 的使用方式和示例产物。
-
-### 开发指南
-
-- [编译与打包](build-and-package.md)
-  wheel 构建流程、构建脚本行为、常用构建参数与手动构建方式。
-- [发布与打 Tag 指南](tag-release.md)
-- [Agent / Tool / Skill 过滤规则](agent-tool-skill-filter-rules.md)
-  说明 agent yml 中 `tools` 与 `skills` 的匹配规则和过滤语义。
-- [重试中间件指南](retry-middleware-guide.md)
-  说明 LLM 与工具重试配置的 YAML 写法和推荐策略。
-
-`add-custom-skill-guide` 的内容已经并入 [配置与扩展](configuration-and-extension.md#custom-skill-guide)，不再作为独立正文维护。
-
----
-
-## ⌨️ 会话常见操作
-
-进入交互式会话后，可以直接输入问题，也可以配合 `/` 命令和快捷键提升效率。
-
-### `/` 命令
-
-当前交互式会话支持以下 slash commands：
-
-| 命令 | 说明 |
-|---|---|
-| `/help` | 查看当前支持的命令列表。 |
-| `/hotkeys` | 查看键盘快捷键说明。 |
-| `/agents` | 打开 Agent 选择器。 |
-| `/model` | 打开模型选择器。 |
-| `/threads` | 浏览并恢复历史会话线程。 |
-| `/tools` | 查看当前可用工具。 |
-| `/skills` | 浏览当前可用 Skills。 |
-| `/mcp` | 管理 MCP 服务启用状态。 |
-| `/offload` | 压缩并卸载较早的会话消息。 |
-| `/tool-output` | 打开最近一次可展开的工具输出。 |
-| `/clear` | 清屏并开启新线程。 |
-| `/exit` | 退出当前会话。 |
-
-### 输入区快捷键
-
-| 快捷键 | 说明 |
-|---|---|
-| `Ctrl+C` | 有输入时清空输入框；连续按两次退出会话。 |
-| `Ctrl+J` | 插入换行，便于多行输入。 |
-| `Shift+Tab` | 循环切换审批模式。 |
-| `Ctrl+B` | 切换 bash mode。 |
-| `Ctrl+K` | 直接打开快捷键说明。 |
-| `Ctrl+O` | 打开最近一次可展开的工具输出。 |
-| `Tab` | 应用第一个补全项。 |
-| `Enter` | 提交输入；如果当前选中了补全项，则先应用补全。 |
-
-### 工具输出查看器
-
-当某次工具调用支持展开查看时，可用 `Ctrl+O` 或 `/tool-output` 打开工具输出查看器。查看器内支持：
-
-| 快捷键 | 说明 |
-|---|---|
-| `Ctrl+O` / `Enter` | 展开或折叠当前工具输出。 |
-| `Left` / `Right` | 在不同 tool call 之间切换。 |
-| `Up` / `Down` | 按行滚动。 |
-| `PageUp` / `PageDown` | 按页滚动。 |
-| `Home` / `End` | 跳到顶部或底部。 |
-| `Esc` / `Ctrl+C` | 关闭查看器。 |
-
----
-
-## 联系我们
-
-欢迎加入飞书群交流：
-
-<a href="https://applink.feishu.cn/client/chat/chatter/add_by_link?link_token=854v5833-c03a-484e-8aac-0637f0303dc4&qr_code=true">
-  <img src="https://img.shields.io/badge/Feishu-3370FF?style=for-the-badge&logo=lark&logoColor=white" alt="Feishu Group"></a>
+日常使用中，优先从 [FAQ](zh/user_guide/faq.md) 和 [配置与扩展](zh/user_guide/configuration-and-extension.md) 定位常见问题；需要参与开发、发布或本地验证文档时，再进入 [贡献指南](zh/developer_guide/contributing.md) 与开发指南。

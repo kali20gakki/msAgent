@@ -90,16 +90,27 @@ html_theme_options = {
 }
 
 
-def _copy_docs_images(app, exception):
-    """Copy docs/images into the built site so repo-relative image links keep working."""
+def _copy_extra_assets(app, exception):
+    """Copy raw assets referenced by Markdown HTML snippets."""
     if exception is not None or app.builder.format != 'html':
         return
 
-    src = Path(app.confdir) / 'images'
-    dst = Path(app.outdir) / 'images'
-    if src.exists():
-        shutil.copytree(src, dst, dirs_exist_ok=True)
+    for relative_dir in ('zh/figures', 'zh/example'):
+        src = Path(app.confdir) / relative_dir
+        dst = Path(app.outdir) / relative_dir
+        if src.exists():
+            shutil.copytree(src, dst, dirs_exist_ok=True)
+
+    license_src = Path(app.confdir) / 'legal' / 'LICENSE'
+    license_dst = Path(app.outdir) / 'legal' / 'LICENSE'
+    if license_src.exists():
+        license_dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(license_src, license_dst)
 
 
 def setup(app):
-    app.connect('build-finished', _copy_docs_images)
+    from pygments.lexers.special import TextLexer
+    from sphinx.highlighting import lexers
+
+    lexers['mermaid'] = TextLexer()
+    app.connect('build-finished', _copy_extra_assets)

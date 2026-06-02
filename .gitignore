@@ -57,3 +57,5 @@ test_data/
 .claude/
 .omx/
 .msagent/
+
+tests/benchmark
