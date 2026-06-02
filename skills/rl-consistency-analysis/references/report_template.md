@@ -1,44 +1,44 @@
-# Root Cause Report
+# 根因分析报告
 
-## Context
-- Train dump:
-- Rollout dump:
-- Scope:
+## 上下文
+- 训练侧数据文件：
+- 推理侧数据文件：
+- 分析范围：
 
-## Final Judgment
-- Most likely root cause:
-- Confidence:
-- Why this is the first credible divergence boundary:
+## 最终判断
+- 最可能的根因：
+- 置信度：
+- 为什么这是首个可信的分歧边界：
 
-## Evidence Chain
-1. Which high-priority candidates were reviewed first.
-2. Which candidates were discarded as fused or structural false positives.
-3. What the last trustworthy aligned boundary was.
-4. Which unmatched intermediate modules appeared between the aligned boundary and the first downstream mismatch.
-5. Why those intermediate modules imply a likely missing op, extra op, implementation mismatch, or config mismatch.
+## 证据链
+1. 首先审查了哪些高优先级候选。
+2. 哪些候选被排除为融合或结构性误报。
+3. 最后一个可信的对齐边界是什么。
+4. 在对齐边界和首个下游不匹配之间出现了哪些未匹配的中间模块。
+5. 为什么这些中间模块意味着可能存在缺失操作、多余操作、实现不匹配或配置不匹配。
 
-## Key Suspects
-- Suspect:
-  Evidence:
-  Interpretation:
-- Suspect:
-  Evidence:
-  Interpretation:
+## 关键疑点
+- 疑点：
+  证据：
+  解读：
+- 疑点：
+  证据：
+  解读：
 
-## Discarded Candidates
-- Candidate:
-  Why it was deprioritized:
+## 已排除候选
+- 候选：
+  被降级的原因：
 
-## Expert Hypothesis
-- Implementation/config hypothesis:
-- Expected train path:
-- Expected rollout path:
-- Most likely mismatch mechanism:
+## 专家假设
+- 实现/配置假设：
+- 预期的训练侧路径：
+- 预期的推理侧路径：
+- 最可能的不匹配机制：
 
-## Next Checks
-- Check:
-- Check:
-- Check:
+## 下一步检查
+- 检查：
+- 检查：
+- 检查：
 
-## Notes
-- Mention uncertainties, alternative explanations, or missing evidence if needed.
+## 备注
+- 如有需要，提及不确定性、替代解释或缺失的证据。

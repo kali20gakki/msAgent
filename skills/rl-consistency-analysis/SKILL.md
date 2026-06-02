@@ -1,52 +1,52 @@
 ---
 name: rl-consistency-analysis
-description: End-to-end root cause analysis for train vs rollout dump mismatches. Use when module mapping/value compare is not enough and you need to trace the first credible divergence boundary, filter out fused or structural false positives, follow producer-consumer chains, and generate a root-cause report with concrete hypotheses and evidence.
+description: 训练与推理数据不一致的端到端根因分析。当模块映射/值比较不足以定位问题时使用，可追踪首个可信的分歧边界，过滤融合或结构性误报，遵循生产者-消费者链，并生成包含具体假设和证据的根因报告。
 ---
 
-# Dump Root Cause Investigator
+# 数据不一致根因分析器
 
-Use this skill when:
-- `dump-module-mapping-value-compare` already ran, but the remaining suspects still need expert-style triage
-- you need to distinguish real root causes from fused/unfused structural mismatches
-- you need a report that explains the most likely divergence boundary, missing or extra ops, and implementation mismatches
+使用此技能的场景：
+- 训推模块不一致时需要进行模块匹配并比对
+- 需要区分真正的根因与融合/非融合结构不匹配
+- 需要一份解释最可能分歧边界、缺失或多余操作以及实现不匹配的报告
 
-## Workflow
+## 工作流程
 
-1. Run the fixed script below. It will:
-   - regenerate `output_1` to `output_4` by calling the sibling `dump-module-mapping-value-compare` skill
-   - rank `module_priority_rank` 1 and 2 candidates
-   - suppress obvious structural false positives such as fused QKV boundaries
-   - inspect the previous aligned module in the same layer/block
-   - compare train-only and rollout-only intermediate modules between the aligned boundary and the suspect
-   - emit structured root-cause evidence in JSON
-2. Read:
-   - `output_5_root_cause_report.json` for machine-readable evidence
-   - `references/report_template.md` for the final markdown structure
-   - `references/manual_case_pattern.md` for the expert reasoning pattern when needed
-3. The agent, not the script, must write the final `output_5_root_cause_report.md`:
-   - use the template as a skeleton, not as fixed prose
-   - explain why top suspects were kept or discarded
-   - convert structured evidence into a task-specific narrative
-   - state the most likely root cause and concrete next checks
-4. If the evidence points to one side having an extra activation or fused op, verify that side’s implementation/config next.
+1. 运行下面的固定脚本。它将：
+   - 调用 `scripts/generate_module_mapping.py` 脚本生成 `output_1` 到 `output_4`
+   - 对 `module_priority_rank` 为 1 和 2 的候选进行排序
+   - 抑制明显的结构性误报（如融合 QKV 边界）
+   - 检查同一层/块中前一个对齐的模块
+   - 比较对齐边界与可疑模块之间的训练侧和推理侧中间模块
+   - 以 JSON 格式输出结构化根因证据
+2. 读取：
+   - `output_5_root_cause_report.json` 获取机器可读的证据
+   - `references/report_template.md` 获取最终 Markdown 报告结构
+   - `references/manual_case_pattern.md` 获取必要时的专家推理模式
+3. 由 Agent（而非脚本）编写最终的 `output_5_root_cause_report.md`：
+   - 使用模板作为框架，而非固定文本
+   - 解释为什么保留或排除顶级可疑模块
+   - 将结构化证据转换为特定任务的叙述
+   - 陈述最可能的根因和具体的下一步检查
+4. 如果证据表明某一侧有额外的激活或融合操作，请下一步验证该侧的实现/配置。
 
-## Analysis Rules
+## 分析规则
 
-- Prefer candidates with `module_priority_rank` in `1, 2`
-- Do not stop at the first high-rank mismatch; first rule out structural mismatches
-- If a suspect’s previous aligned module is clean, and one side has an extra unmatched intermediate module before the suspect, treat that extra module as a high-confidence clue
-- `output` mismatch matters more than internal mismatch
-- If a module is mismatched but later neighboring modules realign, lower confidence unless there is a clear boundary explanation
-- Activation-like unmatched modules are especially important:
+- 优先处理 `module_priority_rank` 为 1 和 2 的候选
+- 不要在第一个高排名不匹配处停止；首先排除结构性不匹配
+- 如果可疑模块的前一个对齐模块是干净的，且某一侧在对齐边界和可疑模块之间有额外的未匹配中间模块，则将该额外模块视为高置信度线索
+- 输出不匹配比内部不匹配更重要
+- 如果某个模块不匹配但后续相邻模块重新对齐，则降低置信度，除非有明确的边界解释
+- 激活类未匹配模块特别重要：
   - `act_fn`
   - `silu`
   - `swiglu`
   - `gelu`
   - `mul`
   - `activation`
-- Do not let the script author the final markdown narrative. The script should stay focused on deterministic evidence extraction, while the agent owns the final explanation.
+- 不要让脚本编写最终的 Markdown 叙述。脚本应专注于确定性证据提取，而 Agent 负责最终解释。
 
-## Fixed Command
+## 固定命令
 
 ```bash
 python3 "<skill_root>/scripts/run_root_cause_analysis.py" \
@@ -55,35 +55,34 @@ python3 "<skill_root>/scripts/run_root_cause_analysis.py" \
   --out-dir "<output_dir>"
 ```
 
-`<skill_root>` is the path to this skill directory.  
-This skill expects the sibling directory `dump-module-mapping-value-compare/` to exist under the same parent directory.
+`<skill_root>` 是此技能目录的路径。
 
-## Outputs
+## 输出文件
 
 - `output_1_key_mapping.*`
 - `output_2_mapping.*`
 - `output_3_value_compare.*`
 - `output_4_module_analysis.*`
 - `output_5_root_cause_report.json`
-- `output_5_root_cause_report.md` (agent-authored from template, not script-authored)
+- `output_5_root_cause_report.md`（由 Agent 基于模板编写，非脚本生成）
 
-## Interpretation Guide
+## 解读指南
 
-- `structural_false_positive`
-  - likely caused by fused/unfused implementation shape
-- `missing_or_extra_op_between_aligned_boundary`
-  - one side has unmatched intermediate modules between the last aligned boundary and the current suspect
-- `parameter_or_checkpoint_issue`
-  - parameters differ while inputs are aligned
-- `in_module_impl_difference`
-  - inputs and parameters align, but outputs differ
-- `upstream_propagation`
-  - parameters align, inputs already diverged
+- `structural_false_positive`（结构性误报）
+  - 可能由融合/非融合实现形态引起
+- `missing_or_extra_op_between_aligned_boundary`（对齐边界之间存在缺失或多余操作）
+  - 某一侧在最后对齐边界和当前可疑模块之间有未匹配的中间模块
+- `parameter_or_checkpoint_issue`（参数或检查点问题）
+  - 参数不同但输入对齐
+- `in_module_impl_difference`（模块内部实现差异）
+  - 输入和参数对齐，但输出不同
+- `upstream_propagation`（上游传播）
+  - 参数对齐，但输入已发散
 
-If the report identifies an extra rollout activation between an aligned upstream module and a mismatched downstream module, investigate whether train is missing the same activation or is using a different activation implementation/config.
+如果报告识别出在对齐的上游模块和不匹配的下游模块之间有额外的推理侧激活，请调查训练侧是否缺少相同的激活，或者是否使用了不同的激活实现/配置。
 
-## References
+## 参考资料
 
-For the concrete reasoning pattern behind this skill, read:
+有关此技能背后的具体推理模式，请阅读：
 - `references/manual_case_pattern.md`
 - `references/report_template.md`
