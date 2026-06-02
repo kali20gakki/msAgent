@@ -14,7 +14,6 @@ from prompt_toolkit.layout.containers import HSplit
 from prompt_toolkit.layout.containers import Window
 from prompt_toolkit.layout.controls import FormattedTextControl
 from prompt_toolkit.output import DummyOutput
-from prompt_toolkit.output.color_depth import ColorDepth
 from prompt_toolkit.styles import Style
 
 if sys.platform == "win32":
@@ -30,8 +29,6 @@ from msagent.configs import ApprovalMode
 from msagent.core.settings import settings
 from msagent.utils.cost import calculate_context_percentage, format_tokens
 from msagent.utils.version import get_version
-
-TRUE_COLOR_DEPTH = ColorDepth.TRUE_COLOR
 
 
 @dataclass
@@ -285,7 +282,6 @@ def create_selector_application(
         "key_bindings": key_bindings,
         "full_screen": full_screen,
         "style": create_prompt_style(context, bash_mode=context.bash_mode),
-        "color_depth": TRUE_COLOR_DEPTH,
         "erase_when_done": True,
         "mouse_support": mouse_support,
     }
