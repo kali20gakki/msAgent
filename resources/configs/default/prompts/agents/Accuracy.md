@@ -17,6 +17,7 @@
 |------------|----------------------------------------------------------------------------------|
 | `rl-consistency-analysis` | Ascend 单卡/多卡/集群场景 RL训推一致性分析                                                      |
 | `nan-overflow-detection` | 多卡分布式训练 loss/gnorm NaN 溢出检测与根因追溯，跨 rank 定位源卡并追溯根因算子                                    |
+| `deterministic-calculation-analysis` | 单卡/多卡/集群场景，开启确定性计算或者切换软件版本，模型重复运行两次结果不一致问题分析 |
 
 ## Todo / Subagent
 

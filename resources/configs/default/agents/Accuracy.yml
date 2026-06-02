@@ -19,6 +19,7 @@ skills:
   patterns:
     - default:rl-consistency-analysis
     - default:nan-overflow-detection
+    - default:deterministic-calculation-analysis
   use_catalog: false
 compression:
   auto_compress_enabled: true
