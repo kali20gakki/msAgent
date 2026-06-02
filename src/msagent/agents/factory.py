@@ -21,6 +21,7 @@
 from __future__ import annotations
 
 import logging
+import string
 import tempfile
 from fnmatch import fnmatch
 from importlib import import_module
@@ -72,6 +73,79 @@ class _ToolPatternFilterMiddleware(AgentMiddleware[Any, Any, Any]):
     async def awrap_model_call(self, request, handler):
         filtered_tools = self._filter_tools(list(getattr(request, "tools", []) or []))
         request = request.override(tools=filtered_tools)
+        return await handler(request)
+
+
+class _SystemMessageMiddleware(AgentMiddleware[Any, Any, Any]):
+    """Populate system message placeholders from runtime AgentContext.template_vars."""
+
+    class _SafeTemplateFormatter(string.Formatter):
+        """String formatter that leaves unknown placeholders unchanged."""
+
+        def __init__(self, context: dict[str, Any]) -> None:
+            super().__init__()
+            self._context = context
+
+        def get_value(self, key: Any, args: tuple[Any, ...], kwargs: dict[str, Any]) -> Any:
+            if isinstance(key, str):
+                if key in self._context:
+                    return self._context[key]
+                return "{" + key + "}"
+            return super().get_value(key, args, kwargs)
+
+    @classmethod
+    def _safe_render_templates(cls, data: Any, context: dict[str, Any] | None) -> Any:
+        formatter = cls._SafeTemplateFormatter(context or {})
+        if isinstance(data, str):
+            return cls._safe_render_text(data, formatter)
+        if isinstance(data, list):
+            return [cls._render_text_block(item, formatter) for item in data]
+        return data
+
+    @staticmethod
+    def _safe_render_text(text: str, formatter: string.Formatter) -> str:
+        try:
+            return formatter.vformat(text, (), {})
+        except ValueError:
+            return text
+
+    @classmethod
+    def _render_text_block(cls, item: Any, formatter: string.Formatter) -> Any:
+        if not isinstance(item, dict) or item.get("type") != "text" or not isinstance(item.get("text"), str):
+            return item
+
+        rendered_text = cls._safe_render_text(item["text"], formatter)
+        if rendered_text == item["text"]:
+            return item
+
+        rendered_item = dict(item)
+        rendered_item["text"] = rendered_text
+        return rendered_item
+
+    @staticmethod
+    def _render_request_system_message(request):
+        system_message = getattr(request, "system_message", None)
+        runtime = getattr(request, "runtime", None)
+        context = getattr(runtime, "context", None) if runtime is not None else None
+        template_vars = getattr(context, "template_vars", None) if context is not None else None
+        if system_message is None or not template_vars:
+            return request
+
+        rendered_content = _SystemMessageMiddleware._safe_render_templates(
+            system_message.content,
+            template_vars,
+        )
+        if rendered_content == system_message.content:
+            return request
+
+        return request.override(system_message=system_message.model_copy(update={"content": rendered_content}))
+
+    def wrap_model_call(self, request, handler):
+        request = self._render_request_system_message(request)
+        return handler(request)
+
+    async def awrap_model_call(self, request, handler):
+        request = self._render_request_system_message(request)
         return await handler(request)
 
 
@@ -220,6 +294,7 @@ class AgentFactory:
                     tool_token_limit_before_evict=tool_output_max_tokens,
                 )
             )
+        middleware.append(_SystemMessageMiddleware())
 
         raw_system_prompt = config.prompt
         if isinstance(raw_system_prompt, list):

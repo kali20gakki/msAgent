@@ -21,9 +21,10 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
+from langchain_core.messages import SystemMessage
 
 import msagent.agents.factory as factory_module
-from msagent.agents.factory import AgentFactory
+from msagent.agents.factory import AgentFactory, _SystemMessageMiddleware
 
 
 class _DummyLLMFactory:
@@ -44,6 +45,28 @@ class _DummyMCPClient:
 
 class _DummyGraph:
     pass
+
+
+def _make_model_request(
+    *,
+    system_message: SystemMessage,
+    template_vars: dict[str, object] | None,
+) -> SimpleNamespace:
+    request = SimpleNamespace(
+        system_message=system_message,
+        runtime=SimpleNamespace(context=SimpleNamespace(template_vars=template_vars or {})),
+    )
+
+    def _override(**overrides):
+        data = {
+            "system_message": request.system_message,
+            "runtime": request.runtime,
+        }
+        data.update(overrides)
+        return SimpleNamespace(**data, override=_override)
+
+    request.override = _override
+    return request
 
 
 def _patch_deepagent_entrypoints(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -239,6 +262,111 @@ def test_agent_factory_filters_deepagents_default_tools_from_model_request() -> 
     )
 
     assert {tool.name for tool in filtered} == {"get_skill", "msprof-mcp_ping"}
+
+
+def test_system_message_middleware_renders_known_vars_and_preserves_unknown_placeholders() -> None:
+    request = _make_model_request(
+        system_message=SystemMessage(
+            content="cwd={working_dir}; local={local_environment_context}; worker={worker}; rank={Rank_ID}"
+        ),
+        template_vars={
+            "working_dir": "/tmp/project",
+            "local_environment_context": "GPU=Ascend",
+        },
+    )
+
+    updated = _SystemMessageMiddleware._render_request_system_message(request)
+
+    assert updated is not request
+    assert str(updated.system_message.content) == (
+        "cwd=/tmp/project; local=GPU=Ascend; worker={worker}; rank={Rank_ID}"
+    )
+
+
+def test_system_message_middleware_leaves_request_unchanged_without_template_vars() -> None:
+    request = _make_model_request(
+        system_message=SystemMessage(content="cwd={working_dir}; worker={worker}"),
+        template_vars={},
+    )
+
+    updated = _SystemMessageMiddleware._render_request_system_message(request)
+
+    assert updated is request
+    assert str(updated.system_message.content) == "cwd={working_dir}; worker={worker}"
+
+
+def test_system_message_middleware_renders_text_blocks_only() -> None:
+    content = [
+        {
+            "type": "text",
+            "text": "cwd={working_dir}",
+            "metadata": {"template": "{working_dir}"},
+        },
+        {
+            "type": "image_url",
+            "image_url": {"url": "https://example.com/{working_dir}.png"},
+        },
+    ]
+    request = _make_model_request(
+        system_message=SystemMessage(content=content),
+        template_vars={"working_dir": "/workspace"},
+    )
+
+    updated = _SystemMessageMiddleware._render_request_system_message(request)
+
+    assert updated is not request
+    assert updated.system_message.content == [
+        {
+            "type": "text",
+            "text": "cwd=/workspace",
+            "metadata": {"template": "{working_dir}"},
+        },
+        {
+            "type": "image_url",
+            "image_url": {"url": "https://example.com/{working_dir}.png"},
+        },
+    ]
+
+
+def test_system_message_middleware_preserves_system_message_metadata() -> None:
+    request = _make_model_request(
+        system_message=SystemMessage(
+            content="cwd={working_dir}",
+            additional_kwargs={"source": "runtime"},
+            response_metadata={"trace_id": "abc"},
+            name="system-name",
+            id="system-id",
+        ),
+        template_vars={"working_dir": "/workspace"},
+    )
+
+    updated = _SystemMessageMiddleware._render_request_system_message(request)
+
+    assert str(updated.system_message.content) == "cwd=/workspace"
+    assert updated.system_message.additional_kwargs == {"source": "runtime"}
+    assert updated.system_message.response_metadata == {"trace_id": "abc"}
+    assert updated.system_message.name == "system-name"
+    assert updated.system_message.id == "system-id"
+
+
+@pytest.mark.asyncio
+async def test_system_message_middleware_awrap_model_call_applies_rendering() -> None:
+    middleware = _SystemMessageMiddleware()
+    request = _make_model_request(
+        system_message=SystemMessage(content="local={local_environment_context}; rank={Rank_ID}"),
+        template_vars={"local_environment_context": "NPU=910B"},
+    )
+
+    captured = {}
+
+    async def _handler(updated_request):
+        captured["request"] = updated_request
+        return "ok"
+
+    result = await middleware.awrap_model_call(request, _handler)
+
+    assert result == "ok"
+    assert str(captured["request"].system_message.content) == "local=NPU=910B; rank={Rank_ID}"
 
 
 @pytest.mark.asyncio
