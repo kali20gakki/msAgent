@@ -26,6 +26,7 @@ skills:
     - default:github-raw-fetch
     - default:mindstudio_profiler_data_check
     - default:op-mfu-calculator
+    - default:ascend-schedule-analysis
   use_catalog: false
 compression:
   auto_compress_enabled: true
