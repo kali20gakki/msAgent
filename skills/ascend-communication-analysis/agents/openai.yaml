@@ -1,0 +1,5 @@
+interface:
+  display_name: "Ascend Communication Analysis"
+  short_description: "Diagnose Ascend collective communication profiling."
+  default_prompt: "Analyze Ascend profiling communication data, identify TOP collective ops, wait-caused slowdowns, slow ranks, bandwidth issues, and fault evidence."
+

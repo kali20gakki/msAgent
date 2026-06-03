@@ -21,12 +21,13 @@ skills:
   patterns:
     - default:ascend_pytorch_profiler_db_explorer
     - default:ascend-computation-analysis
+    - default:ascend-schedule-analysis
+    - default:ascend-communication-analysis
     - default:msprof-analyze-cli
     - default:cluster-fast-slow-rank-detector
     - default:github-raw-fetch
     - default:mindstudio_profiler_data_check
     - default:op-mfu-calculator
-    - default:ascend-schedule-analysis
   use_catalog: false
 compression:
   auto_compress_enabled: true
