@@ -41,6 +41,7 @@ zh/developer_guide/contributing
 zh/developer_guide/build-and-package
 zh/developer_guide/version-and-compatibility
 zh/developer_guide/arch_overview
+zh/design/msagent_design
 zh/developer_guide/tag-release
 zh/developer_guide/readthedocs-local-build
 ```
