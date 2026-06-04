@@ -20,24 +20,26 @@ bash scripts/build_whl.sh
 
 `scripts/build_whl.sh` 会按当前实现执行以下步骤：
 
-1. 解析 `pyproject.toml` 中的项目名、Python 最低版本和入口模块
-2. 检查本机 Python 版本是否满足要求
-3. 识别仓库根目录下的 `skills/` 资源目录
-4. 校验 Skills 资源目录存在且非空
-5. 如果存在 `uv.lock`，先执行 `uv lock --check`
-6. 优先使用 `uv build --wheel --out-dir dist` 构建 wheel
-7. 如果本机没有 `uv`，回退到 `python -m build`
+1. 根据 `WHL_VERSION` 或 `version.info` 同步本次构建使用的版本号，并刷新 `pyproject.toml` 与 `uv.lock` 的根包版本
+2. 解析 `pyproject.toml` 中的项目名、Python 最低版本和入口模块
+3. 检查本机 Python 版本是否满足要求
+4. 识别仓库根目录下的 `skills/` 资源目录
+5. 校验 Skills 资源目录存在且非空
+6. 如果存在 `uv.lock`，先执行 `uv lock --check`
+7. 优先使用 `uv build --wheel --out-dir dist` 构建 wheel
+8. 如果本机没有 `uv`，回退到 `python -m build`
 
 ## 常用构建参数
 
-| 环境变量 | 默认值 | 说明 |
-|---|---|---|
-| `DIST_DIR` | `dist/` | 输出目录。 |
-| `SKILLS_PATH` | `skills` | 指定要打包的 Skills 目录，默认使用仓库根目录下的 `skills/`。 |
-| `VERIFY_WHEEL_INSTALL` | `0` | 是否在临时虚拟环境中做 wheel 安装冒烟验证。 |
-| `PYTHON_BIN` | 自动探测 | 指定构建使用的 Python。 |
-| `SMOKE_IMPORT_MODULE` | 自动推导 | 冒烟验证时导入的模块。 |
-| `SMOKE_RESOURCE_PATH` | `resources/configs/default/config.mcp.json` | 冒烟验证时检查是否被打进 wheel 的资源文件。 |
+| 环境变量 | 默认值                                          | 说明 |
+|---|----------------------------------------------|---|
+| `DIST_DIR` | `dist/`                                      | 输出目录。 |
+| `SKILLS_PATH` | `skills`                                     | 指定要打包的 Skills 目录，默认使用仓库根目录下的 `skills/`。 |
+| `WHL_VERSION` | `version.info` 中的 `Version` | 指定 wheel 版本号；如果不设置，则使用 `version.info` 中的 `Version`。 |
+| `VERIFY_WHEEL_INSTALL` | `0`                                          | 是否在临时虚拟环境中做 wheel 安装冒烟验证。 |
+| `PYTHON_BIN` | 自动探测                                         | 指定构建使用的 Python。 |
+| `SMOKE_IMPORT_MODULE` | 自动推导                                         | 冒烟验证时导入的模块。 |
+| `SMOKE_RESOURCE_PATH` | `resources/configs/default/config.mcp.json`  | 冒烟验证时检查是否被打进 wheel 的资源文件。 |
 | `SMOKE_SKILL_PATH` | `resources/configs/default/skills/README.md` | 冒烟验证时检查是否被打进 wheel 的 Skills 资源文件。 |
 
 如果你希望按主仓库当前锁定的 Skills 版本构建，而不是同步上游最新提交，可以这样执行：

@@ -19,6 +19,14 @@ REQUIRES_PYTHON=""
 MIN_PYTHON_MAJOR=3
 MIN_PYTHON_MINOR=11
 
+sync_project_version() {
+  local python_bin="$1"
+  local sync_script="${REPO_ROOT}/scripts/sync_version.py"
+
+  log "Syncing package version from WHL_VERSION env or version.info..."
+  "${python_bin}" "${sync_script}"
+}
+
 log() {
   printf '[build_whl] %s\n' "$*"
 }
@@ -347,6 +355,7 @@ verify_wheel_install() {
 main() {
   local python_bin
   python_bin="$(resolve_python)"
+  sync_project_version "${python_bin}"
   load_project_metadata "${python_bin}"
   ensure_supported_python "${python_bin}"
   detect_skills_path
