@@ -139,3 +139,196 @@ async def test_compression_handler_updates_current_thread_with_offload_event(
         }
     }
     assert printed_success
+
+
+@pytest.mark.asyncio
+async def test_compression_handler_reports_agent_not_found(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    errors: list[str] = []
+    monkeypatch.setattr(compress_module.console, "print_error", errors.append)
+    monkeypatch.setattr(compress_module.console, "print", lambda *_args, **_kwargs: None)
+
+    session = SimpleNamespace(
+        context=SimpleNamespace(
+            agent="nonexistent",
+            thread_id="thread-1",
+            working_dir=tmp_path,
+            approval_mode=ApprovalMode.ACTIVE,
+            tool_output_max_tokens=None,
+        ),
+        graph=_FakeGraph(),
+    )
+
+    async def fake_load_agents_config(_working_dir):
+        return SimpleNamespace(get_agent_config=lambda _name: None)
+
+    monkeypatch.setattr(compress_module.initializer, "load_agents_config", fake_load_agents_config)
+
+    handler = compress_module.CompressionHandler(session)
+    await handler.handle()
+
+    assert "not found" in errors[0]
+
+
+@pytest.mark.asyncio
+async def test_compression_handler_reports_no_graph_when_none(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    errors: list[str] = []
+    monkeypatch.setattr(compress_module.console, "print_error", errors.append)
+    monkeypatch.setattr(compress_module.console, "print", lambda *_args, **_kwargs: None)
+
+    session = SimpleNamespace(
+        context=SimpleNamespace(
+            agent="msagent",
+            thread_id="thread-1",
+            working_dir=tmp_path,
+            approval_mode=ApprovalMode.ACTIVE,
+            tool_output_max_tokens=None,
+        ),
+        graph=None,
+    )
+
+    agent_config = SimpleNamespace(
+        llm=SimpleNamespace(),
+        compression=SimpleNamespace(prompt=None, llm=None, messages_to_keep=1),
+    )
+    agents_config = SimpleNamespace(get_agent_config=lambda _name: agent_config)
+
+    async def fake_load_agents_config(_working_dir):
+        return agents_config
+
+    monkeypatch.setattr(compress_module.initializer, "load_agents_config", fake_load_agents_config)
+    monkeypatch.setattr(compress_module.initializer.llm_factory, "create", lambda _config: SimpleNamespace())
+
+    handler = compress_module.CompressionHandler(session)
+    await handler.handle()
+
+    assert any("not ready for compression" in e for e in errors)
+
+
+@pytest.mark.asyncio
+async def test_compression_handler_reports_no_messages(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    errors: list[str] = []
+
+    class _EmptyGraph:
+        _agent_backend = object()
+
+        async def aget_state(self, _config):
+            return SimpleNamespace(values={"messages": []})
+
+    session = SimpleNamespace(
+        context=SimpleNamespace(
+            agent="msagent",
+            thread_id="thread-1",
+            working_dir=tmp_path,
+            approval_mode=ApprovalMode.ACTIVE,
+            tool_output_max_tokens=None,
+        ),
+        graph=_EmptyGraph(),
+    )
+
+    agent_config = SimpleNamespace(
+        llm=SimpleNamespace(),
+        compression=SimpleNamespace(prompt=None, llm=None, messages_to_keep=1),
+    )
+    agents_config = SimpleNamespace(get_agent_config=lambda _name: agent_config)
+
+    async def fake_load_agents_config(_working_dir):
+        return agents_config
+
+    monkeypatch.setattr(compress_module.initializer, "load_agents_config", fake_load_agents_config)
+    monkeypatch.setattr(compress_module.initializer.llm_factory, "create", lambda _config: SimpleNamespace())
+    monkeypatch.setattr(compress_module.console, "print_error", errors.append)
+    monkeypatch.setattr(compress_module.console, "print", lambda *_args, **_kwargs: None)
+
+    handler = compress_module.CompressionHandler(session)
+    await handler.handle()
+
+    assert any("No conversation history" in e for e in errors)
+
+
+@pytest.mark.asyncio
+async def test_compression_handler_reports_backend_unavailable(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    errors: list[str] = []
+
+    class _NoBackendGraph:
+        _agent_backend = None
+
+        async def aget_state(self, _config):
+            return SimpleNamespace(values={"messages": [HumanMessage(content="hello")]})
+
+    session = SimpleNamespace(
+        context=SimpleNamespace(
+            agent="msagent",
+            thread_id="thread-1",
+            working_dir=tmp_path,
+            approval_mode=ApprovalMode.ACTIVE,
+            tool_output_max_tokens=None,
+        ),
+        graph=_NoBackendGraph(),
+    )
+
+    agent_config = SimpleNamespace(
+        llm=SimpleNamespace(),
+        compression=SimpleNamespace(prompt=None, llm=None, messages_to_keep=1),
+    )
+    agents_config = SimpleNamespace(get_agent_config=lambda _name: agent_config)
+
+    async def fake_load_agents_config(_working_dir):
+        return agents_config
+
+    monkeypatch.setattr(compress_module.initializer, "load_agents_config", fake_load_agents_config)
+    monkeypatch.setattr(compress_module.initializer.llm_factory, "create", lambda _config: SimpleNamespace())
+    monkeypatch.setattr(compress_module.console, "print_error", errors.append)
+    monkeypatch.setattr(compress_module.console, "print", lambda *_args, **_kwargs: None)
+
+    handler = compress_module.CompressionHandler(session)
+    await handler.handle()
+
+    assert any("unavailable for compression" in e for e in errors)
+
+
+@pytest.mark.asyncio
+async def test_compression_handler_warns_when_already_within_window(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    warnings: list[str] = []
+
+    class _FakeGraphWithBackend:
+        _agent_backend = object()
+
+        async def aget_state(self, _config):
+            return SimpleNamespace(values={"messages": [HumanMessage(content="hello")]})
+
+    session = SimpleNamespace(
+        context=SimpleNamespace(
+            agent="msagent",
+            thread_id="thread-1",
+            working_dir=tmp_path,
+            approval_mode=ApprovalMode.ACTIVE,
+            tool_output_max_tokens=None,
+        ),
+        graph=_FakeGraphWithBackend(),
+    )
+
+    agent_config = SimpleNamespace(
+        llm=SimpleNamespace(),
+        compression=SimpleNamespace(prompt=None, llm=None, messages_to_keep=1),
+    )
+    agents_config = SimpleNamespace(get_agent_config=lambda _name: agent_config)
+
+    async def fake_load_agents_config(_working_dir):
+        return agents_config
+
+    async def fake_perform_conversation_offload(**kwargs):
+        return None
+
+    monkeypatch.setattr(compress_module.initializer, "load_agents_config", fake_load_agents_config)
+    monkeypatch.setattr(compress_module.initializer.llm_factory, "create", lambda _config: SimpleNamespace())
+    monkeypatch.setattr(compress_module, "perform_conversation_offload", fake_perform_conversation_offload)
+    monkeypatch.setattr(compress_module.console, "print_error", lambda *_args: None)
+    monkeypatch.setattr(compress_module.console, "print_warning", warnings.append)
+    monkeypatch.setattr(compress_module.console, "print", lambda *_args, **_kwargs: None)
+
+    handler = compress_module.CompressionHandler(session)
+    await handler.handle()
+
+    assert any("already within the configured retention window" in w for w in warnings)
