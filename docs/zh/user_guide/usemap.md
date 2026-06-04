@@ -5,7 +5,7 @@
 | `/hotkeys` | 查看键盘快捷键说明。 |
 | `/agents` | 打开 Agent 选择器。 |
 | `/model` | 打开模型选择器。 |
-| `/threads` | 浏览并恢复历史会话线程。 |
+| `/threads` | 浏览并恢复历史会话线程；已执行过 offload 的线程会显示 `[history offloaded]`。 |
 | `/tools` | 查看当前可用工具。 |
 | `/skills` | 浏览当前可用 Skills。 |
 | `/mcp` | 管理 MCP 服务启用状态。 |

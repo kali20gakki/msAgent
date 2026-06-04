@@ -35,6 +35,7 @@ class ThreadEntry:
     preview: str
     timestamp: str
     pending_interrupts: list[Any]
+    offloaded_path: str | None = None
 
 
 class ThreadsHandler:
@@ -66,31 +67,71 @@ class ThreadsHandler:
         """Read the latest checkpoint for each prior thread."""
         ctx = self.session.context
         entries: list[ThreadEntry] = []
-        seen_thread_ids: set[str] = set()
 
         async with initializer.get_checkpointer(ctx.agent, ctx.working_dir) as checkpointer:
-            async for checkpoint_tuple in checkpointer.alist(None):
-                thread_id = str(checkpoint_tuple.config.get("configurable", {}).get("thread_id", ""))
-                if not thread_id or thread_id == ctx.thread_id or thread_id in seen_thread_ids:
-                    continue
+            conn = getattr(checkpointer, "conn", None)
+            if conn is not None:
+                # Fast path: one GROUP BY query to get unique thread IDs, then a
+                # targeted aget_tuple per thread instead of streaming all rows.
+                await checkpointer.setup()
+                async with conn.execute(
+                    "SELECT thread_id FROM checkpoints "
+                    "WHERE checkpoint_ns = '' AND thread_id != ? "
+                    "GROUP BY thread_id ORDER BY MAX(checkpoint_id) DESC",
+                    (ctx.thread_id,),
+                ) as cursor:
+                    thread_ids = [row[0] async for row in cursor]
 
-                checkpoint = checkpoint_tuple.checkpoint or {}
-                channel_values = checkpoint.get("channel_values", {})
-                messages = list(channel_values.get("messages", []) or [])
-                if not messages:
-                    continue
-
-                entries.append(
-                    ThreadEntry(
-                        thread_id=thread_id,
-                        preview=self._build_preview(messages),
-                        timestamp=str(checkpoint.get("ts", "")),
-                        pending_interrupts=self._extract_interrupts(checkpoint_tuple.pending_writes or []),
-                    )
-                )
-                seen_thread_ids.add(thread_id)
+                for thread_id in thread_ids:
+                    entry = await self._build_entry_from_tuple(checkpointer, thread_id)
+                    if entry is not None:
+                        entries.append(entry)
+            else:
+                # Fallback for InMemorySaver (no raw connection available).
+                seen_thread_ids: set[str] = set()
+                async for checkpoint_tuple in checkpointer.alist(None):
+                    thread_id = str(checkpoint_tuple.config.get("configurable", {}).get("thread_id", ""))
+                    if not thread_id or thread_id == ctx.thread_id or thread_id in seen_thread_ids:
+                        continue
+                    entry = self._entry_from_checkpoint_tuple(checkpoint_tuple)
+                    if entry is not None:
+                        entries.append(entry)
+                    seen_thread_ids.add(thread_id)
 
         return entries
+
+    async def _build_entry_from_tuple(self, checkpointer, thread_id: str) -> "ThreadEntry | None":
+        """Fetch the latest checkpoint tuple for a thread and build a ThreadEntry."""
+        checkpoint_tuple = await checkpointer.aget_tuple(RunnableConfig(configurable={"thread_id": thread_id}))
+        if checkpoint_tuple is None:
+            return None
+        return self._entry_from_checkpoint_tuple(checkpoint_tuple)
+
+    @staticmethod
+    def _entry_from_checkpoint_tuple(checkpoint_tuple) -> "ThreadEntry | None":
+        """Build a ThreadEntry from a CheckpointTuple, or None if it has no messages."""
+        thread_id = str(checkpoint_tuple.config.get("configurable", {}).get("thread_id", ""))
+        if not thread_id:
+            return None
+
+        checkpoint = checkpoint_tuple.checkpoint or {}
+        channel_values = checkpoint.get("channel_values", {})
+        messages = list(channel_values.get("messages", []) or [])
+        if not messages:
+            return None
+
+        summarization_event = channel_values.get("_summarization_event")
+        offloaded_path: str | None = None
+        if isinstance(summarization_event, dict):
+            offloaded_path = summarization_event.get("file_path") or None
+
+        return ThreadEntry(
+            thread_id=thread_id,
+            preview=ThreadsHandler._build_preview(messages),
+            timestamp=str(checkpoint.get("ts", "")),
+            pending_interrupts=ThreadsHandler._extract_interrupts(checkpoint_tuple.pending_writes or []),
+            offloaded_path=offloaded_path,
+        )
 
     async def _select_thread(self, entries: list[ThreadEntry]) -> str:
         """Show a compact keyboard-driven selector for previous threads."""
@@ -126,6 +167,7 @@ class ThreadsHandler:
             selected[0] = True
             event.app.exit()
 
+        @kb.add(Keys.Escape)
         @kb.add(Keys.ControlC)
         def _(event) -> None:
             event.app.exit()
@@ -241,6 +283,8 @@ class ThreadsHandler:
             actual_index = scroll_offset + idx
             relative_time = format_relative_time(entry.timestamp) if entry.timestamp else "unknown"
             suffix = " [pending approval]" if entry.pending_interrupts else ""
+            if entry.offloaded_path:
+                suffix += " [history offloaded]"
             display_text = f"[{relative_time}] {entry.preview}{suffix}"
 
             if actual_index == selected_index:

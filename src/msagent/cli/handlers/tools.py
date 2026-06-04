@@ -92,6 +92,7 @@ class ToolsHandler:
             else:
                 expanded_indices.add(state.index)
 
+        @kb.add(Keys.Escape)
         @kb.add(Keys.ControlC)
         def _(event):
             event.app.exit()

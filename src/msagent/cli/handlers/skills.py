@@ -121,6 +121,7 @@ class SkillsHandler:
             selected[0] = True
             event.app.exit()
 
+        @kb.add(Keys.Escape)
         @kb.add(Keys.ControlC)
         def _(event):
             event.app.exit()
@@ -168,11 +169,11 @@ class SkillsHandler:
                 lines.append(("", f"  {name}"))
 
             lines.append(("", "\n"))
-            lines.append(("dim", f"    {preview}"))
+            lines.append((f"fg:{theme.muted_text}", f"    {preview}"))
 
             if absolute_index in expanded_indices:
                 lines.append(("", "\n"))
-                lines.append(("muted", f"    Path: {skill.root_dir.as_posix()}"))
+                lines.append((f"fg:{theme.muted_text}", f"    Path: {skill.root_dir.as_posix()}"))
                 for wrapped_line in SkillsHandler._wrap_description(description, wrap_width):
                     lines.append(("", "\n"))
                     lines.append(("dim", f"    {wrapped_line}"))

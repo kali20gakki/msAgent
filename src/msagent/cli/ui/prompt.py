@@ -159,20 +159,22 @@ class InteractivePrompt:
             """Tab: apply first completion immediately."""
             buffer = event.current_buffer
 
-            if buffer.complete_state and buffer.complete_state.current_completion:
-                current_completion = buffer.complete_state.current_completion
-                buffer.apply_completion(current_completion)
-
-                if not buffer.text.lstrip().startswith("/"):
-                    buffer.insert_text(" ")
-            else:
-                buffer.start_completion(select_first=True)
-                if buffer.complete_state and buffer.complete_state.current_completion:
-                    current_completion = buffer.complete_state.current_completion
-                    buffer.apply_completion(current_completion)
-
+            if buffer.complete_state:
+                completions = buffer.complete_state.completions
+                target = buffer.complete_state.current_completion or (completions[0] if completions else None)
+                if target is not None:
+                    buffer.apply_completion(target)
                     if not buffer.text.lstrip().startswith("/"):
                         buffer.insert_text(" ")
+            else:
+                buffer.start_completion(select_first=True)
+                if buffer.complete_state:
+                    completions = buffer.complete_state.completions
+                    target = buffer.complete_state.current_completion or (completions[0] if completions else None)
+                    if target is not None:
+                        buffer.apply_completion(target)
+                        if not buffer.text.lstrip().startswith("/"):
+                            buffer.insert_text(" ")
 
         self.hotkeys = {
             self._format_key_name(Keys.ControlC): "Clear input (press twice to quit)",

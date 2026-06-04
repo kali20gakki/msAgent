@@ -148,6 +148,7 @@ class ModelHandler:
             selected[0] = True
             event.app.exit()
 
+        @kb.add(Keys.Escape)
         @kb.add(Keys.ControlC)
         def _(event):
             event.app.exit()

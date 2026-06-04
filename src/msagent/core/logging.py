@@ -112,29 +112,29 @@ def configure_logging(show_logs: bool = False, working_dir: Path | None = None) 
         module=r"pydantic(\.v1)?\.main",
     )
 
-    if show_logs:
-        # Enable file logging
-        log_dir = working_dir / CONFIG_LOG_DIR
-        log_file_path = log_dir / "app.log"
-        try:
-            log_dir.mkdir(parents=True, exist_ok=True)
-            file_handler = TimedRotatingFileHandler(
-                log_file_path,
-                when="midnight",
-                interval=1,
-                backupCount=7,  # Keep 7 days of logs
-                encoding="utf-8",
-            )
-            # Rotated files will be named app.log.YYYY-MM-DD
-            file_handler.suffix = "%Y-%m-%d"
-            file_handler.setFormatter(logging.Formatter(FILE_LOG_FORMAT))
-            root_logger.addHandler(file_handler)
+    # Always write logs to disk so they are available without -v.
+    log_dir = working_dir / CONFIG_LOG_DIR
+    log_file_path = log_dir / "app.log"
+    try:
+        log_dir.mkdir(parents=True, exist_ok=True)
+        file_handler = TimedRotatingFileHandler(
+            log_file_path,
+            when="midnight",
+            interval=1,
+            backupCount=7,  # Keep 7 days of logs
+            encoding="utf-8",
+        )
+        # Rotated files will be named app.log.YYYY-MM-DD
+        file_handler.suffix = "%Y-%m-%d"
+        file_handler.setFormatter(logging.Formatter(FILE_LOG_FORMAT))
+        root_logger.addHandler(file_handler)
 
-            # Print log file location hint (using plain print, not logging)
+        if show_logs:
+            # Print log file location hint only when verbose mode is active.
             abs_log_path = log_file_path.resolve()
             print(f"📝 Logs written to: {abs_log_path}", flush=True)
-        except OSError:
-            pass  # Sandbox may block file creation
+    except OSError:
+        pass  # Sandbox may block file creation
 
     # Suppress urllib3 "I/O operation on closed file" during botocore GC cleanup.
     _install_unraisablehook_filter()
