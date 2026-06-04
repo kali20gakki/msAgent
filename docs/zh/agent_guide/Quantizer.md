@@ -1,10 +1,10 @@
-# Zephyr 模型量化
+# Quantizer 模型量化
 
-`Zephyr` 是面向 msModelSlim 模型分析与适配场景的 Agent，负责协助用户完成新模型接入量化/压缩流程前的可行性评估、实现来源与结构性风险排查，并在分析通过后按约定完成模型适配器（Model Adapter）的开发与验证。
+`Quantizer` 是面向 msModelSlim 模型分析与适配场景的 Agent，负责协助用户完成新模型接入量化/压缩流程前的可行性评估、实现来源与结构性风险排查，并在分析通过后按约定完成模型适配器（Model Adapter）的开发与验证。
 
 ## Agent 定位
 
-- 面向大语言模型 (LLM) 的 msModelSlim 适配场景
+- 面向大语言模型（LLM）的 msModelSlim 适配场景
 - 聚焦接入前可行性分析、模型结构解析、适配器代码生成及关键验证
 - 适合处理基础 Transformers 模型适配，以及应对 MoE packed 权重拆解、超大模型逐层加载等复杂模型接入需求
 
@@ -17,17 +17,18 @@
 
 ## 环境准备
 
-- 请准备推理运行环境，推荐使用 vllm-ascend 镜像，使用 Docker 安装vllm-ascend指导：[vllm-ascend安装](https://docs.vllm.ai/projects/vllm-ascend-cn/zh-cn/latest/installation.html#set-up-using-docker)，推荐在容器内安装msagent并使用Zephyr
-- 请根据模型安装合适的transformers版本
+- 请准备推理运行环境，推荐使用 vllm-ascend 镜像，使用 Docker 安装 vllm-ascend 指导：[vllm-ascend安装](https://docs.vllm.ai/projects/vllm-ascend-cn/zh-cn/latest/installation.html#set-up-using-docker)，推荐在容器内安装 msagent 并使用 Quantizer
+- 请根据模型安装合适的 transformers 版本
 
 ## 推荐使用方式
 
 - 开始前请先下载 [msModelSlim 代码仓](https://gitcode.com/Ascend/msmodelslim)
-- 模型权重请用户自行准备并下载到本地可访问路径，再将模型名称或路径提供给 Zephyr
-- 在开始适配前，提供模型名称或路径，让 Zephyr 先进行模型分析和风险评估
+- 模型权重请用户自行准备并下载到本地可访问路径，再将模型名称或路径提供给 Quantizer
+- 在开始适配前，提供模型名称或路径，让 Quantizer 先进行模型分析和风险评估
 - Agent生成模型适配器后，请重新源码安装msModelSlim，执行install.sh安装脚本，具体操作可参考[安装指导](https://gitcode.com/Ascend/msmodelslim/blob/master/docs/zh/getting_started/install_guide.md#23-%E6%BA%90%E7%A0%81%E5%AE%89%E8%A3%85)，安装完成后使用一键量化生成量化权重，具体操作可参考[一键量化使用指导](https://gitcode.com/Ascend/msmodelslim/blob/master/docs/zh/feature_guide/quick_quantization_v1/usage.md)
 - 若量化过程出现报错，可以将报错信息复制给agent，由agent定位并解决问题
 - 推荐使用以下量化配置生成w8a8量化权重
+
 ```yaml
 apiversion: modelslim_v1
 
@@ -65,4 +66,4 @@ spec:
 
 | 场景 | 示例提示词 | 效果展示|
 |---|---|---|
-| 基础模型适配 | ` {模型路径} 是{模型}的权重，请完成对该模型的适配风险分析，并完成{msModelSlim代码路径}项目对于该模型的适配器开发和验证工作。` | <img src="../figures/modelslim_adapt.jpg" alt="MsModelslim 适配示例" width="800"> |
+| 基础模型适配 | ` {模型路径} 是该模型}的权重，请完成对该模型的适配风险分析，并完成{msModelSlim代码路径}项目对于该模型的适配器开发和验证工作。` | <img src="../figures/modelslim_adapt.jpg" alt="MsModelslim 适配示例" width="800"> |

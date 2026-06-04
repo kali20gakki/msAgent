@@ -188,10 +188,10 @@ sequenceDiagram
 
 | Agent | 领域定位 | 默认性 | 典型 Tool Pattern | 典型 Skill Pattern | SubAgent |
 | -- | -- | -- | -- | -- | -- |
-| Hermes | Ascend Profiling / 性能分析 | 默认 Agent | `impl:deepagents:*` + `mcp:msprof-mcp:*` | profiler DB 分析、快慢卡诊断、MFU 计算 | `explorer` + `general-purpose` |
+| Profiler | Ascend Profiling / 性能分析 | 默认 Agent | `impl:deepagents:*` + `mcp:msprof-mcp:*` | profiler DB 分析、快慢卡诊断、MFU 计算 | `explorer` + `general-purpose` |
 | Accuracy | 模型精度分析 | 否 | `impl:deepagents:*` | RL 一致性、NaN/溢出、确定性分析 | `explorer` + `general-purpose` |
-| Zephyr | 模型量化与适配 | 否 | `impl:deepagents:*` | msModelSlim 分析、适配、量化 | `explorer` + `general-purpose` |
-| Icarus | 算子性能优化 | 否 | `impl:deepagents:*` + 特定 MCP 模式 | AscendC 算子优化、算子 profiler | `explorer` + `general-purpose` |
+| Quantizer | 模型量化与适配 | 否 | `impl:deepagents:*` | msModelSlim 分析、适配、量化 | `explorer` + `general-purpose` |
+| Operator | 算子性能优化 | 否 | `impl:deepagents:*` + 特定 MCP 模式 | AscendC 算子优化、算子 profiler | `explorer` + `general-purpose` |
 | Minos | 文档体验与代码审查 | 否 | `impl:deepagents:*` | `document-ux-review`、`gitcode-code-reviewer` | `explorer` |
 
 这种设计意味着：
@@ -225,10 +225,10 @@ flowchart LR
     U --> Q4["算子性能瓶颈"]
     U --> Q5["文档体验 / 代码审查"]
 
-    Q1 --> H["Hermes"]
+    Q1 --> H["Profiler"]
     Q2 --> A["Accuracy"]
-    Q3 --> Z["Zephyr"]
-    Q4 --> I["Icarus"]
+    Q3 --> Z["Quantizer"]
+    Q4 --> I["Operator"]
     Q5 --> M["Minos"]
 
     H --> H1["Prompt: 性能分析方法论"]
@@ -259,7 +259,7 @@ flowchart LR
 
 5 个默认 Agent 共用同一套运行时骨架，在以下维度上形成差异化配置：
 
-| 维度 | Hermes | Accuracy | Zephyr | Icarus | Minos |
+| 维度 | Profiler | Accuracy | Quantizer | Operator | Minos |
 | -- | -- | -- | -- | -- | -- |
 | 主问题域 | Profiling / 性能瓶颈 | 精度异常 | 量化与适配 | 算子优化 | 文档与代码审查 |
 | Prompt 关注点 | 调度、热点、通信、MFU | 一致性、NaN、溢出 | 模型结构、量化风险、适配成本 | 算子热点、端到端性能 | 上手体验、文档可用性、PR 风险 |
@@ -283,10 +283,10 @@ resources/configs/default/
 ├─ config.mcp.json
 ├─ config.approval.json
 ├─ agents/
-│  ├─ Hermes.yml
+│  ├─ Profiler.yml
 │  ├─ Accuracy.yml
-│  ├─ Zephyr.yml
-│  ├─ Icarus.yml
+│  ├─ Quantizer.yml
+│  ├─ Operator.yml
 │  └─ Minos.yml
 ├─ subagents/
 │  ├─ explorer.yml
@@ -632,7 +632,7 @@ msagent
 常见启动参数：
 
 ```bash
-msagent -a Hermes -m default
+msagent -a Profiler -m default
 msagent -a Minos "帮我检查这个仓库的 README 上手流程"
 msagent --approval-mode active
 ```

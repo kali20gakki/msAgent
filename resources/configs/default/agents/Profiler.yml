@@ -1,8 +1,8 @@
 version: __APP_VERSION__
-name: Hermes
+name: Profiler
 description: Ascend NPU profiling analysis agent with msprof-mcp-first workflow
 prompt:
-  - prompts/agents/Hermes.md
+  - prompts/agents/Profiler.md
   - prompts/suffixes/environments.md
 llm: default
 checkpointer: sqlite

@@ -51,11 +51,11 @@ msagent
 手动指定启动 Agent：
 
 ```bash
-msagent --agent Hermes
+msagent --agent Profiler
 msagent --agent Accuracy
-msagent --agent Zephyr
+msagent --agent Quantizer
 msagent --agent Minos
-msagent --agent Icarus
+msagent --agent Operator
 ```
 
 更多命令，请参见[《使用指南》](../user_guide/usemap.md)

@@ -17,6 +17,7 @@
 
 <span style="font-size:14px;">
 
+🔹 **[2026.06.04]**：`Hermes` 更名为 `Profiler`，`Zephyr` 更名为 `Quantizer`，`Icarus` 更名为 `Operator`。<br>
 🔹 **[2026.05.21]**：`v26.0.0已发布，新增Icarus Agent，覆盖算子性能调优场景`。<br>
 🔹 **[2026.04.27]**：`v26.0.0.alpha1` 发布，新增 `Accuracy` / `Zephyr` Agent，覆盖精度调优与模型量化场景。<br>
 🔹 **[2026.04.08]**：`v0.1.3` 发布，完成 DeepAgents 重构并增强 `Hermes` / `Minos` Agent。<br>
@@ -36,10 +37,10 @@ MindStudio-Agent（简称 `msagent`）是面向昇腾 Ascend NPU 开发、调试
 
 | 名称 |  核心能力 |
 |---|---|
-| [**Hermes**](docs/zh/agent_guide/Hermes.md) | **【性能调优】**  聚焦 Ascend Profiling 分析，覆盖单卡、多卡、集群等场景，擅长快慢卡、慢节点、MFU、通信瓶颈、算子热点、下发调度等性能问题定位与优化建议。 |
+| [**Profiler**](docs/zh/agent_guide/Profiler.md) | **【性能调优】**  聚焦 Ascend Profiling 分析，覆盖单卡、多卡、集群等场景，擅长快慢卡、慢节点、MFU、通信瓶颈、算子热点、下发调度等性能问题定位与优化建议。 |
 | [**Accuracy**](docs/zh/agent_guide/Accuracy.md) | **【精度调优】** 聚焦 Ascend 精度分析与优化，覆盖 RL 训推一致性分析、loss / gnorm NaN 分析等常见精度问题。 |
-| [**Zephyr**](docs/zh/agent_guide/Zephyr.md) | **【模型量化】**  聚焦 msModelSlim 量化与压缩场景，协助完成模型适配可行性、结构风险评估与基础适配器开发。 |
-| [**Icarus**](docs/zh/agent_guide/Icarus.md) | **【算子调优】**  聚焦 Ascend NPU 算子性能调优，包括算子性能深度分析、端到端算子性能优化，辅助提升调优效率并降低开发难度。 |
+| [**Quantizer**](docs/zh/agent_guide/Quantizer.md) | **【模型量化】**  聚焦 msModelSlim 量化与压缩场景，协助完成模型适配可行性、结构风险评估与基础适配器开发。 |
+| [**Operator**](docs/zh/agent_guide/Operator.md) | **【算子调优】**  聚焦 Ascend NPU 算子性能调优，包括算子性能深度分析、端到端算子性能优化，辅助提升调优效率并降低开发难度。 |
 | [**Minos**](docs/zh/agent_guide/Minos.md) | **【文档体验与代码审查】**  聚焦 README 走查、安装流程验证、Quick Start 体验、新手 onboarding、文档可用性评估，以及 GitCode PR 审查与评审意见整理。 |
 
 ## 🧩 Skills

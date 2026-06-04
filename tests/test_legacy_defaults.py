@@ -26,7 +26,7 @@ from msagent.skills.factory import DEFAULT_SKILL_CATEGORY, SkillFactory
 
 
 def test_legacy_system_prompt_is_preserved() -> None:
-    prompt_path = Path("resources/configs/default/prompts/agents/Hermes.md")
+    prompt_path = Path("resources/configs/default/prompts/agents/Profiler.md")
     prompt = prompt_path.read_text(encoding="utf-8")
 
     assert "Ascend NPU Profiling 性能分析助手" in prompt

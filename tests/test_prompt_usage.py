@@ -70,11 +70,11 @@ def test_bottom_toolbar_hides_usage_without_input_tokens() -> None:
 
 def test_placeholder_text_uses_current_agent_name() -> None:
     prompt = InteractivePrompt.__new__(InteractivePrompt)
-    prompt.context = _build_prompt_context(agent="Hermes")
+    prompt.context = _build_prompt_context(agent="Profiler")
 
     text = prompt._build_placeholder_text()
 
-    assert text == "尽管问Hermes，@ 引用文件，/ 使用命令"
+    assert text == "尽管问Profiler，@ 引用文件，/ 使用命令"
 
 
 def test_placeholder_text_stays_consistent_in_bash_mode() -> None:
@@ -100,9 +100,9 @@ def test_prompt_hotkeys_include_tool_output_toggle() -> None:
 
 
 def test_build_agent_prompt_uses_current_agent_name() -> None:
-    prompt_text = build_agent_prompt(_build_prompt_context(agent="Hermes"))
+    prompt_text = build_agent_prompt(_build_prompt_context(agent="Profiler"))
 
-    assert prompt_text == "Hermes > "
+    assert prompt_text == "Profiler > "
 
 
 @pytest.mark.asyncio

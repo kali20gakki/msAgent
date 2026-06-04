@@ -38,7 +38,7 @@ async def test_context_create_keeps_alias_and_exposes_resolved_model(
         context_window=128000,
     )
     agent_config = SimpleNamespace(
-        name="Hermes",
+        name="Profiler",
         description="Ascend NPU profiling analysis agent with msprof-mcp-first workflow",
         llm=llm_config,
         tools=None,

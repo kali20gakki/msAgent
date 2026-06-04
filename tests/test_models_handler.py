@@ -40,7 +40,7 @@ def _build_llm_config(alias: str, provider: LLMProvider = LLMProvider.OPENAI) ->
 def _build_session(tmp_path: Path, *, model: str = "default") -> SimpleNamespace:
     return SimpleNamespace(
         context=SimpleNamespace(
-            agent="Hermes",
+            agent="Profiler",
             working_dir=tmp_path,
             model=model,
             thread_id="thread-1",
@@ -150,7 +150,7 @@ async def test_model_handler_updates_context_on_successful_switch(
     context_updates: dict[str, object] = {}
     session = SimpleNamespace(
         context=SimpleNamespace(
-            agent="Hermes",
+            agent="Profiler",
             working_dir=tmp_path,
             model="default",
             thread_id="thread-1",
@@ -194,7 +194,7 @@ async def test_model_handler_skips_update_when_selection_canceled(
     context_updates: dict[str, object] = {}
     session = SimpleNamespace(
         context=SimpleNamespace(
-            agent="Hermes",
+            agent="Profiler",
             working_dir=tmp_path,
             model="default",
             thread_id="thread-1",

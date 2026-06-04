@@ -73,7 +73,7 @@ Ascend 生态下利用 LLM 分析 Profiling 数据存在几个典型难点：
 
 ```mermaid
 flowchart TB
-    LLM["LLM / Agent<br/>msAgent Hermes / Cherry Studio / Claude Desktop"] --> MCP["MCP Protocol<br/>stdio transport"]
+    LLM["LLM / Agent<br/>msAgent Profiler / Cherry Studio / Claude Desktop"] --> MCP["MCP Protocol<br/>stdio transport"]
 
     MCP --> SERVER["FastMCP Server<br/>server.py : create_server()"]
 
@@ -502,7 +502,7 @@ uv run msprof-mcp
 
 msprof-mcp 通过 stdio 传输协议与 MCP Host 通信，典型集成场景包括：
 
-- msAgent Hermes Agent：通过 `.msagent/config.mcp.json` 配置，Hermes 默认启用 `mcp:msprof-mcp:*` Tool Pattern。
+- msAgent Profiler Agent：通过 `.msagent/config.mcp.json` 配置，Profiler 默认启用 `mcp:msprof-mcp:*` Tool Pattern。
 - Cherry Studio / Claude Desktop：通过 MCP 配置 JSON 添加服务。
 - 其他 MCP 客户端：只要支持 stdio 传输即可接入。
 

@@ -35,9 +35,9 @@ def _load_default_msprof_server() -> dict:
     return config["mcpServers"]["msprof-mcp"]
 
 
-def _load_default_hermes_config() -> dict:
+def _load_default_profiler_config() -> dict:
     config_path = files("resources")
-    for part in ("configs", "default", "agents", "Hermes.yml"):
+    for part in ("configs", "default", "agents", "Profiler.yml"):
         config_path = config_path.joinpath(part)
     return yaml.safe_load(config_path.read_text(encoding="utf-8"))
 
@@ -102,13 +102,13 @@ async def test_config_registry_bootstraps_default_layout(tmp_path: Path) -> None
         for rule in approval_config["decision_rules"]
     )
 
-    hermes = yaml.safe_load((config_dir / "agents" / "Hermes.yml").read_text())
+    profiler = yaml.safe_load((config_dir / "agents" / "Profiler.yml").read_text())
     minos = yaml.safe_load((config_dir / "agents" / "Minos.yml").read_text())
-    default_hermes = _load_default_hermes_config()
+    default_profiler = _load_default_profiler_config()
     default_minos = _load_default_minos_config()
-    assert hermes["name"] == "Hermes"
-    assert hermes["tools"]["patterns"] == default_hermes["tools"]["patterns"]
-    assert hermes["skills"]["patterns"] == default_hermes["skills"]["patterns"]
+    assert profiler["name"] == "Profiler"
+    assert profiler["tools"]["patterns"] == default_profiler["tools"]["patterns"]
+    assert profiler["skills"]["patterns"] == default_profiler["skills"]["patterns"]
     assert minos["name"] == "Minos"
     assert minos["skills"]["patterns"] == default_minos["skills"]["patterns"]
 
@@ -125,12 +125,12 @@ async def test_config_registry_resolves_template_version_tokens_on_load(
     assert all(llm.version == LLM_CONFIG_VERSION for llm in llms.llms)
 
 
-def test_default_agent_skill_bindings_are_split_between_hermes_and_minos() -> None:
-    hermes = _load_default_hermes_config()
+def test_default_agent_skill_bindings_are_split_between_profiler_and_minos() -> None:
+    profiler = _load_default_profiler_config()
     minos = _load_default_minos_config()
 
-    assert "default:document-ux-review" not in hermes["skills"]["patterns"]
-    assert "default:gitcode-code-reviewer" not in hermes["skills"]["patterns"]
+    assert "default:document-ux-review" not in profiler["skills"]["patterns"]
+    assert "default:gitcode-code-reviewer" not in profiler["skills"]["patterns"]
     assert minos["skills"]["patterns"] == [
         "default:document-ux-review",
         "default:gitcode-code-reviewer",

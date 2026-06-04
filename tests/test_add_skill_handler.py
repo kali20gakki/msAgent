@@ -22,7 +22,7 @@ def _write_skill(skill_dir: Path, *, name: str, description: str = "test skill")
 def _build_session(tmp_path: Path) -> SimpleNamespace:
     return SimpleNamespace(
         context=SimpleNamespace(
-            agent="Hermes",
+            agent="Profiler",
             working_dir=tmp_path,
             bash_mode=False,
             thread_id="thread-1",
@@ -61,8 +61,8 @@ async def test_add_skill_handler_installs_skill_and_updates_agent_patterns(
     installed_skill = tmp_path / ".msagent" / "skills" / "custom_skill" / "SKILL.md"
     assert installed_skill.exists()
 
-    hermes_config = yaml.safe_load((tmp_path / ".msagent" / "agents" / "Hermes.yml").read_text(encoding="utf-8"))
-    assert "default:custom_skill" in hermes_config["skills"]["patterns"]
+    profiler_config = yaml.safe_load((tmp_path / ".msagent" / "agents" / "Profiler.yml").read_text(encoding="utf-8"))
+    assert "default:custom_skill" in profiler_config["skills"]["patterns"]
     assert session.needs_reload is True
     assert session.running is False
     assert any("Installed skill 'custom_skill'" in message for message in messages)
@@ -174,7 +174,7 @@ async def test_add_skill_handler_handles_skill_install_error(tmp_path: Path, mon
     handler = AddSkillHandler(session)
 
     async def fake_load_agent_config(_agent, _working_dir):
-        return SimpleNamespace(name="Hermes")
+        return SimpleNamespace(name="Profiler")
 
     async def fake_install(_self, _path):
         raise SkillInstallError("Skill conflicts with existing one")

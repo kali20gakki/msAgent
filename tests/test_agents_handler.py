@@ -30,7 +30,7 @@ from msagent.configs import AgentConfig, ApprovalMode
 
 def _build_context() -> Context:
     return Context(
-        agent="Hermes",
+        agent="Profiler",
         agent_description="Ascend NPU profiling analysis agent",
         model="default",
         thread_id="thread-1",
@@ -45,7 +45,7 @@ async def test_agents_handler_keeps_single_agent_list_without_warning(
     monkeypatch,
 ) -> None:
     agent = AgentConfig.model_construct(
-        name="Hermes",
+        name="Profiler",
         description="Ascend NPU profiling analysis agent",
         llm=SimpleNamespace(alias="default"),
         default=True,
@@ -59,7 +59,7 @@ async def test_agents_handler_keeps_single_agent_list_without_warning(
 
     async def fake_get_agent_selection(agents, current_agent_name):
         selections.append((agents, current_agent_name))
-        return "Hermes"
+        return "Profiler"
 
     session = SimpleNamespace(context=_build_context(), update_context=lambda **kwargs: None)
     handler = AgentHandler(session)
@@ -69,14 +69,14 @@ async def test_agents_handler_keeps_single_agent_list_without_warning(
 
     assert len(selections) == 1
     agents, current_agent_name = selections[0]
-    assert [agent.name for agent in agents] == ["Hermes"]
-    assert current_agent_name == "Hermes"
+    assert [agent.name for agent in agents] == ["Profiler"]
+    assert current_agent_name == "Profiler"
 
 
 def test_format_agent_list_shows_all_state_markers() -> None:
     agents = [
         AgentConfig.model_construct(
-            name="Hermes",
+            name="Profiler",
             description="Ascend NPU profiling analysis agent",
             llm=SimpleNamespace(alias="default"),
             default=True,
@@ -89,10 +89,10 @@ def test_format_agent_list_shows_all_state_markers() -> None:
         ),
     ]
 
-    formatted = AgentHandler._format_agent_list(agents, selected_index=0, current_agent_name="Hermes")
+    formatted = AgentHandler._format_agent_list(agents, selected_index=0, current_agent_name="Profiler")
     text = "".join(fragment[1] for fragment in formatted)
 
-    assert "Hermes [current]" in text
+    assert "Profiler [current]" in text
     assert "Ascend NPU profiling analysis agent" in text
     assert "Minos" in text
     assert "Documentation onboarding and GitCode PR review agent" in text
@@ -123,7 +123,7 @@ async def test_agents_handler_skips_update_when_same_agent_selected(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     agent = AgentConfig.model_construct(
-        name="Hermes",
+        name="Profiler",
         description="Ascend NPU profiling analysis agent",
         llm=SimpleNamespace(alias="default"),
         default=True,
@@ -137,7 +137,7 @@ async def test_agents_handler_skips_update_when_same_agent_selected(
     monkeypatch.setattr(agents_module.initializer, "load_agents_config", fake_load_agents_config)
 
     async def fake_get_agent_selection(_agents, _current):
-        return "Hermes"
+        return "Profiler"
 
     session = SimpleNamespace(context=_build_context(), update_context=lambda **kwargs: context_updates.update(kwargs))
     handler = AgentHandler(session)
@@ -153,7 +153,7 @@ async def test_agents_handler_updates_context_when_different_agent_selected(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     hermes = AgentConfig.model_construct(
-        name="Hermes",
+        name="Profiler",
         description="NPU profiling agent",
         llm=SimpleNamespace(alias="default"),
         default=True,
@@ -217,22 +217,22 @@ async def test_agents_handler_handles_exception_gracefully(
 
 def test_format_agent_list_hides_description_when_missing() -> None:
     agent = AgentConfig.model_construct(
-        name="Hermes",
+        name="Profiler",
         description=None,
         llm=SimpleNamespace(alias="default"),
         default=True,
     )
 
-    formatted = AgentHandler._format_agent_list([agent], selected_index=0, current_agent_name="Hermes")
+    formatted = AgentHandler._format_agent_list([agent], selected_index=0, current_agent_name="Profiler")
     text = "".join(fragment[1] for fragment in formatted)
 
-    assert "Hermes [current]" in text
+    assert "Profiler [current]" in text
 
 
 def test_format_agent_list_does_not_show_current_tag_for_non_current_agent() -> None:
     agents = [
         AgentConfig.model_construct(
-            name="Hermes",
+            name="Profiler",
             description="Agent A",
             llm=SimpleNamespace(alias="default"),
             default=True,
@@ -245,15 +245,15 @@ def test_format_agent_list_does_not_show_current_tag_for_non_current_agent() -> 
         ),
     ]
 
-    formatted = AgentHandler._format_agent_list(agents, selected_index=1, current_agent_name="Hermes")
+    formatted = AgentHandler._format_agent_list(agents, selected_index=1, current_agent_name="Profiler")
     text = "".join(fragment[1] for fragment in formatted)
 
-    assert "[current]" not in text.replace("Hermes [current]", "")
+    assert "[current]" not in text.replace("Profiler [current]", "")
 
 
 @pytest.mark.asyncio
 async def test_agent_handler_get_agent_selection_returns_empty_for_no_agents() -> None:
     session = SimpleNamespace(context=_build_context())
     handler = AgentHandler(session)
-    result = await handler._get_agent_selection([], "Hermes")
+    result = await handler._get_agent_selection([], "Profiler")
     assert result == ""

@@ -21,7 +21,7 @@
 
 默认 agent 配置位于：
 
-- `resources/configs/default/agents/Hermes.yml`
+- `resources/configs/default/agents/Profiler.yml`
 
 当前默认配置为：
 
