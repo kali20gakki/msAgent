@@ -1563,7 +1563,7 @@ requires-dist = [
     { name = "msprof-mcp", specifier = "==0.1.6" },
     { name = "packaging", specifier = ">=24.0,<26.0" },
     { name = "pathspec", specifier = ">=0.12.1,<1.1.0" },
-    { name = "prompt-toolkit", specifier = "~=3.0.52" },
+    { name = "prompt-toolkit", specifier = ">=3.0.43,<3.1" },
     { name = "pydantic", specifier = "~=2.12.5" },
     { name = "pydantic-settings", specifier = ">=2.12,<2.14" },
     { name = "pyfiglet", specifier = ">=0.8" },
