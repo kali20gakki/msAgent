@@ -42,42 +42,43 @@ MindStudio-Agent（简称 `msagent`）是面向昇腾 Ascend NPU 开发、调试
 | [**Icarus**](docs/zh/agent_guide/Icarus.md) | **【算子调优】**  聚焦 Ascend NPU 算子性能调优，包括算子性能深度分析、端到端算子性能优化，辅助提升调优效率并降低开发难度。 |
 | [**Minos**](docs/zh/agent_guide/Minos.md) | **【文档体验与代码审查】**  聚焦 README 走查、安装流程验证、Quick Start 体验、新手 onboarding、文档可用性评估，以及 GitCode PR 审查与评审意见整理。 |
 
-## 🧩 内置技能
+## 🧩 Skills
 
-除领域 Agent 外，`msagent` 还内置了一批可复用的 Skills，覆盖 Profiling 数据分析、算子性能调优、精度溢出检测、文档体验审查、代码审查等场景。完整技能清单、触发方式与依赖说明，请参见 [《内置技能库》](docs/zh/skills/README.md)。
+除领域 Agent 外，`msagent` 还内置了一批可复用的 Skills，覆盖 Profiling 数据分析、算子性能调优、精度溢出检测、文档体验审查、代码审查等场景。完整技能清单、触发方式与依赖说明，请参见 《[Skills]》(./skills/README.md)。
 
 ## 🚀 快速入门
-快速体验核心功能，请参见[《msAgent快速入门》](docs/zh/getting_started/quick_start.md)。
+快速体验核心功能，请参见《[msAgent快速入门]》(docs/zh/getting_started/quick_start.md)。
 
 ## 📦 安装指南
-介绍工具的环境依赖与安装方法，请参见[《msAgent安装指南》](docs/zh/getting_started/install_guide.md)
+介绍工具的环境依赖与安装方法，请参见《[msAgent安装指南]》(docs/zh/getting_started/install_guide.md)
 
 
 ## 📘 使用指南
-工具的详细使用方法，请参见[《msAgent使用指南》](docs/zh/user_guide/usemap.md)
+工具的详细使用方法，请参见《[msAgent使用指南]》(docs/zh/user_guide/usemap.md)
 
 ## ❓ FAQ
 
-常见问题与排查入口请参见 [《FAQ》](docs/zh/user_guide/faq.md)。
+常见问题与排查入口请参见 《[FAQ]》(docs/zh/user_guide/faq.md)。
 
 ## 🌌 智能检索
 
 为提升文档查阅效率，建议优先通过以下入口定位信息：
-🔹 [《中文文档首页》](docs/index.md)：按快速入门、用户指南、Agent 指南和开发指南组织内容。
-🔹 [《配置与扩展》](docs/zh/user_guide/configuration-and-extension.md)：查询本地配置目录、MCP 配置、Skills 扩展与加载顺序。
-🔹 [《版本与兼容性》](docs/zh/developer_guide/version-and-compatibility.md)：查询版本要求、兼容策略与内置依赖。
-🔹 会话内直接询问 `msagent`：让对应 Agent 结合仓库文档、配置和上下文辅助定位问题。
+
+🔹 《[中文文档首页]》(docs/index.md)：按快速入门、用户指南、Agent 指南和开发指南组织内容。<br>
+🔹 《[配置与扩展]》(docs/zh/user_guide/configuration-and-extension.md)：查询本地配置目录、MCP 配置、Skills 扩展与加载顺序。<br>
+🔹 《[版本与兼容性]》(docs/zh/developer_guide/version-and-compatibility.md)：查询版本要求、兼容策略与内置依赖。<br>
+🔹 会话内直接询问 `msagent`：让对应 Agent 结合仓库文档、配置和上下文辅助定位问题。<br>
 
 ## 🛠️ 贡献指南
 
-欢迎提交 Issue、PR 或补充新的领域 Skills。完整流程、开发自检与各类贡献指引见 [《贡献指南》](docs/zh/developer_guide/contributing.md)。
+欢迎提交 Issue、PR 或补充新的领域 Skills。完整流程、开发自检与各类贡献指引见 《[贡献指南]》(docs/zh/developer_guide/contributing.md)。
 
 ## ⚖️ 相关说明
 
-🔹 [《版本与兼容性》](docs/zh/developer_guide/version-and-compatibility.md)
-🔹 [《安全声明》](docs/zh/legal/SECURITY.md)
-🔹 [《免责声明》](docs/zh/legal/DISCLAIMER.md)
-🔹 [《许可证声明》](docs/zh/legal/LICENSE)
+🔹 《[版本与兼容性]》(docs/zh/developer_guide/version-and-compatibility.md)<br>
+🔹 《[安全声明]》(docs/zh/legal/SECURITY.md)<br>
+🔹 《[免责声明]》(docs/zh/legal/DISCLAIMER.md)<br>
+🔹 《[许可证声明]》(docs/zh/legal/LICENSE_intro.md)<br>
 
 ## 🤝 建议与交流
 

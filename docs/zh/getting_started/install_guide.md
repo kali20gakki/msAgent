@@ -32,3 +32,7 @@ uv run msagent
 ```
 
 源码运行时，后续示例中的 `msagent` 可以替换为 `uv run msagent`。
+
+## 源码安装
+
+如果你需要本地构建并发布软件包，请参考[《构建打包指南》](../developer_guide/build-and-package.md)

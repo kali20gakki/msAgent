@@ -3,6 +3,55 @@
 一个面向支持 `SKILL.md` 约定的 AI Agent 的技能仓库，当前重点覆盖 **Ascend / MindStudio Profiling 分析**，并补充文档体验审查、GitCode PR 审查等通用辅助技能。
 
 这个仓库的目标不是堆积提示词，而是把可复用的诊断经验、明确的 SOP、以及必要的脚本工具收敛到同一个技能目录里，让 Agent 在合适场景下稳定触发、稳定执行、稳定输出。
+## 快速使用
+
+### 1. 选择一个 skill
+
+每个 skill 都是一个独立目录，至少包含一个 `SKILL.md`。如果你的 Agent 支持本地 skills 目录，通常可以直接把对应目录复制、软链接，或按仓库方式纳入技能搜索路径。
+
+### 2. 确保运行环境可用
+
+部分技能除了说明文档，还会调用本地脚本或外部工具：
+
+- Python 3
+- `pandas`
+- `sqlite3`（数据库查询类 skill）
+- `git`
+- `msprof`
+- `torch_npu` 或 `mindspore`（仅离线解析相关技能需要）
+- `curl` / `curl.exe`（GitHub raw / docs 抓取类场景）
+- `GITCODE_TOKEN` 或 `git config --global gitcode.token <your-token>`（仅 `gitcode-code-reviewer` 需要）
+
+### 3. 用任务语言触发技能
+
+示例：
+
+- “帮我检查这个 MindStudio profiler 数据是否完整可分析”
+- “分析这个 Ascend 集群 profiling 目录里的快慢卡问题”
+- “查一下这个 `msprof_*.db` 里最耗时的 TopK 算子和通信耗时”
+- “根据这个 matmul 的 shape 和耗时计算 MFU”
+- “按这个仓库 README 真跑一遍，看看新人能不能走通”
+- “review 这个 GitCode PR，并把需要修改的问题整理出来”
+- “把这个 GitHub 文件页面链接转成 raw content 给我”
+- “读取这个仓库里关于 X 的 docs，先按 `agent_router.md` 找真实路径”
+
+对于 `gitcode-code-reviewer`：
+
+- 输入可以是 GitCode PR 链接，例如 `https://gitcode.com/<owner>/<repo>/pull/<number>`
+- 技能会先获取 PR 元数据、变更文件和 diff，再结合仓库上下文做“有依据”的审查，而不是只复述 patch
+- 如需把结论发布回 PR，需要先配置 GitCode 访问令牌
+
+对于 `github-raw-fetch`：
+
+- 如果目标是普通文本文件，按 `github.com/<owner>/<repo>/blob/<ref>/...` 到 `raw.githubusercontent.com/<owner>/<repo>/<ref>/...` 的规则直接转换并抓取
+- 如果目标属于 docs、FAQ、指南、Markdown 文档体系，必须先读取同仓库同 `ref` 的 `agent_router.md`，再根据其中的目录映射、别名或入口规则推导真实路径
+- 抓取 raw 内容时优先使用 `curl`；在 PowerShell 环境中优先使用 `curl.exe -L`
+
+对于 `ascendc-operator-performance-optim`：
+
+- 输入可以是 msprof op 性能数据目录（包含 ArithmeticUtilization.csv、L2Cache.csv 等文件）
+- 技能会自动诊断性能瓶颈（Vector/Scalar 利用率、L2 Cache、流水线、资源冲突等）
+- 结合算子源码给出具体的代码优化建议，并参考 AscendC 高阶 API 文档生成优化后的代码
 
 ## 特点
 
@@ -76,55 +125,6 @@
 │   └── SKILL.md
 ```
 
-## 快速使用
-
-### 1. 选择一个 skill
-
-每个 skill 都是一个独立目录，至少包含一个 `SKILL.md`。如果你的 Agent 支持本地 skills 目录，通常可以直接把对应目录复制、软链接，或按仓库方式纳入技能搜索路径。
-
-### 2. 确保运行环境可用
-
-部分技能除了说明文档，还会调用本地脚本或外部工具：
-
-- Python 3
-- `pandas`
-- `sqlite3`（数据库查询类 skill）
-- `git`
-- `msprof`
-- `torch_npu` 或 `mindspore`（仅离线解析相关技能需要）
-- `curl` / `curl.exe`（GitHub raw / docs 抓取类场景）
-- `GITCODE_TOKEN` 或 `git config --global gitcode.token <your-token>`（仅 `gitcode-code-reviewer` 需要）
-
-### 3. 用任务语言触发技能
-
-示例：
-
-- “帮我检查这个 MindStudio profiler 数据是否完整可分析”
-- “分析这个 Ascend 集群 profiling 目录里的快慢卡问题”
-- “查一下这个 `msprof_*.db` 里最耗时的 TopK 算子和通信耗时”
-- “根据这个 matmul 的 shape 和耗时计算 MFU”
-- “按这个仓库 README 真跑一遍，看看新人能不能走通”
-- “review 这个 GitCode PR，并把需要修改的问题整理出来”
-- “把这个 GitHub 文件页面链接转成 raw content 给我”
-- “读取这个仓库里关于 X 的 docs，先按 `agent_router.md` 找真实路径”
-
-对于 `gitcode-code-reviewer`：
-
-- 输入可以是 GitCode PR 链接，例如 `https://gitcode.com/<owner>/<repo>/pull/<number>`
-- 技能会先获取 PR 元数据、变更文件和 diff，再结合仓库上下文做“有依据”的审查，而不是只复述 patch
-- 如需把结论发布回 PR，需要先配置 GitCode 访问令牌
-
-对于 `github-raw-fetch`：
-
-- 如果目标是普通文本文件，按 `github.com/<owner>/<repo>/blob/<ref>/...` 到 `raw.githubusercontent.com/<owner>/<repo>/<ref>/...` 的规则直接转换并抓取
-- 如果目标属于 docs、FAQ、指南、Markdown 文档体系，必须先读取同仓库同 `ref` 的 `agent_router.md`，再根据其中的目录映射、别名或入口规则推导真实路径
-- 抓取 raw 内容时优先使用 `curl`；在 PowerShell 环境中优先使用 `curl.exe -L`
-
-对于 `ascendc-operator-performance-optim`：
-
-- 输入可以是 msprof op 性能数据目录（包含 ArithmeticUtilization.csv、L2Cache.csv 等文件）
-- 技能会自动诊断性能瓶颈（Vector/Scalar 利用率、L2 Cache、流水线、资源冲突等）
-- 结合算子源码给出具体的代码优化建议，并参考 AscendC 高阶 API 文档生成优化后的代码
 
 ## Skill 设计约定
 
@@ -145,18 +145,3 @@
 3. 如果流程里有稳定可执行的步骤，把它放进 `scripts/`
 4. 用一个真实任务做最小验证，确认技能会被正确触发
 5. 把新 skill 补充到本 README 的“当前技能”表格中
-
-
-## 参考的开源项目
-
-这个 README 的组织方式主要参考了几类业界开源项目的写法：项目定位先行、技能列表可扫读、目录结构明确、快速使用路径清晰、扩展规范单独成节。
-
-- Vercel `skills`: <https://github.com/vercel-labs/skills>
-- Vercel `agent-skills`: <https://github.com/vercel-labs/agent-skills>
-- `claude-skills-base`: <https://github.com/Cam10001110101/claude-skills-base>
-
-如果后续这个仓库继续扩展，可以再补充：
-
-- `CONTRIBUTING.md`
-- 技能分类目录（如 `profiling/`、`utility/`、`research/`）
-- 自动校验脚本（frontmatter、目录结构、脚本可执行性）
