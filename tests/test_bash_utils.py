@@ -65,6 +65,98 @@ class _DummyProcess:
 
 
 @pytest.mark.asyncio
+async def test_bash_helper_functions_cover_stream_cancel_and_finish(monkeypatch: pytest.MonkeyPatch) -> None:
+    buffer = bytearray()
+    await bash_module._pump_stream(_DummyStream([b"a", b"b"]), buffer)
+    assert buffer == b"ab"
+    await bash_module._pump_stream(None, bytearray())
+
+    task = asyncio.create_task(asyncio.sleep(10))
+    await bash_module._cancel_task(task)
+    assert task.cancelled() is True
+    await bash_module._cancel_task(None)
+
+    await bash_module._finish_stream_tasks([None])
+
+    cancelled: list[asyncio.Task[None]] = []
+
+    async def fake_cancel_task(task):
+        cancelled.append(task)
+
+    async def fake_wait_for(_awaitable, timeout):
+        raise RuntimeError("flush failed")
+
+    monkeypatch.setattr(bash_module, "_cancel_task", fake_cancel_task)
+    monkeypatch.setattr(asyncio, "wait_for", fake_wait_for)
+
+    pending = asyncio.create_task(asyncio.sleep(0))
+    await bash_module._finish_stream_tasks([pending])
+    assert cancelled == [pending]
+
+
+@pytest.mark.asyncio
+async def test_terminate_process_tree_covers_windows_and_posix_paths(monkeypatch: pytest.MonkeyPatch) -> None:
+    process = _DummyProcess(returncode=None)
+
+    original_platform = bash_module.sys.platform
+    monkeypatch.setattr(bash_module.sys, "platform", "win32")
+
+    class _FakeKiller:
+        async def wait(self) -> int:
+            return 0
+
+    async def fake_create_subprocess_exec(*args, **kwargs):
+        return _FakeKiller()
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
+    await bash_module._terminate_process_tree(process)
+
+    process = _DummyProcess(returncode=None)
+
+    async def raising_create_subprocess_exec(*args, **kwargs):
+        raise RuntimeError("taskkill unavailable")
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", raising_create_subprocess_exec)
+    await bash_module._terminate_process_tree(process)
+    assert process.kill_called is True
+
+    process = _DummyProcess(returncode=None)
+    monkeypatch.setattr(bash_module.sys, "platform", "linux")
+    calls: list[tuple[int, int]] = []
+    monkeypatch.setattr(bash_module.signal, "SIGKILL", 9, raising=False)
+    monkeypatch.setattr(bash_module.os, "killpg", lambda pid, sig: calls.append((pid, sig)), raising=False)
+    await bash_module._terminate_process_tree(process)
+    assert calls == [(process.pid, 9)]
+
+    process = _DummyProcess(returncode=None)
+
+    def raise_permission(_pid: int, _sig: int) -> None:
+        raise PermissionError
+
+    monkeypatch.setattr(bash_module.os, "killpg", raise_permission, raising=False)
+    await bash_module._terminate_process_tree(process)
+    assert process.kill_called is True
+
+    monkeypatch.setattr(bash_module.sys, "platform", original_platform)
+
+
+@pytest.mark.asyncio
+async def test_execute_bash_command_returns_error_for_spawn_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_create_subprocess_exec(*args, **kwargs):
+        raise RuntimeError("spawn failed")
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
+
+    status, stdout, stderr = await bash_module.execute_bash_command(["bash", "-c", "echo test"])
+
+    assert status == -1
+    assert stdout == ""
+    assert stderr == "spawn failed"
+
+
+@pytest.mark.asyncio
 async def test_execute_bash_command_collects_incremental_output(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

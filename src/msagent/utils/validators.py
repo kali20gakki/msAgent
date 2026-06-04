@@ -21,7 +21,7 @@
 import inspect
 import json
 from collections.abc import Callable
-from typing import Annotated, Any, get_args, get_origin
+from typing import Annotated, Any, get_args, get_origin, get_type_hints
 
 from json_repair import loads as repair_loads
 from langchain.tools import tool
@@ -88,14 +88,18 @@ def json_safe_tool(func: Callable) -> Any:
             ...
     """
     sig = inspect.signature(func)
+    try:
+        resolved_hints = get_type_hints(func, include_extras=True)
+    except Exception:
+        resolved_hints = {}
     fields: dict[str, Any] = {}
     validators: dict[str, Any] = {}
 
     for param_name, param in sig.parameters.items():
-        if param.annotation == inspect.Parameter.empty:
+        annotation = resolved_hints.get(param_name, param.annotation)
+        if annotation == inspect.Parameter.empty:
             continue
 
-        annotation = param.annotation
         field_info = None
 
         # Check if it's Annotated[Type, Field(...)]

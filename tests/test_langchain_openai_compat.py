@@ -18,6 +18,8 @@
 
 from __future__ import annotations
 
+import json
+
 from langchain_core.messages import AIMessage, AIMessageChunk
 from langchain_openai.chat_models import base as openai_base
 
@@ -45,13 +47,12 @@ def test_patch_replays_reasoning_content_in_chat_completions_requests() -> None:
 
     assert payload["reasoning_content"] == "need to inspect the workspace first"
     assert payload["content"] is None
-    assert payload["tool_calls"] == [
-        {
-            "id": "call_1",
-            "type": "function",
-            "function": {"name": "ls", "arguments": "{\"path\":\".\"}"},
-        }
-    ]
+    assert len(payload["tool_calls"]) == 1
+    tool_call = payload["tool_calls"][0]
+    assert tool_call["id"] == "call_1"
+    assert tool_call["type"] == "function"
+    assert tool_call["function"]["name"] == "ls"
+    assert json.loads(tool_call["function"]["arguments"]) == {"path": "."}
 
 
 def test_patch_extracts_reasoning_content_from_chat_completion_responses() -> None:
