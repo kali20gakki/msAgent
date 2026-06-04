@@ -249,3 +249,87 @@ def test_tool_output_handler_body_lines_include_tool_name_and_args() -> None:
         "Output:",
     ]
     assert lines[6] == "preview output"
+
+
+def test_stringify_tool_arg_converts_dict_to_json() -> None:
+    result = ToolOutputHandler._stringify_tool_arg({"key": "value", "num": 42})
+    assert '"key"' in result
+    assert '"value"' in result
+    assert "42" in result
+
+
+def test_stringify_tool_arg_converts_list_to_json() -> None:
+    result = ToolOutputHandler._stringify_tool_arg([1, 2, 3])
+    assert "1" in result
+    assert "2" in result
+    assert "3" in result
+
+
+def test_stringify_tool_arg_normalizes_crlf_in_strings() -> None:
+    result = ToolOutputHandler._stringify_tool_arg("line1\r\nline2")
+    assert result == "line1\nline2"
+
+
+def test_stringify_tool_arg_converts_non_string_types() -> None:
+    assert ToolOutputHandler._stringify_tool_arg(42) == "42"
+    assert ToolOutputHandler._stringify_tool_arg(True) == "True"
+
+
+def test_wrap_block_preserves_line_breaks() -> None:
+    text = "first line\nsecond line\nthird line"
+    result = ToolOutputHandler._wrap_block(text, width=80)
+    assert "first line" in result
+    assert "second line" in result
+    assert "third line" in result
+
+
+def test_wrap_block_returns_empty_for_empty_input() -> None:
+    result = ToolOutputHandler._wrap_block("", width=80)
+    assert result == [""]
+
+
+def test_wrap_block_applies_initial_and_subsequent_indent() -> None:
+    text = "a long line that needs wrapping because it exceeds the specified width"
+    result = ToolOutputHandler._wrap_block(text, width=20, initial_indent="  key: ", subsequent_indent="       ")
+    assert result[0].startswith("  key: ")
+    for line in result[1:]:
+        assert line.startswith("       ")
+
+
+def test_build_body_lines_includes_tool_name_and_args() -> None:
+    entry = ToolOutputEntry(
+        tool_call_id="call-1",
+        tool_name="execute",
+        preview_content="preview",
+        full_content="full output\nline 2",
+        tool_args={"command": "ls -la"},
+    )
+    lines = ToolOutputHandler._build_body_lines(entry, width=120)
+    assert lines[0] == "Tool: execute"
+    assert "Args:" in lines
+    assert "  command: ls -la" in lines
+    assert "Output:" in lines
+
+
+def test_build_body_lines_uses_full_content_when_expanded() -> None:
+    entry = ToolOutputEntry(
+        tool_call_id="call-1",
+        tool_name="run",
+        preview_content="preview",
+        full_content="expanded detailed output",
+        tool_args={},
+    )
+    entry.expanded = True
+    lines = ToolOutputHandler._build_body_lines(entry, width=120)
+    assert "expanded detailed output" in lines
+
+
+def test_build_body_lines_shows_empty_output_placeholder_when_no_content() -> None:
+    entry = ToolOutputEntry(
+        tool_call_id="call-1",
+        tool_name="test",
+        preview_content="",
+        full_content="",
+    )
+    lines = ToolOutputHandler._build_body_lines(entry, width=120)
+    assert "(empty output)" in lines

@@ -149,3 +149,58 @@ async def test_command_dispatcher_routes_add_skill_command(
 
     handle_mock.assert_awaited_once_with(["/tmp/custom skill"])
     assert "/add-skill" in dispatcher.commands
+
+
+@pytest.mark.asyncio
+async def test_add_skill_handler_reports_usage_when_no_args(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    errors: list[str] = []
+    monkeypatch.setattr(add_skill_module.console, "print_error", errors.append)
+    monkeypatch.setattr(add_skill_module.console, "print", lambda *_args, **_kwargs: None)
+
+    session = _build_session(tmp_path)
+    handler = AddSkillHandler(session)
+    await handler.handle([])
+
+    assert any("Usage: /add-skill" in e for e in errors)
+
+
+@pytest.mark.asyncio
+async def test_add_skill_handler_handles_skill_install_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    errors: list[str] = []
+    monkeypatch.setattr(add_skill_module.console, "print_error", errors.append)
+    monkeypatch.setattr(add_skill_module.console, "print", lambda *_args, **_kwargs: None)
+
+    session = _build_session(tmp_path)
+    handler = AddSkillHandler(session)
+
+    async def fake_load_agent_config(_agent, _working_dir):
+        return SimpleNamespace(name="Hermes")
+
+    async def fake_install(_self, _path):
+        raise SkillInstallError("Skill conflicts with existing one")
+
+    monkeypatch.setattr(add_skill_module.initializer, "load_agent_config", fake_load_agent_config)
+    monkeypatch.setattr(SkillInstaller, "install", fake_install)
+
+    await handler.handle(["/tmp/skill"])
+
+    assert any("Skill conflicts with existing one" in e for e in errors)
+
+
+@pytest.mark.asyncio
+async def test_add_skill_handler_handles_generic_exception(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    errors: list[str] = []
+    monkeypatch.setattr(add_skill_module.console, "print_error", errors.append)
+    monkeypatch.setattr(add_skill_module.console, "print", lambda *_args, **_kwargs: None)
+
+    session = _build_session(tmp_path)
+    handler = AddSkillHandler(session)
+
+    async def fake_load_agent_config(_agent, _working_dir):
+        raise RuntimeError("unexpected failure")
+
+    monkeypatch.setattr(add_skill_module.initializer, "load_agent_config", fake_load_agent_config)
+
+    await handler.handle(["/tmp/skill"])
+
+    assert any("Error installing skill" in e for e in errors)
