@@ -3,7 +3,6 @@
 <div align="center">
 <p><b><span style="font-size:24px;">面向 Ascend NPU 场景的一站式调试调优 Agent</span></b></p>
 
-
 [![快速入门](https://badgen.net/badge/快速入门/QuickStart/blue)](#-快速入门)
 [![精确搜索](https://badgen.net/badge/精确搜索/ReadTheDocs/blue)](https://mindstudio-agent.readthedocs.io/zh-cn/latest/)
 [![安装指南](https://badgen.net/badge/安装指南/Install/blue)](#-安装指南)
@@ -45,49 +44,51 @@ MindStudio-Agent（简称 `msagent`）是面向昇腾 Ascend NPU 开发、调试
 
 ## 🧩 Skills
 
-除领域 Agent 外，`msagent` 还内置了一批可复用的 Skills，覆盖 Profiling 数据分析、算子性能调优、精度溢出检测、文档体验审查、代码审查等场景。完整技能清单、触发方式与依赖说明，请参见 《[Skills]》(./skills/README.md)。
+除领域 Agent 外，`msagent` 还内置了一批可复用的 Skills，覆盖 Profiling 数据分析、算子性能调优、精度溢出检测、文档体验审查、代码审查等场景。完整技能清单、触发方式与依赖说明，请参见 《[Skills](./skills/README.md)》。
 
 ## 🚀 快速入门
-快速体验核心功能，请参见《[msAgent快速入门]》(docs/zh/getting_started/quick_start.md)。
+
+快速体验核心功能，请参见《[msAgent快速入门](docs/zh/getting_started/quick_start.md)》。
 
 ## 📦 安装指南
-介绍工具的环境依赖与安装方法，请参见《[msAgent安装指南]》(docs/zh/getting_started/install_guide.md)
 
+介绍工具的环境依赖与安装方法，请参见《[msAgent安装指南](docs/zh/getting_started/install_guide.md)》。
 
 ## 📘 使用指南
-工具的详细使用方法，请参见《[msAgent使用指南]》(docs/zh/user_guide/usemap.md)
+
+工具的详细使用方法，请参见《[msAgent使用指南](docs/zh/user_guide/usemap.md)》。
 
 ## ❓ FAQ
 
-常见问题与排查入口请参见 《[FAQ]》(docs/zh/user_guide/faq.md)。
+常见问题与排查入口请参见 《[FAQ](docs/zh/user_guide/faq.md)》。
 
 ## 🌌 智能检索
 
 为提升文档查阅效率，建议优先通过以下入口定位信息：
 
-🔹 《[中文文档首页]》(docs/index.md)：按快速入门、用户指南、Agent 指南和开发指南组织内容。<br>
-🔹 《[配置与扩展]》(docs/zh/user_guide/configuration-and-extension.md)：查询本地配置目录、MCP 配置、Skills 扩展与加载顺序。<br>
-🔹 《[版本与兼容性]》(docs/zh/developer_guide/version-and-compatibility.md)：查询版本要求、兼容策略与内置依赖。<br>
+🔹 《[中文文档首页](docs/index.md)》：按快速入门、用户指南、Agent 指南和开发指南组织内容。<br>
+🔹 《[配置与扩展](docs/zh/user_guide/configuration-and-extension.md)》：查询本地配置目录、MCP 配置、Skills 扩展与加载顺序。<br>
+🔹 《[版本与兼容性](docs/zh/developer_guide/version-and-compatibility.md)》：查询版本要求、兼容策略与内置依赖。<br>
 🔹 会话内直接询问 `msagent`：让对应 Agent 结合仓库文档、配置和上下文辅助定位问题。<br>
 
 ## 🛠️ 贡献指南
 
-欢迎提交 Issue、PR 或补充新的领域 Skills。完整流程、开发自检与各类贡献指引见 《[贡献指南]》(docs/zh/developer_guide/contributing.md)。
+欢迎提交 Issue、PR 或补充新的领域 Skills。完整流程、开发自检与各类贡献指引见 《[贡献指南](docs/zh/developer_guide/contributing.md)》。
 
 ## ⚖️ 相关说明
 
-🔹 《[版本与兼容性]》(docs/zh/developer_guide/version-and-compatibility.md)<br>
-🔹 《[安全声明]》(docs/zh/legal/SECURITY.md)<br>
-🔹 《[免责声明]》(docs/zh/legal/DISCLAIMER.md)<br>
-🔹 《[许可证声明]》(docs/zh/legal/LICENSE_intro.md)<br>
+🔹 《[版本与兼容性](docs/zh/developer_guide/version-and-compatibility.md)》<br>
+🔹 《[安全声明](docs/zh/legal/SECURITY.md)》<br>
+🔹 《[免责声明](docs/zh/legal/DISCLAIMER.md)》<br>
+🔹 《[许可证声明](docs/zh/legal/LICENSE_intro.md)》<br>
 
 ## 🤝 建议与交流
 
-欢迎大家为社区做贡献。如果有任何疑问或建议，请提交 [Issues](https://gitcode.com/Ascend/msagent/issues)，我们会尽快回复。感谢您的支持。
+欢迎大家为社区做贡献。如果有任何疑问或建议，请提交 [Issues](https://gitcode.com/Ascend/mssanitizer/issues)，我们会尽快回复。感谢您的支持。
 
-| 即时互动（飞书群） | 交流说明 |
-|:--:|:--|
-| [![Feishu](https://img.shields.io/badge/Feishu-3370FF?style=for-the-badge&logo=lark&logoColor=white)](https://applink.feishu.cn/client/chat/chatter/add_by_link?link_token=854v5833-c03a-484e-8aac-0637f0303dc4&qr_code=true)<br><sub>*点击蓝色按钮加入技术交流群*</sub> | 加入飞书群，直达 MindStudio 用户与开发者交流平台：<br> **快速提问：** 与社区小伙伴即时探讨技术问题<br>**掌握动态：** 第一时间获取版本发布与功能更新通知<br> **经验共享：** 与广大开发者交流最佳实践与实战心得 |
+|                      即时互动（微信群）                      |                      官方资讯（公众号）                      | 深度支持（助手/论坛）                                        |
+| :----------------------------------------------------------: | :----------------------------------------------------------: | :----------------------------------------------------------- |
+| <img src="https://raw.gitcode.com/mengguangxin/docs/files/dev_0526/common/Writing_Template/figures/qr_code_wechat_work.png" width="120"><br><sub>*扫码加入技术交流群*</sub> | <img src="https://raw.gitcode.com/mengguangxin/docs/files/dev_0526/common/Writing_Template/figures/qr_code_wechat_official_account.png" width="120"><br><sub>*扫码关注官方公众号*</sub> | 扫码入群并关注公众号，直达 MindStudio 用户与开发者最快捷的交流平台：<br> **快速提问：** 与社区小伙伴即时探讨技术问题<br>**掌握动态：** 第一时间获取版本发布与功能更新通知<br> **经验共享：** 与广大开发者交流最佳实践与实战心得  <br> <br> **更多支持渠道**：👉 昇腾助手：[![WeChat](https://img.shields.io/badge/WeChat-07C160?style=flat-square&logo=wechat&logoColor=white)](https://gitcode.com/Ascend/msit/blob/master/docs/zh/figures/readme/xiaozhushou.png) 👉 昇腾论坛：[![Website](https://img.shields.io/badge/Website-%231e37ff?style=flat-square&logo=RSS&logoColor=white)](https://www.hiascend.com/forum/) |
 
 ## 🙏 致谢
 
