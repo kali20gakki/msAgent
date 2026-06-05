@@ -4,7 +4,8 @@
 
 ## 1. 环境准备
 
-安装昇腾NPU驱动和配套版本的CANN软件（包含Toolkit和ops包）并配置环境变量，具体请参见《[CANN 快速安装](https://www.hiascend.com/cann/download)》。
+1. 安装昇腾NPU驱动和配套版本的CANN软件（包含Toolkit和ops包）并配置环境变量，具体请参见《[CANN 快速安装](https://www.hiascend.com/cann/download)》。
+2. 安装本工具，具体请参见《[msAgent安装指南](./install_guide.md)》。
 
 ## 2. 配置 LLM
 
