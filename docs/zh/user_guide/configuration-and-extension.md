@@ -20,7 +20,7 @@
 |---|---|
 | `.msagent/config.llms.yml` | 默认模型配置入口文件。 |
 | `.msagent/llms/*.yml` | 额外的模型别名配置。 |
-| `.msagent/agents/*.yml` | Agent 定义。当前默认包含 `Profiler.yml`、`Minos.yml`。 |
+| `.msagent/agents/*.yml` | Agent 定义。当前默认包含 `Profiler.yml`、`Accuracy.yml`、`Quantizer.yml`、`Modeling.yml`、`Operator.yml`、`Minos.yml`。 |
 | `.msagent/subagents/*.yml` | SubAgent 定义。 |
 | `.msagent/checkpointers/*.yml` | Checkpointer 配置。当前默认包含 `memory.yml`、`sqlite.yml`。 |
 | `.msagent/sandboxes/*.yml` | Sandbox 配置模板。 |

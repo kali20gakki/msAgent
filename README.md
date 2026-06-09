@@ -39,6 +39,7 @@ MindStudio-Agent（简称 `msagent`）是面向昇腾 Ascend NPU 开发、调试
 | [**Profiler**](docs/zh/agent_guide/Profiler.md) | **【性能调优】**  聚焦 Ascend Profiling 分析，覆盖单卡、多卡、集群等场景，擅长快慢卡、慢节点、MFU、通信瓶颈、算子热点、下发调度等性能问题定位与优化建议。 |
 | [**Accuracy**](docs/zh/agent_guide/Accuracy.md) | **【精度调优】** 聚焦 Ascend 精度分析与优化，覆盖 RL 训推一致性分析、loss / gnorm NaN 分析等常见精度问题。 |
 | [**Quantizer**](docs/zh/agent_guide/Quantizer.md) | **【模型量化】**  聚焦 msModelSlim 量化与压缩场景，协助完成模型适配可行性、结构风险评估与基础适配器开发。 |
+| [**Modeling**](docs/zh/agent_guide/Modeling.md) | **【仿真建模】** 聚焦大模型（LLM/VLM）仿真建模场景，承接性能建模、单点仿真、吞吐规划、设备画像与模型接入准备类问题。 |
 | [**Operator**](docs/zh/agent_guide/Operator.md) | **【算子调优】**  聚焦 Ascend NPU 算子性能调优，包括算子性能深度分析、端到端算子性能优化，辅助提升调优效率并降低开发难度。 |
 | [**Minos**](docs/zh/agent_guide/Minos.md) | **【文档体验与代码审查】**  聚焦 README 走查、安装流程验证、Quick Start 体验、新手 onboarding、文档可用性评估，以及 GitCode PR 审查与评审意见整理。 |
 

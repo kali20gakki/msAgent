@@ -151,6 +151,21 @@ class ConfigRegistry:
                     encoding="utf-8",
                 )
 
+            modeling_agent_path = self.config_dir / "agents" / "Modeling.yml"
+            template_modeling_agent_path = template_config_dir / "agents" / "Modeling.yml"
+            if modeling_agent_path.exists() and template_modeling_agent_path.exists():
+                current_agent = yaml.safe_load(modeling_agent_path.read_text(encoding="utf-8")) or {}
+                template_agent = yaml.safe_load(template_modeling_agent_path.read_text(encoding="utf-8")) or {}
+                current_patterns = current_agent.setdefault("skills", {}).setdefault("patterns", [])
+                template_patterns = template_agent.get("skills", {}).get("patterns", [])
+                for pattern in template_patterns:
+                    if pattern not in current_patterns:
+                        current_patterns.append(pattern)
+                modeling_agent_path.write_text(
+                    yaml.safe_dump(current_agent, sort_keys=False, allow_unicode=True),
+                    encoding="utf-8",
+                )
+
         await asyncio.to_thread(normalize)
 
     # === LLM configs ===
