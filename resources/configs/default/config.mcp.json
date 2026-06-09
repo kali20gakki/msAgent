@@ -11,6 +11,23 @@
       "stateful": true,
       "repair_timeout": 30,
       "invoke_timeout": 3600.0
+    },
+    "tavily-mcp": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "tavily-mcp@latest"
+      ],
+      "transport": "stdio",
+      "env": {
+        "TAVILY_API_KEY": "${TAVILY_API_KEY}"
+      },
+      "include": [],
+      "exclude": [],
+      "enabled": false,
+      "stateful": true,
+      "repair_timeout": 30,
+      "invoke_timeout": 120.0
     }
   }
 }

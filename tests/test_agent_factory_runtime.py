@@ -107,7 +107,14 @@ async def test_agent_factory_create_populates_runtime_tools_without_name_error(
     assert hasattr(graph, "_tools_in_catalog")
     assert hasattr(graph, "_agent_backend")
     tool_names = {tool.name for tool in graph._llm_tools}
-    assert {"fetch_tools", "get_tool", "run_tool", "fetch_skills", "get_skill", "web_search"} <= tool_names
+    assert {
+        "fetch_tools",
+        "get_tool",
+        "run_tool",
+        "fetch_skills",
+        "get_skill",
+        "web_search",
+    } <= tool_names
     assert "write_todos" not in tool_names
 
 
@@ -630,3 +637,158 @@ async def test_agent_factory_injects_local_environment_placeholder_into_system_p
     system_prompt = str(captured.get("system_prompt"))
     assert "test prompt" in system_prompt
     assert "{local_environment_context}" in system_prompt
+
+
+@pytest.mark.asyncio
+async def test_should_prefer_search_mcp_requires_valid_tavily_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(factory_module, "_TAVILY_KEY_VALIDATION_CACHE", {})
+    monkeypatch.setattr(
+        AgentFactory,
+        "_probe_tavily_api_key",
+        staticmethod(lambda api_key: _return_true(api_key)),
+    )
+    mcp_client = SimpleNamespace(
+        config=SimpleNamespace(
+            servers={
+                "tavily-mcp": SimpleNamespace(
+                    enabled=True,
+                    env={"TAVILY_API_KEY": "tvly-valid-key"},
+                )
+            }
+        )
+    )
+
+    assert (
+        await AgentFactory._should_prefer_search_mcp(
+            mcp_client,
+            mcp_tools=[SimpleNamespace(name="tavily_search")],
+            mcp_module_map={"tavily_search": "mcp:tavily-mcp"},
+        )
+        is True
+    )
+
+
+@pytest.mark.asyncio
+async def test_should_prefer_search_mcp_keeps_builtin_web_search_for_invalid_tavily_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(factory_module, "_TAVILY_KEY_VALIDATION_CACHE", {})
+    monkeypatch.setattr(
+        AgentFactory,
+        "_probe_tavily_api_key",
+        staticmethod(lambda api_key: _return_false(api_key)),
+    )
+    mcp_client = SimpleNamespace(
+        config=SimpleNamespace(
+            servers={
+                "tavily-mcp": SimpleNamespace(
+                    enabled=True,
+                    env={"TAVILY_API_KEY": "tvly-invalid-key"},
+                )
+            }
+        )
+    )
+
+    assert (
+        await AgentFactory._should_prefer_search_mcp(
+            mcp_client,
+            mcp_tools=[SimpleNamespace(name="tavily_search")],
+            mcp_module_map={"tavily_search": "mcp:tavily-mcp"},
+        )
+        is False
+    )
+
+
+@pytest.mark.asyncio
+async def test_should_prefer_search_mcp_requires_actual_search_tool(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(factory_module, "_TAVILY_KEY_VALIDATION_CACHE", {})
+    mcp_client = SimpleNamespace(
+        config=SimpleNamespace(
+            servers={
+                "brave-search": SimpleNamespace(
+                    enabled=True,
+                    env={},
+                )
+            }
+        )
+    )
+
+    assert (
+        await AgentFactory._should_prefer_search_mcp(
+            mcp_client,
+            mcp_tools=[SimpleNamespace(name="brave_fetch")],
+            mcp_module_map={"brave_fetch": "mcp:brave-search"},
+        )
+        is False
+    )
+
+
+@pytest.mark.asyncio
+async def test_should_prefer_search_mcp_prefers_non_tavily_search_tool_when_available() -> None:
+    mcp_client = SimpleNamespace(
+        config=SimpleNamespace(
+            servers={
+                "brave-search": SimpleNamespace(
+                    enabled=True,
+                    env={},
+                )
+            }
+        )
+    )
+
+    assert (
+        await AgentFactory._should_prefer_search_mcp(
+            mcp_client,
+            mcp_tools=[SimpleNamespace(name="brave_search")],
+            mcp_module_map={"brave_search": "mcp:brave-search"},
+        )
+        is True
+    )
+
+
+@pytest.mark.asyncio
+async def test_resolve_tavily_api_key_reads_env_placeholders(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("TAVILY_API_KEY", "tvly-from-env")
+
+    key = AgentFactory._resolve_tavily_api_key(SimpleNamespace(env={"TAVILY_API_KEY": "${TAVILY_API_KEY}"}))
+
+    assert key == "tvly-from-env"
+
+
+@pytest.mark.asyncio
+async def test_probe_tavily_api_key_uses_usage_endpoint_and_caches_success(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(factory_module, "_TAVILY_KEY_VALIDATION_CACHE", {})
+    calls: list[tuple[str, dict[str, str]]] = []
+
+    class _DummyClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def get(self, url: str, headers: dict[str, str]):
+            calls.append((url, headers))
+            return SimpleNamespace(status_code=200)
+
+    monkeypatch.setattr(factory_module.httpx, "AsyncClient", lambda **kwargs: _DummyClient())
+
+    assert await AgentFactory._probe_tavily_api_key("tvly-valid") is True
+    assert await AgentFactory._probe_tavily_api_key("tvly-valid") is True
+    assert calls == [("https://api.tavily.com/usage", {"Authorization": "Bearer tvly-valid"})]
+
+
+async def _return_true(_api_key: str) -> bool:
+    return True
+
+
+async def _return_false(_api_key: str) -> bool:
+    return False

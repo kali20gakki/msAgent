@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import logging
 import string
+import os
 import tempfile
 from fnmatch import fnmatch
 from importlib import import_module
@@ -32,6 +33,7 @@ from deepagents import create_deep_agent
 from deepagents.backends import CompositeBackend, LocalShellBackend
 from deepagents.backends.filesystem import FilesystemBackend
 from deepagents.middleware import MemoryMiddleware, SkillsMiddleware
+import httpx
 from langchain.agents.middleware import ToolRetryMiddleware
 from langchain.agents.middleware.types import AgentMiddleware
 
@@ -39,7 +41,13 @@ from msagent.agents.local_context import ensure_local_context_prompt
 from msagent.core.constants import CONFIG_CONVERSATION_HISTORY_DIR
 from msagent.llms.factory import LLMFactory
 from msagent.middlewares.tool_result_eviction import ToolResultEvictionMiddleware
-from msagent.tools.catalog import fetch_skills, fetch_tools, get_skill, get_tool, run_tool
+from msagent.tools.catalog import (
+    fetch_skills,
+    fetch_tools,
+    get_skill,
+    get_tool,
+    run_tool,
+)
 from msagent.tools.factory import ToolFactory
 from msagent.tools.web_search import web_search
 from msagent.utils.deepagents_compat import patch_deepagents_windows_absolute_paths
@@ -53,6 +61,14 @@ if TYPE_CHECKING:
 
 
 logger = logging.getLogger(__name__)
+
+_TAVILY_SERVER_KEYWORDS = ("tavily",)
+_TAVILY_API_KEY_ENV = "TAVILY_API_KEY"
+_TAVILY_VALIDATE_URL = "https://api.tavily.com/usage"
+_TAVILY_VALIDATE_TIMEOUT_SECONDS = 5.0
+_TAVILY_KEY_VALIDATION_CACHE: dict[str, bool] = {}
+_SEARCH_TOOL_NAME_KEYWORDS = ("search", "web_search")
+_SEARCH_TOOL_DESCRIPTION_KEYWORDS = ("search", "web", "internet", "query")
 
 
 class _ToolPatternFilterMiddleware(AgentMiddleware[Any, Any, Any]):
@@ -217,6 +233,13 @@ class AgentFactory:
             loaded = await mcp_client.tools()
             mcp_tools = list(loaded or [])
             mcp_module_map = dict(getattr(mcp_client, "module_map", {}) or {})
+
+            if await self._should_prefer_search_mcp(
+                mcp_client,
+                mcp_tools=mcp_tools,
+                mcp_module_map=mcp_module_map,
+            ):
+                runtime_tools = [t for t in runtime_tools if self._tool_name(t) != "web_search"]
 
         tool_patterns = list(config.tools.patterns or []) if config.tools is not None else []
         mcp_servers = self._collect_mcp_servers(mcp_client, mcp_module_map)
@@ -470,6 +493,117 @@ class AgentFactory:
         if isinstance(config_servers, dict):
             servers.update(str(name) for name in config_servers.keys())
         return servers
+
+    @staticmethod
+    async def _should_prefer_search_mcp(
+        mcp_client: Any,
+        *,
+        mcp_tools: list[Any],
+        mcp_module_map: dict[str, str],
+    ) -> bool:
+        config = getattr(mcp_client, "config", None)
+        servers = getattr(config, "servers", None)
+        if not isinstance(servers, dict):
+            return False
+
+        for name, server in servers.items():
+            if not getattr(server, "enabled", False):
+                continue
+
+            server_tools = AgentFactory._collect_server_tools(
+                server_name=str(name),
+                mcp_tools=mcp_tools,
+                mcp_module_map=mcp_module_map,
+            )
+            if not AgentFactory._has_search_tool(server_tools):
+                continue
+
+            normalized_name = str(name).lower()
+            if any(kw in normalized_name for kw in _TAVILY_SERVER_KEYWORDS):
+                if await AgentFactory._has_valid_tavily_api_key(server):
+                    return True
+                continue
+
+            return True
+
+        return False
+
+    @staticmethod
+    def _collect_server_tools(
+        *,
+        server_name: str,
+        mcp_tools: list[Any],
+        mcp_module_map: dict[str, str],
+    ) -> list[Any]:
+        server_prefix = f"mcp:{server_name}"
+        return [
+            tool
+            for tool in mcp_tools
+            if str(mcp_module_map.get(AgentFactory._tool_name(tool), "") or "") == server_prefix
+        ]
+
+    @staticmethod
+    def _has_search_tool(mcp_tools: list[Any]) -> bool:
+        for tool in mcp_tools:
+            tool_name = AgentFactory._tool_name(tool).lower()
+            if any(keyword in tool_name for keyword in _SEARCH_TOOL_NAME_KEYWORDS):
+                return True
+            description = str(getattr(tool, "description", "") or "").lower()
+            if description and all(keyword in description for keyword in _SEARCH_TOOL_DESCRIPTION_KEYWORDS):
+                return True
+        return False
+
+    @staticmethod
+    async def _has_valid_tavily_api_key(server: Any) -> bool:
+        api_key = AgentFactory._resolve_tavily_api_key(server)
+        if not api_key:
+            return False
+        if not api_key.startswith("tvly-"):
+            logger.warning("Ignoring Tavily MCP preference because TAVILY_API_KEY does not look valid.")
+            return False
+        return await AgentFactory._probe_tavily_api_key(api_key)
+
+    @staticmethod
+    def _resolve_tavily_api_key(server: Any) -> str:
+        env = getattr(server, "env", None)
+        if isinstance(env, dict):
+            explicit_key = str(env.get(_TAVILY_API_KEY_ENV, "") or "").strip()
+            if explicit_key.startswith("${") and explicit_key.endswith("}"):
+                env_name = explicit_key[2:-1].strip()
+                return str(os.environ.get(env_name, "") or "").strip()
+            if explicit_key:
+                return explicit_key
+
+        return str(os.environ.get(_TAVILY_API_KEY_ENV, "") or "").strip()
+
+    @staticmethod
+    async def _probe_tavily_api_key(api_key: str) -> bool:
+        cached = _TAVILY_KEY_VALIDATION_CACHE.get(api_key)
+        if cached is not None:
+            return cached
+
+        headers = {"Authorization": f"Bearer {api_key}"}
+        try:
+            async with httpx.AsyncClient(timeout=_TAVILY_VALIDATE_TIMEOUT_SECONDS, follow_redirects=True) as client:
+                response = await client.get(_TAVILY_VALIDATE_URL, headers=headers)
+        except httpx.HTTPError as exc:
+            logger.warning("Unable to validate Tavily API key; keeping built-in web_search fallback: %s", exc)
+            return False
+
+        if response.status_code == 200:
+            _TAVILY_KEY_VALIDATION_CACHE[api_key] = True
+            return True
+
+        if response.status_code in {401, 403}:
+            logger.warning("Tavily API key validation failed with HTTP %s.", response.status_code)
+            _TAVILY_KEY_VALIDATION_CACHE[api_key] = False
+            return False
+
+        logger.warning(
+            "Unable to confirm Tavily API key validity (HTTP %s); keeping built-in web_search fallback.",
+            response.status_code,
+        )
+        return False
 
     def _resolve_mcp_tool_identity(
         self,
