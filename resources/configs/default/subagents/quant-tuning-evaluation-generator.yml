@@ -1,0 +1,17 @@
+version: __APP_VERSION__
+name: quant-tuning-evaluation-generator
+description: Generate msmodelslim evaluation YAML configuration
+prompt:
+  - prompts/subagents/quant-tuning-evaluation-generator.md
+llm: default
+tools:
+  patterns:
+    - impl:*:*
+    - internal:*:*
+    - mcp:*:*
+  use_catalog: false
+  output_max_tokens: 10000
+skills:
+  patterns:
+    - default:gen-evaluation-cfg
+  use_catalog: false

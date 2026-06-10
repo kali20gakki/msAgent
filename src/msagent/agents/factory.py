@@ -38,6 +38,7 @@ from langchain.agents.middleware import ToolRetryMiddleware
 from langchain.agents.middleware.types import AgentMiddleware
 
 from msagent.agents.local_context import ensure_local_context_prompt
+from msagent.configs import AgentConfig, BaseAgentConfig, RetryPolicyConfig, SubAgentConfig
 from msagent.core.constants import CONFIG_CONVERSATION_HISTORY_DIR
 from msagent.llms.factory import LLMFactory
 from msagent.middlewares.tool_result_eviction import ToolResultEvictionMiddleware
@@ -57,7 +58,7 @@ if TYPE_CHECKING:
     from langgraph.checkpoint.base import BaseCheckpointSaver
     from langgraph.graph.state import CompiledStateGraph
 
-    from msagent.configs import AgentConfig, LLMConfig
+    from msagent.configs import LLMConfig
 
 
 logger = logging.getLogger(__name__)
@@ -195,23 +196,8 @@ class AgentFactory:
         working_dir = (working_dir or Path.cwd()).resolve()
         resolved_llm = llm_config or config.llm
         retry_cfg = getattr(config, "retry", None)
-        model_retry_cfg = getattr(retry_cfg, "model", None) if retry_cfg is not None else None
         tool_retry_cfg = getattr(retry_cfg, "tool", None) if retry_cfg is not None else None
-        llm_max_retries: int | None = None
-        llm_timeout_seconds: float | None = None
-        if retry_cfg is not None and retry_cfg.enabled:
-            model_enabled = getattr(model_retry_cfg, "enabled", True) if model_retry_cfg is not None else True
-            if model_enabled:
-                llm_max_retries = int(getattr(model_retry_cfg, "max_retries", 0))
-                llm_timeout_seconds = (
-                    float(getattr(model_retry_cfg, "timeout"))
-                    if model_retry_cfg is not None and getattr(model_retry_cfg, "timeout", None) is not None
-                    else None
-                )
-            else:
-                llm_max_retries = 0
-        elif retry_cfg is not None and not retry_cfg.enabled:
-            llm_max_retries = 0
+        llm_max_retries, llm_timeout_seconds = self._resolve_llm_retry_for_policy(retry_cfg)
 
         model = self.llm_factory.create(
             resolved_llm,
@@ -240,6 +226,8 @@ class AgentFactory:
                 mcp_module_map=mcp_module_map,
             ):
                 runtime_tools = [t for t in runtime_tools if self._tool_name(t) != "web_search"]
+        catalog_runtime_tools = list(runtime_tools)
+        catalog_mcp_tools = list(mcp_tools)
 
         tool_patterns = list(config.tools.patterns or []) if config.tools is not None else []
         mcp_servers = self._collect_mcp_servers(mcp_client, mcp_module_map)
@@ -290,6 +278,16 @@ class AgentFactory:
 
         middleware: list[AgentMiddleware[Any, Any, Any]] = []
         agent_backend = self._build_composite_backend(working_dir)
+        deepagents_subagents = self._build_deepagents_subagent_specs(
+            config=config,
+            agent_backend=agent_backend,
+            skills_sources=skills_sources,
+            catalog_runtime_tools=catalog_runtime_tools,
+            catalog_mcp_tools=catalog_mcp_tools,
+            mcp_module_map=mcp_module_map,
+            mcp_servers=mcp_servers,
+            tool_timeout=tool_timeout,
+        )
         metadata_backend = FilesystemBackend(virtual_mode=False)
         if memory_sources:
             middleware.append(
@@ -334,6 +332,8 @@ class AgentFactory:
             "name": config.name,
             "middleware": middleware,
         }
+        if deepagents_subagents:
+            kwargs["subagents"] = deepagents_subagents
         if interrupt_on:
             kwargs["interrupt_on"] = interrupt_on
         if (
@@ -376,6 +376,168 @@ class AgentFactory:
         setattr(graph, "_llm_tools", all_tools)
         setattr(graph, "_tools_in_catalog", list(all_tools))
         return graph
+
+    @staticmethod
+    def _resolve_llm_retry_for_policy(
+        retry_cfg: RetryPolicyConfig | None,
+    ) -> tuple[int | None, float | None]:
+        model_retry_cfg = getattr(retry_cfg, "model", None) if retry_cfg is not None else None
+        llm_max_retries: int | None = None
+        llm_timeout_seconds: float | None = None
+        if retry_cfg is not None and retry_cfg.enabled:
+            model_enabled = getattr(model_retry_cfg, "enabled", True) if model_retry_cfg is not None else True
+            if model_enabled:
+                llm_max_retries = int(getattr(model_retry_cfg, "max_retries", 0))
+                llm_timeout_seconds = (
+                    float(getattr(model_retry_cfg, "timeout"))
+                    if model_retry_cfg is not None and getattr(model_retry_cfg, "timeout", None) is not None
+                    else None
+                )
+            else:
+                llm_max_retries = 0
+        elif retry_cfg is not None and not retry_cfg.enabled:
+            llm_max_retries = 0
+        return llm_max_retries, llm_timeout_seconds
+
+    @staticmethod
+    def _agent_system_prompt_text(prompt: str | list[str]) -> str:
+        if isinstance(prompt, list):
+            return "\n\n".join(str(item) for item in prompt)
+        return str(prompt)
+
+    def _build_deepagents_subagent_specs(
+        self,
+        *,
+        config: AgentConfig,
+        agent_backend: Any,
+        skills_sources: list[str],
+        catalog_runtime_tools: list[Any],
+        catalog_mcp_tools: list[Any],
+        mcp_module_map: dict[str, str],
+        mcp_servers: set[str],
+        tool_timeout: float | None,
+    ) -> list[dict[str, Any]]:
+        raw = getattr(config, "subagents", None) or []
+        if not raw:
+            return []
+
+        main_retry = getattr(config, "retry", None)
+        specs: list[dict[str, Any]] = []
+        for sub in raw:
+            if not isinstance(sub, SubAgentConfig):
+                continue
+            if sub.name == "general-purpose":
+                continue
+
+            sub_retry = sub.retry if sub.retry is not None else main_retry
+            sub_max_r, sub_timeout = self._resolve_llm_retry_for_policy(sub_retry)
+            sub_model = self.llm_factory.create(
+                sub.llm,
+                max_retries=sub_max_r,
+                timeout_seconds=sub_timeout,
+            )
+
+            system_prompt = ensure_local_context_prompt(self._agent_system_prompt_text(sub.prompt))
+            spec: dict[str, Any] = {
+                "name": sub.name,
+                "description": sub.description or f"Subagent {sub.name}",
+                "system_prompt": system_prompt,
+                "model": sub_model,
+            }
+
+            stools = sub.tools
+            if stools is not None and stools.patterns:
+                pos, neg = self._compile_tool_patterns(list(stools.patterns))
+                rt, mcp = self._filter_tools_by_patterns(
+                    runtime_tools=catalog_runtime_tools,
+                    mcp_tools=catalog_mcp_tools,
+                    positive_patterns=pos,
+                    negative_patterns=neg,
+                    mcp_module_map=mcp_module_map,
+                    mcp_servers=mcp_servers,
+                )
+                sub_t_timeout = tool_timeout
+                if stools.execution_timeout_seconds is not None:
+                    sub_t_timeout = float(stools.execution_timeout_seconds)
+                if sub_t_timeout:
+                    mcp = self.tool_factory.wrap_tools_with_timeout(
+                        mcp,
+                        timeout_seconds=float(sub_t_timeout),
+                        source="subagent",
+                    )
+                    rt = self.tool_factory.wrap_tools_with_timeout(
+                        rt,
+                        timeout_seconds=float(sub_t_timeout),
+                        source="subagent",
+                    )
+                spec["tools"] = [*rt, *mcp]
+
+            if self._should_enable_skills_middleware(config=sub, skills_sources=skills_sources):
+                spec["skills"] = list(skills_sources)
+
+            extra_mw = self._subagent_extra_middleware(
+                sub=sub,
+                agent_backend=agent_backend,
+                fallback_retry=main_retry,
+            )
+            if extra_mw:
+                spec["middleware"] = extra_mw
+
+            specs.append(spec)
+        return specs
+
+    def _subagent_extra_middleware(
+        self,
+        *,
+        sub: SubAgentConfig,
+        agent_backend: Any,
+        fallback_retry: RetryPolicyConfig | None,
+    ) -> list[AgentMiddleware[Any, Any, Any]]:
+        extra: list[AgentMiddleware[Any, Any, Any]] = []
+        retry_cfg = sub.retry if sub.retry is not None else fallback_retry
+        tool_retry_cfg = getattr(retry_cfg, "tool", None) if retry_cfg is not None else None
+        if (
+            retry_cfg is not None
+            and retry_cfg.enabled
+            and (getattr(tool_retry_cfg, "enabled", True) if tool_retry_cfg is not None else True)
+            and int(getattr(tool_retry_cfg, "max_retries", 0)) > 0
+        ):
+            tool_names = (
+                list(getattr(tool_retry_cfg, "tools"))
+                if tool_retry_cfg is not None and getattr(tool_retry_cfg, "tools", None) is not None
+                else None
+            )
+            retry_on = self._resolve_retry_on_exceptions(
+                list(getattr(tool_retry_cfg, "retry_on"))
+                if tool_retry_cfg is not None and getattr(tool_retry_cfg, "retry_on", None) is not None
+                else []
+            )
+            tool_retry_kwargs: dict[str, Any] = {
+                "max_retries": int(getattr(tool_retry_cfg, "max_retries")),
+                "tools": tool_names,
+                "on_failure": getattr(tool_retry_cfg, "on_failure", "continue"),
+                "backoff_factor": float(getattr(tool_retry_cfg, "backoff_factor", 2.0)),
+                "initial_delay": float(getattr(tool_retry_cfg, "initial_delay", 1.0)),
+                "max_delay": float(getattr(tool_retry_cfg, "max_delay", 60.0)),
+                "jitter": bool(getattr(tool_retry_cfg, "jitter", True)),
+            }
+            if retry_on is not None:
+                tool_retry_kwargs["retry_on"] = retry_on
+            extra.append(ToolRetryMiddleware(**tool_retry_kwargs))
+
+        sub_tools = sub.tools
+        if (
+            sub_tools is not None
+            and getattr(sub_tools, "output_max_tokens", None) is not None
+            and int(sub_tools.output_max_tokens) > 0
+        ):
+            extra.append(
+                ToolResultEvictionMiddleware(
+                    backend=agent_backend,
+                    tool_token_limit_before_evict=int(sub_tools.output_max_tokens),
+                )
+            )
+        return extra
 
     def _filter_tools_by_patterns(
         self,
@@ -705,7 +867,7 @@ class AgentFactory:
     @staticmethod
     def _should_enable_skills_middleware(
         *,
-        config: AgentConfig,
+        config: BaseAgentConfig,
         skills_sources: list[str],
     ) -> bool:
         if not skills_sources:

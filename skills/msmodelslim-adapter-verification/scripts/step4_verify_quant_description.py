@@ -2,7 +2,7 @@
 # -*- coding: UTF-8 -*-
 """
 验证流程步骤4：验证量化描述文件
-根据规则文件检查 quant_weight_description.json 中的层量化类型是否符合预期。
+根据规则文件检查 quant_model_description.json 中的层量化类型是否符合预期。
 """
 
 import os
@@ -22,7 +22,7 @@ def find_description_file(path: str) -> str:
     if os.path.isfile(path):
         return path
 
-    p = os.path.join(path, "quant_weight_description.json")
+    p = os.path.join(path, "quant_model_description.json")
 
     if os.path.exists(p):
         return p
@@ -38,7 +38,7 @@ def verify_description(desc_path: str, rules_path: str) -> bool:
     real_desc_path = find_description_file(desc_path)
     if not real_desc_path:
         print(f"[ERROR] 未找到量化描述文件 (在路径: {desc_path})")
-        print("  期望文件: quant_weight_description.json 或 quant_model_description.json")
+        print("  期望文件: quant_model_description.json 或 quant_model_description.json")
         return False
 
     print(f"[INFO] 描述文件: {real_desc_path}")

@@ -1,0 +1,17 @@
+version: __APP_VERSION__
+name: msmodelslim-model-analysis
+description: "Pre-adaptation model analysis for msModelSlim: implementation source, structure, MoE, layer-wise load risk, and the required analysis report."
+prompt:
+  - prompts/subagents/msmodelslim-model-analysis.md
+llm: default
+tools:
+  patterns:
+    - impl:*:*
+    - internal:*:*
+    - mcp:*:*
+  use_catalog: false
+  output_max_tokens: 10000
+skills:
+  patterns:
+    - default:msmodelslim-model-analysis
+  use_catalog: false

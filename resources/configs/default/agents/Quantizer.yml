@@ -1,15 +1,18 @@
 version: __APP_VERSION__
 name: Quantizer
-description: msModelSlim model analysis and adaptation assistant
+description: Automatically adapt and tune model for quantization accuracy
 prompt:
   - prompts/agents/Quantizer.md
-  - prompts/suffixes/environments.md
 llm: default
 checkpointer: sqlite
 default: false
 subagents:
-  - explorer
-  - general-purpose
+  - quant-tuning-practice-generator
+  - quant-tuning-evaluation-generator
+  - quant-tuning-evaluator
+  - quant-tuning-quantizer
+  - msmodelslim-model-analysis
+  - msmodelslim-model-adapt
 recursion_limit: 1000
 tools:
   patterns:
@@ -18,8 +21,13 @@ tools:
   output_max_tokens: 10000
 skills:
   patterns:
-    - default:msmodelslim-model-adapt
+    - default:quantization-accuracy-tuning-orchestrator
+    - default:gen-evaluation-cfg
+    - default:quant-tuning-evaluate
+    - default:tune-practice-cfg
+    - default:quant-tuning-quantize
     - default:msmodelslim-model-analysis
+    - default:msmodelslim-model-adapt
     - default:msmodelslim-adapter-verification
     - default:msmodelslim-layer-wise-quantization
     - default:msmodelslim-model-dequant

@@ -1,0 +1,17 @@
+version: __APP_VERSION__
+name: quant-tuning-quantizer
+description: Quantize model using Practice YAML configuration
+prompt:
+  - prompts/subagents/quant-tuning-quantizer.md
+llm: default
+tools:
+  patterns:
+    - impl:*:*
+    - internal:*:*
+    - mcp:*:*
+  use_catalog: false
+  output_max_tokens: 10000
+skills:
+  patterns:
+    - default:quant-tuning-quantize
+  use_catalog: false

@@ -1,0 +1,17 @@
+version: __APP_VERSION__
+name: quant-tuning-evaluator
+description: Evaluate quantized model using Evaluation YAML configuration
+prompt:
+  - prompts/subagents/quant-tuning-evaluator.md
+llm: default
+tools:
+  patterns:
+    - impl:*:*
+    - internal:*:*
+    - mcp:*:*
+  use_catalog: false
+  output_max_tokens: 10000
+skills:
+  patterns:
+    - default:quant-tuning-evaluate
+  use_catalog: false

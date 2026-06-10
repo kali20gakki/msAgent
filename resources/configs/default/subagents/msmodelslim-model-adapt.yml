@@ -1,0 +1,17 @@
+version: __APP_VERSION__
+name: msmodelslim-model-adapt
+description: "msModelSlim base model adapter work: templates, registration, and the four-step adapter verification workflow."
+prompt:
+  - prompts/subagents/msmodelslim-model-adapt.md
+llm: default
+tools:
+  patterns:
+    - impl:*:*
+    - internal:*:*
+    - mcp:*:*
+  use_catalog: false
+  output_max_tokens: 10000
+skills:
+  patterns:
+    - default:msmodelslim-model-adapt
+  use_catalog: false
