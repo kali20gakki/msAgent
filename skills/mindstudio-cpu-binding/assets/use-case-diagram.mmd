@@ -1,0 +1,29 @@
+flowchart LR
+    user((用户))
+    perf((性能工程师))
+    ops((交付/运维))
+
+    subgraph skill["mindstudio-cpu-binding Advisor Skill"]
+        uc1[问答澄清环境]
+        uc2[生成 Linux 采集命令]
+        uc3[读取 Snapshot]
+        uc4[查看 HTML 绑核报告]
+        uc5[获取优化建议]
+        uc6[确认低风险绑核]
+        uc7[安全回滚]
+        uc8[对比验证指标]
+    end
+
+    user --> uc1
+    user --> uc4
+    user --> uc5
+    perf --> uc2
+    perf --> uc3
+    perf --> uc8
+    ops --> uc6
+    ops --> uc7
+
+    uc1 --> uc2 --> uc3 --> uc4 --> uc5
+    uc5 --> uc6
+    uc6 --> uc7
+    uc6 --> uc8

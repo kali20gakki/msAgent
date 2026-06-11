@@ -1,0 +1,100 @@
+classDiagram
+    class CpuAffinityAdvisorSkill {
+        +clarifyUserInput()
+        +generateCollectCommand()
+        +loadSnapshot()
+        +runDiagnosis()
+        +generateReport()
+        +generatePlan()
+        +applyLowRiskBinding()
+        +rollbackAffinity()
+    }
+
+    class HostCpuSnapshot {
+        +collection
+        +workload
+        +system
+        +cpu_topology
+        +numa_topology
+        +npu_topology
+        +processes
+        +cgroup
+        +pytorch
+        +runtime_sample
+        +availability
+    }
+
+    class Collector {
+        +collectCpuTopology()
+        +collectNpuTopology()
+        +collectProcessAffinity()
+        +collectCgroupLimits()
+        +collectPytorchConfig()
+        +collectRuntimeSample()
+    }
+
+    class DiagnosisEngine {
+        +evaluateRules(snapshot)
+        +detectMissingInfo()
+        +detectNoAffinity()
+        +detectCrossNuma()
+        +detectThreadOversubscription()
+        +detectCgroupConflict()
+    }
+
+    class AffinityPlanGenerator {
+        +generateConservativePlan()
+        +generateAdvancedPlan()
+        +generateApplyActions()
+        +generateRollbackActions()
+    }
+
+    class HtmlReportRenderer {
+        +renderSummary()
+        +renderCpuNumaGrid()
+        +renderIssueCards()
+        +renderPlan()
+        +writeSingleFileHtml()
+    }
+
+    class BindingExecutor {
+        +validatePid()
+        +validateProcessIdentity()
+        +validateCpuset()
+        +saveRollbackState()
+        +apply()
+        +rollback()
+        +verifyAffinity()
+    }
+
+    class TasksetExecutor {
+        +apply()
+        +rollback()
+    }
+
+    class InternalScriptExecutor {
+        +apply()
+        +rollback()
+        +query()
+    }
+
+    class RollbackStateStore {
+        +writeState()
+        +readState()
+        +updateActionStatus()
+    }
+
+    CpuAffinityAdvisorSkill --> Collector
+    CpuAffinityAdvisorSkill --> HostCpuSnapshot
+    CpuAffinityAdvisorSkill --> DiagnosisEngine
+    CpuAffinityAdvisorSkill --> AffinityPlanGenerator
+    CpuAffinityAdvisorSkill --> HtmlReportRenderer
+    CpuAffinityAdvisorSkill --> BindingExecutor
+    BindingExecutor <|-- TasksetExecutor
+    BindingExecutor <|-- InternalScriptExecutor
+    BindingExecutor --> RollbackStateStore
+    Collector --> HostCpuSnapshot
+    DiagnosisEngine --> HostCpuSnapshot
+    AffinityPlanGenerator --> DiagnosisEngine
+    HtmlReportRenderer --> HostCpuSnapshot
+    RollbackStateStore --> AffinityPlanGenerator

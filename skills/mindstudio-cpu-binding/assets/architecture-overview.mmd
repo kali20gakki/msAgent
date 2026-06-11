@@ -1,0 +1,34 @@
+flowchart TB
+    user["用户 / 性能工程师 / 模型开发者"]
+
+    subgraph advisor["CPU Affinity Advisor Skill"]
+        interaction["交互层<br/>澄清场景 / 目标 / PID / NPU-Rank 映射"]
+        analysis["分析层<br/>问题 taxonomy / 诊断规则 / 推荐策略 / 风险判断"]
+        report["报告层<br/>HTML 报告 / 命令建议 / 验证计划 / 回滚方案"]
+        executor["低风险执行层<br/>BindingExecutor / taskset / internal-script"]
+        rollback["回滚状态层<br/>rollback-state / PID starttime 校验"]
+    end
+
+    subgraph snapshot["Host CPU Snapshot"]
+        cpu["CPU / NUMA / SMT topology"]
+        npu["NPU topology and NUMA locality"]
+        proc["Process / Thread affinity"]
+        cgroup["cgroup / cpuset / CPU quota"]
+        pytorch["PyTorch / OpenMP / BLAS thread config"]
+        runtime["Runtime CPU usage sample"]
+    end
+
+    subgraph collect["采集与工具层"]
+        script["MVP: Linux 只读采集脚本"]
+        mcp["下一阶段: MCP tools"]
+        plugin["后续: Plugin 分发"]
+    end
+
+    user --> interaction
+    interaction --> analysis
+    analysis --> report
+    report --> executor
+    executor --> rollback
+    collect --> snapshot
+    snapshot --> analysis
+    rollback -.保存原始 affinity / 校验进程身份.-> snapshot

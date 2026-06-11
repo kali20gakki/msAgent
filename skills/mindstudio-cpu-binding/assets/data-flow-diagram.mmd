@@ -1,0 +1,23 @@
+flowchart LR
+    input["用户输入<br/>场景 / PID / NPU 映射 / 优化目标"]
+    linux[Linux 目标节点]
+    collector[只读采集器]
+    snapshot[Host CPU Snapshot JSON]
+    rules[诊断规则 R001-R010]
+    plan["Affinity Plan<br/>保守方案 / 进阶方案 / 回滚命令"]
+    html[自包含 HTML 报告]
+    apply["确认后执行<br/>taskset 或 internal-script"]
+    rollback["rollback-state.json<br/>原始 affinity / PID starttime"]
+    verify[Before / After 验证]
+
+    input --> collector
+    linux --> collector
+    collector --> snapshot
+    snapshot --> rules
+    rules --> plan
+    snapshot --> html
+    plan --> html
+    plan --> apply
+    apply --> rollback
+    rollback --> verify
+    html --> verify
