@@ -52,6 +52,15 @@ class CompressionConfig(BaseModel):
     )
 
 
+class AuditLogConfig(BaseModel):
+    """Record session and subagent events to ``.msagent/audit_log/``."""
+
+    enabled: bool = Field(
+        default=False,
+        description="Write audit events for this agent",
+    )
+
+
 class ToolsConfig(BaseModel):
     patterns: list[str] = Field(default_factory=list, description="Tool reference patterns")
     use_catalog: bool = Field(
@@ -414,6 +423,10 @@ class AgentConfig(BaseAgentConfig):
         default=None, description="Compression configuration for context management"
     )
     retry: RetryPolicyConfig | None = Field(default=None, description="Retry configuration for LLM and tool calls")
+    audit_log: AuditLogConfig | None = Field(
+        default=None,
+        description="Optional audit log for session and subagent events",
+    )
 
 
 # Forward reference for AgentConfig.subagents

@@ -56,3 +56,5 @@ retry:
     initial_delay: 5.0
     max_delay: 60.0
     jitter: true
+audit_log:
+  enabled: true

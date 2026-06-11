@@ -9,6 +9,7 @@ from prompt_toolkit.layout.controls import FormattedTextControl
 
 from msagent.cli.bootstrap.initializer import initializer
 from msagent.cli.core.context import Context
+from msagent.audit import resolve_audit_log_enabled
 from msagent.cli.theme import console, theme
 from msagent.cli.ui.shared import SelectorState, create_selector_application
 from msagent.configs import AgentConfig
@@ -53,6 +54,7 @@ class AgentHandler:
                     model_display=Context.format_model_display(
                         selected_agent_config.llm.alias, selected_agent_config.llm
                     ),
+                    audit_log_enabled=resolve_audit_log_enabled(selected_agent_config),
                 )
                 logger.info(f"Switched to Agent: {selected_agent_name}, Model: {selected_agent_config.llm.alias}")
 

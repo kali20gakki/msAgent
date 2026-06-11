@@ -6,6 +6,7 @@ import asyncio
 import hashlib
 import json
 import time
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -40,6 +41,7 @@ from msagent.cli.ui.renderer import Renderer
 from msagent.core.constants import OS_VERSION, PLATFORM
 from msagent.core.logging import get_logger
 from msagent.middlewares.token_cost import extract_usage_counts
+from msagent.audit.user_interaction import extract_last_agent_prompt
 from msagent.utils.compression import should_auto_compress
 from msagent.utils.render import TOOL_TIMING_RESPONSE_METADATA_KEY
 
@@ -199,6 +201,14 @@ class MessageDispatcher:
                 recursion_limit=ctx.recursion_limit,
             )
 
+            run_id = str(uuid.uuid4())
+            prior_prompt = await self._resolve_prior_agent_prompt(graph_config)
+            self.session.subagent_audit.begin_run(
+                run_id,
+                user_message=content,
+                prompt=prior_prompt,
+            )
+
             if ctx.stream_output:
                 await self._stream_response(
                     {"messages": [human_message]},
@@ -217,6 +227,21 @@ class MessageDispatcher:
             console.print_error(f"Error processing message: {error_msg}")
             console.print("")
             await self._log_processing_error(e)
+
+    async def _resolve_prior_agent_prompt(self, graph_config: RunnableConfig) -> str | None:
+        """Read the latest assistant message from checkpointed graph state."""
+        graph = self.session.graph
+        if graph is None:
+            return None
+        try:
+            snapshot = await graph.aget_state(graph_config)
+        except Exception:
+            logger.debug("Failed to read graph state for user.turn prompt", exc_info=True)
+            return None
+
+        state_values = snapshot.values if snapshot is not None else {}
+        messages = list(state_values.get("messages", []) or [])
+        return extract_last_agent_prompt(messages)
 
     async def _build_agent_context(self) -> AgentContext:
         """Build runtime context injected into prompt templates and middleware."""
@@ -387,6 +412,10 @@ class MessageDispatcher:
         await self._update_token_tracking(result)
 
         messages = result.get("messages", [])
+        for message in messages:
+            if isinstance(message, (AIMessage, ToolMessage)):
+                self._record_subagent_audit(message, namespace=())
+
         for message in reversed(messages):
             if isinstance(message, (AIMessage, ToolMessage)):
                 self.session.renderer.render_message(message)
@@ -817,6 +846,13 @@ class MessageDispatcher:
             return text
         return f"{text[:keep]}{suffix}"
 
+    def _record_subagent_audit(self, message: AnyMessage, *, namespace: tuple) -> None:
+        """Record subagent delegation events for messages on the main agent thread."""
+        tracker = getattr(self.session, "subagent_audit", None)
+        if tracker is None:
+            return
+        tracker.observe(message, namespace=namespace)
+
     @classmethod
     def _resolve_origin_label(cls, namespace: tuple | None = None) -> str | None:
         """Mark nested namespace output as coming from a subagent."""
@@ -1238,6 +1274,7 @@ class MessageDispatcher:
                 active_tools=active_tools,
                 thinking_previews=thinking_previews,
             )
+            self._record_subagent_audit(last_message, namespace=namespace)
             self._render_new_update_message(
                 last_message,
                 indent_level=indent_level,
@@ -1621,5 +1658,8 @@ class MessageDispatcher:
             configurable={"thread_id": thread_id},
             recursion_limit=ctx.recursion_limit,
         )
+
+        if not self.session.subagent_audit.run_id:
+            self.session.subagent_audit.begin_run(str(uuid.uuid4()))
 
         await self._stream_response(cmd, graph_config, agent_context)

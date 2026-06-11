@@ -53,7 +53,7 @@ async def test_hitl_uses_decision_rules_to_auto_approve_non_risky_execute(
     monkeypatch.setattr(handler, "_save_approval_config", lambda _cfg: None)
     monkeypatch.setattr(handler, "_prompt_hitl_decision", _never_prompt)
 
-    result = await handler._get_hitl_decisions(
+    result, user_interacted = await handler._get_hitl_decisions(
         {
             "action_requests": [{"name": "execute", "args": {"command": "echo hello"}}],
             "review_configs": [{"action_name": "execute", "allowed_decisions": ["approve", "reject"]}],
@@ -61,6 +61,7 @@ async def test_hitl_uses_decision_rules_to_auto_approve_non_risky_execute(
     )
 
     assert result == {"decisions": [{"type": "approve"}]}
+    assert user_interacted is False
     assert prompt_called is False
 
 
@@ -81,7 +82,7 @@ async def test_hitl_persists_always_reject_selection(tmp_path: Path, monkeypatch
     monkeypatch.setattr(handler, "_save_approval_config", _save)
     monkeypatch.setattr(handler, "_prompt_hitl_decision", _prompt)
 
-    result = await handler._get_hitl_decisions(
+    result, user_interacted = await handler._get_hitl_decisions(
         {
             "action_requests": [{"name": "execute", "args": {"command": "rm -rf /tmp/demo"}}],
             "review_configs": [{"action_name": "execute", "allowed_decisions": ["approve", "reject"]}],
@@ -89,7 +90,84 @@ async def test_hitl_persists_always_reject_selection(tmp_path: Path, monkeypatch
     )
 
     assert result == {"decisions": [{"type": "reject", "message": "Rejected by local approval policy."}]}
+    assert user_interacted is True
     assert saved["called"] is True
+
+
+@pytest.mark.asyncio
+async def test_handle_skips_audit_when_hitl_auto_approved(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    recorded: list[dict] = []
+    writer = SimpleNamespace(
+        enabled=True,
+        emit_user_response=lambda **kwargs: recorded.append(kwargs),
+    )
+    session = SimpleNamespace(
+        context=SimpleNamespace(working_dir=tmp_path),
+        prompt=SimpleNamespace(mode_change_callback=None),
+        audit_writer=writer,
+    )
+    handler = InterruptHandler(session)
+    cfg = ToolApprovalConfig()
+
+    monkeypatch.setattr(handler, "_load_approval_config", lambda: cfg)
+    monkeypatch.setattr(handler, "_save_approval_config", lambda _cfg: None)
+
+    interrupt = SimpleNamespace(
+        id="int-auto",
+        value={
+            "action_requests": [{"name": "execute", "args": {"command": "python -c 'print(1)'"}}],
+            "review_configs": [{"action_name": "execute", "allowed_decisions": ["approve", "reject"]}],
+        },
+    )
+
+    result = await handler.handle([interrupt])
+
+    assert result == {"decisions": [{"type": "approve"}]}
+    assert recorded == []
+
+
+@pytest.mark.asyncio
+async def test_handle_records_audit_when_user_prompted(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    recorded: list[dict] = []
+    writer = SimpleNamespace(
+        enabled=True,
+        emit_user_response=lambda **kwargs: recorded.append(kwargs),
+    )
+    session = SimpleNamespace(
+        context=SimpleNamespace(working_dir=tmp_path),
+        prompt=SimpleNamespace(mode_change_callback=None),
+        audit_writer=writer,
+    )
+    handler = InterruptHandler(session)
+    cfg = ToolApprovalConfig()
+
+    async def _prompt(**_kwargs):
+        return "approve"
+
+    monkeypatch.setattr(handler, "_load_approval_config", lambda: cfg)
+    monkeypatch.setattr(handler, "_save_approval_config", lambda _cfg: None)
+    monkeypatch.setattr(handler, "_prompt_hitl_decision", _prompt)
+
+    interrupt = SimpleNamespace(
+        id="int-manual",
+        value={
+            "action_requests": [
+                {
+                    "name": "execute",
+                    "description": "Delete round_4 artifacts",
+                    "args": {"command": "rm -rf /tmp/round_4"},
+                }
+            ],
+            "review_configs": [{"action_name": "execute", "allowed_decisions": ["approve", "reject"]}],
+        },
+    )
+
+    result = await handler.handle([interrupt])
+
+    assert result == {"decisions": [{"type": "approve"}]}
+    assert len(recorded) == 1
+    assert recorded[0]["response"] == "approve"
+    assert recorded[0]["kind"] == "approval"
 
 
 @pytest.mark.asyncio
@@ -110,7 +188,7 @@ async def test_interrupt_handler_returns_none_for_unknown_payload_shape(
     monkeypatch.setattr(interrupts_module.console, "print", lambda *_args, **_kwargs: None)
 
     fake_interrupt = SimpleNamespace(id="int-1", value="just a string")
-    result = await handler._get_choice(fake_interrupt)
+    result, _user_interacted = await handler._get_choice(fake_interrupt)
     assert result is None
 
 
@@ -119,7 +197,7 @@ async def test_hitl_returns_none_when_action_requests_is_empty(tmp_path: Path, m
     handler = InterruptHandler(_build_session(tmp_path))
     monkeypatch.setattr(handler, "_load_approval_config", lambda: ToolApprovalConfig())
 
-    result = await handler._get_hitl_decisions({"action_requests": [], "review_configs": []})
+    result, _user_interacted = await handler._get_hitl_decisions({"action_requests": [], "review_configs": []})
     assert result is None
 
 
@@ -139,7 +217,7 @@ async def test_hitl_persists_always_approve_selection(tmp_path: Path, monkeypatc
     monkeypatch.setattr(handler, "_save_approval_config", _save)
     monkeypatch.setattr(handler, "_prompt_hitl_decision", _prompt)
 
-    result = await handler._get_hitl_decisions(
+    result, _user_interacted = await handler._get_hitl_decisions(
         {
             "action_requests": [{"name": "dangerous_tool", "args": {"target": "/etc/passwd"}}],
             "review_configs": [{"action_name": "dangerous_tool", "allowed_decisions": ["approve", "reject"]}],
@@ -168,7 +246,7 @@ async def test_hitl_auto_rejects_when_policy_is_always_reject(tmp_path: Path, mo
 
     cfg.prepend_decision_rule(tool_name="execute", tool_args=None, decision="always_reject")
 
-    result = await handler._get_hitl_decisions(
+    result, _user_interacted = await handler._get_hitl_decisions(
         {
             "action_requests": [{"name": "execute", "args": {"command": "rm -rf /"}}],
             "review_configs": [{"action_name": "execute", "allowed_decisions": ["approve", "reject"]}],
@@ -197,7 +275,7 @@ async def test_hitl_handles_non_dict_tool_args_gracefully(tmp_path: Path, monkey
     monkeypatch.setattr(handler, "_save_approval_config", lambda _cfg: None)
     monkeypatch.setattr(handler, "_prompt_hitl_decision", _prompt)
 
-    result = await handler._get_hitl_decisions(
+    result, _user_interacted = await handler._get_hitl_decisions(
         {
             "action_requests": [{"name": "search", "args": "not a dict"}],
             "review_configs": [{"action_name": "search", "allowed_decisions": ["approve", "reject"]}],
@@ -219,7 +297,7 @@ async def test_hitl_prompt_returns_none_cancels_entire_session(tmp_path: Path, m
     monkeypatch.setattr(handler, "_save_approval_config", lambda _cfg: None)
     monkeypatch.setattr(handler, "_prompt_hitl_decision", _prompt)
 
-    result = await handler._get_hitl_decisions(
+    result, _user_interacted = await handler._get_hitl_decisions(
         {
             "action_requests": [{"name": "dangerous_tool", "args": {"target": "/root"}}],
             "review_configs": [{"action_name": "dangerous_tool", "allowed_decisions": ["approve", "reject"]}],
@@ -238,7 +316,7 @@ async def test_interrupt_handler_returns_dict_for_multiple_interrupts(
     monkeypatch.setattr(interrupts_module.console, "print", lambda *_args, **_kwargs: None)
 
     async def _fake_get_choice(interrupt):
-        return "approve"
+        return "approve", True
 
     monkeypatch.setattr(handler, "_get_choice", _fake_get_choice)
 

@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from msagent.cli.bootstrap.initializer import initializer
 from msagent.cli.bootstrap.timer import timer
 from msagent.configs import ApprovalMode, LLMProvider
+from msagent.audit import resolve_audit_log_enabled
 from msagent.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -30,6 +31,7 @@ class Context(BaseModel):
     recursion_limit: int
     tool_output_max_tokens: int | None = None
     stream_output: bool = True
+    audit_log_enabled: bool = False
 
     @staticmethod
     def format_provider_label(llm_config: object) -> str | None:
@@ -101,6 +103,7 @@ class Context(BaseModel):
             recursion_limit=agent_config.recursion_limit,
             tool_output_max_tokens=tool_output_max_tokens,
             stream_output=stream_output,
+            audit_log_enabled=resolve_audit_log_enabled(agent_config),
         )
 
     def cycle_approval_mode(self) -> ApprovalMode:

@@ -125,8 +125,8 @@
 4. 然后才进入循环
 
 注意：target 不要随意计算。参照以下示例进行计算：
-（1）如果用户描述“不低于浮点精度超过 1%”，则 target = FP baseline - 1%。
-（2）如果描述“某数据集相比浮点模型多错一道题”，则需要通过计算该数据集一道题目对应的精度数值，然后 target = FP baseline - 一题对应的数值。
+（1）如果用户描述"不低于浮点精度超过 1%"，则 target = FP baseline - 1%。
+（2）如果描述"某数据集相比浮点模型多错一道题"，则需要通过计算该数据集一道题目对应的精度数值，然后 target = FP baseline - 一题对应的数值。
 
 ### standing_high 摸高二分搜索
 
@@ -150,44 +150,164 @@
 - 截断 exclude 列表时，不能在 gate_proj/up_proj 配对中间截断
 - 若中位数截断点落在配对中间，向上取整到配对末尾
 
-## 拉起subagent时传入的格式
+## 拉起 subagent 的格式（MSAGENT_IO v1）
 
-### Agent: quant-tuning-evaluation-generator
+协议总则见 [subagent_io_protocol.md](./subagent_io_protocol.md)。本文档面向**主 Agent**，重点定义委派 `input`；回传 `output` 一行简述主 Agent 需读取的业务字段。
 
-传入参数：
-- 模型名称：量化后的模型标识符
-- 服务地址：推理服务 host（默认 localhost）
-- 服务端口：推理服务 port（默认 8000）
-- 设备类型：推理后端设备（默认 ascend）
-- 设备数量：并行推理的卡数（默认 1）
-- 目标数据集：要评测的数据集列表
-- 精度目标：每个数据集的目标精度百分比
-- 精度容差：允许的精度波动范围
+调用 `task` 时，`description` **必须**包含一个 ` ```msagent-io v1 ` JSON 块；`input` 按下表填写。收到回传后从 `output` 读取下表字段驱动流程，完整 output 示例见各 subagent prompt。
+
+编排脚本（`accuracy_lookup`、`history_clear`、`history_append`、`accuracy_append`）由主 Agent `execute`，**不得** `task` 委派。
 
 ### Agent: quant-tuning-practice-generator
 
-传入参数：
-- model_type：模型类型名
-- model_path：模型路径
-- save_path：工作目录，Practice YAML 写入此目录下
-- device：分析设备（如 npu、npu:0、gpu:0,1）
-- strategy：调优策略（"standing_high" 或 "standing_high_with_experience"）
-- max_iterations：最大迭代轮次
-- prev_result：上轮评测结果（首轮为 None）
-- anchor_practice：当前已知最优且达标的 Practice YAML 路径（锚点）
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `model_type` | string | ✓ | 模型类型名 |
+| `model_path` | string | ✓ | 模型路径 |
+| `save_path` | string | ✓ | 工作目录，Practice YAML 写入此目录 |
+| `device` | string | ✓ | 如 `npu:2,3` |
+| `strategy` | string | ✓ | `standing_high` 或 `standing_high_with_experience` |
+| `max_iterations` | int | ✓ | 最大迭代轮次 |
+| `round` | int | ✓ | 当前调优轮次 |
+| `prev_result` | object\|null | | 上轮评测结果，首轮 `null` |
+| `anchor_practice` | string\|null | | 已知最优且达标的 Practice 路径 |
+
+回传 `output` 必填：`practice_path`，`validation: { ok, valid, errors }`，`commands`（须含 `sensitive_layer_analysis` 与 `validate_practice_yaml`；跳过敏感层分析时前者 `skipped: true`）
+
+委派模板：
+
+````markdown
+```msagent-io v1
+{
+  "protocol": "msagent.subagent_io",
+  "subagent_type": "quant-tuning-practice-generator",
+  "input": {
+    "model_type": "",
+    "model_path": "",
+    "save_path": "",
+    "device": "",
+    "strategy": "standing_high",
+    "max_iterations": 10,
+    "round": 1,
+    "prev_result": null,
+    "anchor_practice": null
+  }
+}
+```
+````
+
+### Agent: quant-tuning-evaluation-generator
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `model_name` | string | ✓ | 量化后的模型标识符 |
+| `save_path` | string | ✓ | 工作目录 |
+| `datasets` | object[] | ✓ | 评测数据集列表，每项见下表 |
+| `service_host` | string | | 默认 `localhost` |
+| `service_port` | int | | 默认 `8000` |
+| `device_type` | string | | 默认 `ascend` |
+| `device_count` | int | | 默认 `1` |
+
+`datasets[]` 每项：
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `name` | string | ✓ | 数据集名称（如 `gpqa`） |
+| `config_name` | string | ✓ | AISBench 注册配置名 |
+| `target` | number | ✓ | 目标精度（百分比） |
+| `tolerance` | number | | 容差，默认 `0` |
+
+回传 `output` 必填：`evaluate_config_path`；若执行了 YAML 校验，建议填 `commands`（`name: validate_yaml`）
+
+委派模板：
+
+````markdown
+```msagent-io v1
+{
+  "protocol": "msagent.subagent_io",
+  "subagent_type": "quant-tuning-evaluation-generator",
+  "input": {
+    "model_name": "",
+    "save_path": "",
+    "datasets": [
+      {
+        "name": "gpqa",
+        "config_name": "gpqa_gen_0_shot_cot_str",
+        "target": 79.0,
+        "tolerance": 1.0
+      }
+    ],
+    "service_host": "localhost",
+    "service_port": 8000,
+    "device_type": "ascend",
+    "device_count": 1
+  }
+}
+```
+````
 
 ### Agent: quant-tuning-quantizer
 
-传入参数：
-- config_path：Practice YAML 路径，JSON 字符串格式
-- model_path：原始模型路径
-- save_path：量化产物保存路径
-- device：设备类型，如 `npu:0`
-- trust_remote_code：是否信任远程代码（可选）
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `config_path` | string | ✓ | Practice YAML 路径 |
+| `model_path` | string | ✓ | 原始模型路径 |
+| `save_path` | string | ✓ | 量化产物目录，如 `.../round_N/quantized` |
+| `device` | string | ✓ | 如 `npu:2,3` |
+| `trust_remote_code` | bool | | 默认 `true` |
+| `round` | int | | 建议填写当前轮次 |
+
+回传 `output` 必填：`success`，`quantized_path`，`exit_code`，`commands`（含 `name: quantize` 的量化命令）
+
+委派模板：
+
+````markdown
+```msagent-io v1
+{
+  "protocol": "msagent.subagent_io",
+  "subagent_type": "quant-tuning-quantizer",
+  "input": {
+    "config_path": "",
+    "model_path": "",
+    "save_path": "",
+    "device": "",
+    "trust_remote_code": true,
+    "round": 1
+  }
+}
+```
+````
 
 ### Agent: quant-tuning-evaluator
 
-传入参数：
-- config_path：Evaluation YAML 路径，JSON 字符串格式
-- device：设备类型，如 `npu`
-- device_indices：设备索引列表，如 `[0,1]`
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `config_path` | string | ✓ | Evaluation YAML 路径 |
+| `quant_model_path` | string | ✓ | 量化模型路径 |
+| `save_path` | string | ✓ | 工作目录 |
+| `device` | string | ✓ | 如 `npu` |
+| `device_indices` | int[] | ✓ | 如 `[0, 1]` |
+| `evaluate_id` | string | | 评测标识 |
+| `round` | int | | 建议填写当前轮次 |
+
+回传 `output` 必填：`overall_passed`，`datasets: [{ name, score, target, passed }]`，`commands`（须含 `inference_service` 与 `evaluation`）
+
+委派模板：
+
+````markdown
+```msagent-io v1
+{
+  "protocol": "msagent.subagent_io",
+  "subagent_type": "quant-tuning-evaluator",
+  "input": {
+    "config_path": "",
+    "quant_model_path": "",
+    "save_path": "",
+    "device": "npu",
+    "device_indices": [0, 1],
+    "evaluate_id": "",
+    "round": 1
+  }
+}
+```
+````

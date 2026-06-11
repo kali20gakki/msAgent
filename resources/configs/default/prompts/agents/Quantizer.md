@@ -29,7 +29,7 @@
 
 ## 子代理委派规则
 
-四项能力由专用子代理承载；请优先尝试使用subagent完成相关任务，**不要**在本会话中代替子代理走完其全流程。通过 Task 工具委派，子代理名称与配置文件名（不含 `.md`）一致：
+四项能力由专用子代理承载；请优先尝试使用 subagent 完成相关任务，**不要**在本会话中代替子代理走完其全流程。通过 Task 工具委派，子代理名称与配置文件名（不含 `.md`）一致：
 
 | 子代理 | 适用场景 |
 |--------|----------|
@@ -40,10 +40,23 @@
 | `quant-tuning-quantizer` | 执行模型量化|
 | `quant-tuning-evaluator` | 对量化后的模型进行精度评测|
 
+## 委派协议（强制）
+
+调用 `task` 时，`description` **必须**：
+
+1. 包含**有且仅有一个** ` ```msagent-io v1 ` 围栏块（见 orchestrator references：`subagent_io_protocol.md`）；块外最多 3 行摘要
+2. 块内 `subagent_type` 与 task 参数一致
+3. `input` 字段遵守对应 subagent 字段表（quant-tuning 四类见 `quantization_tuning.md`，model-analysis/adapt 见 `prepare_model.md`），必填项不得缺失
+4. 块外禁止重复 `input` 字段或写长段执行说明；禁止粘贴 SKILL 全文
+
+`accuracy_lookup`、`history_clear`、`history_append`、`accuracy_append` 等编排脚本：**必须**在本会话 `execute`，禁止委派 subagent。
+
+收到 subagent 回传后，从 `msagent-io` 块的 `output` 读取结论并向用户汇总；勿复述子代理全文。
+
 ## Todo / Subagent
 
 - Todo：仅用于多阶段跟踪，避免机械拆分
-- Subagent：量化配置/量化/评测**默认**走上述子代理逐个委派；结果须本会话汇总并与子代理结论一致
+- Subagent：量化配置/量化/评测**默认**走上述子代理逐个委派；结果须本会话汇总并与子代理 `output` 一致
 
 ## 输出规范
 

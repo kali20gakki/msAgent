@@ -10,6 +10,7 @@ from types import SimpleNamespace
 from types import FrameType
 from typing import TYPE_CHECKING, Any
 
+from msagent.audit import AuditWriter, SubagentAuditTracker
 from msagent.cli.bootstrap.initializer import initializer
 from msagent.cli.dispatchers import CommandDispatcher, MessageDispatcher
 from msagent.cli.handlers.bash import BashDispatcher
@@ -60,6 +61,14 @@ class Session:
         self._sigint_handler: SignalHandler = None
         self.tool_outputs: list[ToolOutputEntry] = []
         self.latest_tool_output: ToolOutputEntry | None = None
+
+        self.audit_writer = AuditWriter(
+            working_dir=context.working_dir,
+            thread_id=context.thread_id,
+            agent_name=context.agent,
+            enabled=context.audit_log_enabled,
+        )
+        self.subagent_audit = SubagentAuditTracker(self.audit_writer)
 
     def _create_prompt_with_fallback(self) -> InteractivePrompt | SimpleNamespace:
         try:
@@ -172,6 +181,14 @@ class Session:
         finally:
             self._restore_sigint()
 
+    def _sync_audit_context(self) -> None:
+        """Keep audit logging aligned with the active thread and agent."""
+        self.audit_writer.rebind(
+            thread_id=self.context.thread_id,
+            agent_name=self.context.agent,
+        )
+        self.audit_writer.enabled = self.context.audit_log_enabled
+
     def update_context(self, **kwargs) -> None:
         """Update context fields dynamically.
 
@@ -188,6 +205,9 @@ class Session:
         for key, value in kwargs.items():
             if hasattr(self.context, key):
                 setattr(self.context, key, value)
+
+        if "thread_id" in kwargs or "agent" in kwargs:
+            self._sync_audit_context()
 
     def remember_tool_output(self, entry: ToolOutputEntry) -> None:
         """Store or refresh an expandable tool output for the viewer."""

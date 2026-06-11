@@ -69,6 +69,7 @@ CONFIG_SANDBOX_CACHE_DIR = Path(f"{CONFIG_DIR_NAME}/cache/sandboxes")
 CONFIG_LOG_DIR = Path(f"{CONFIG_DIR_NAME}/logs")
 CONFIG_MCP_OAUTH_DIR = Path(f"{CONFIG_DIR_NAME}/oauth/mcp")
 CONFIG_CONVERSATION_HISTORY_DIR = Path(f"{CONFIG_DIR_NAME}/conversation_history")
+CONFIG_AUDIT_DIR = Path(f"{CONFIG_DIR_NAME}/audit_log")
 
 DEFAULT_CONFIG_DIR_NAME = "resources.configs.default"
 DEFAULT_CONFIG_DIR = Path(__file__).parent.parent.parent / "resources" / "configs" / "default"

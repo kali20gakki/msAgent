@@ -21,6 +21,7 @@ from msagent.cli.ui.shared import (
     create_bottom_toolbar,
     create_prompt_style,
 )
+from msagent.audit.user_interaction import build_user_response_fields
 from msagent.configs import ToolApprovalConfig
 from msagent.core.logging import get_logger
 from msagent.middlewares.approval import InterruptPayload
@@ -79,14 +80,20 @@ class InterruptHandler:
 
             # Handle single interrupt - return value directly
             if len(interrupt_data) == 1:
-                return await self._get_choice(interrupt_data[0])
+                interrupt = interrupt_data[0]
+                choice, user_interacted = await self._get_choice(interrupt)
+                if choice is not None and user_interacted:
+                    self._record_user_response(interrupt, choice)
+                return choice
 
             # Handle multiple interrupts - return dict mapping IDs to values
             resume_dict = {}
             for interrupt in interrupt_data:
-                choice = await self._get_choice(interrupt)
+                choice, user_interacted = await self._get_choice(interrupt)
                 if choice is not None:
                     resume_dict[interrupt.id] = choice
+                    if user_interacted:
+                        self._record_user_response(interrupt, choice)
 
             return resume_dict if resume_dict else None
 
@@ -95,28 +102,46 @@ class InterruptHandler:
             console.print("")
             return None
 
-    async def _get_choice(self, interrupt: Interrupt) -> Any:
-        """Choice selector with tab completion and Enter key support."""
+    def _record_user_response(self, interrupt: Interrupt, resume_value: Any) -> None:
+        """Append a ``user.response`` audit event for one interrupt answer."""
+        writer = getattr(self.session, "audit_writer", None)
+        if writer is None or not writer.enabled:
+            return
+
+        fields = build_user_response_fields(interrupt, resume_value)
+        if fields is None:
+            return
+
+        writer.emit_user_response(**fields)
+
+    async def _get_choice(self, interrupt: Interrupt) -> tuple[Any, bool]:
+        """Choice selector with tab completion and Enter key support.
+
+        Returns:
+            Tuple of resume value and whether the user was prompted interactively.
+        """
         value = interrupt.value
 
         if isinstance(value, dict) and "action_requests" in value and "review_configs" in value:
             return await self._get_hitl_decisions(cast(HITLRequest, value))
 
         if isinstance(value, dict) and "question" in value and "options" in value:
-            return await self._get_legacy_choice(value)
+            choice = await self._get_legacy_choice(value)
+            return choice, choice is not None
 
         logger.warning("Unknown interrupt payload shape: %s", type(value).__name__)
-        return None
+        return None, False
 
-    async def _get_hitl_decisions(self, value: HITLRequest) -> dict[str, Any] | None:
+    async def _get_hitl_decisions(self, value: HITLRequest) -> tuple[dict[str, Any] | None, bool]:
         """Handle deepagents HITL action/review payload."""
         actions = value.get("action_requests") or []
         review_configs = value.get("review_configs") or []
         if not actions:
-            return None
+            return None, False
 
         approval_config = self._load_approval_config()
         should_persist = False
+        user_interacted = False
         review_by_action = {str(config.get("action_name", "")): config for config in review_configs}
         decisions: list[dict[str, Any]] = []
         for action in actions:
@@ -163,7 +188,9 @@ class InterruptHandler:
                 options=options,
             )
             if selected is None:
-                return None
+                return None, user_interacted
+
+            user_interacted = True
 
             if selected == "always_approve":
                 approval_config.prepend_decision_rule(
@@ -195,7 +222,7 @@ class InterruptHandler:
         if should_persist:
             self._save_approval_config(approval_config)
 
-        return {"decisions": decisions}
+        return {"decisions": decisions}, user_interacted
 
     async def _prompt_hitl_decision(
         self,
