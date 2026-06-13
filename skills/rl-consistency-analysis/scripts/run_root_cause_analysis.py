@@ -6,60 +6,16 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import re
 import subprocess
 import sys
 from pathlib import Path
 from typing import Any
-
+from common import load_json, get_module_keys, parse_layer_idx, infer_block, structural_false_positive
 
 SKILLS_ROOT = Path(__file__).resolve().parents[2]
 COMPARE_SCRIPT = SKILLS_ROOT / "rl-consistency-analysis" / "scripts" / "generate_module_mapping.py"
 
 ACTIVATION_TERMS = ("act_fn", "silu", "swiglu", "gelu", "mul", "activation")
-STRUCTURAL_PATTERNS = [
-    ("linear_q_down_proj", "fused_qkv_a_proj"),
-    ("linear_kv_down_proj", "fused_qkv_a_proj"),
-]
-
-
-def load_json(path: Path) -> dict[str, Any]:
-    return json.loads(path.read_text(encoding="utf-8"))
-
-
-def get_module_keys(dump_data: dict[str, Any]) -> list[str]:
-    data = dump_data.get("data", {})
-    if not isinstance(data, dict):
-        return []
-    return [key for key in data if isinstance(key, str) and key.startswith("Module.")]
-
-
-def parse_layer_idx(key: str) -> int | None:
-    match = re.search(r"\.layers\.(\d+)\.", key)
-    return int(match.group(1)) if match else None
-
-
-def infer_block(key: str) -> str:
-    lowered = key.lower()
-    if ".mlp." in lowered:
-        return "mlp"
-    if "self_attn" in lowered or "self_attention" in lowered or "attention" in lowered:
-        return "attn"
-    if "norm" in lowered:
-        return "norm"
-    if "embed" in lowered:
-        return "embed"
-    return "other"
-
-
-def structural_false_positive(train_key: str, rollout_key: str) -> str:
-    lowered_train = train_key.lower()
-    lowered_rollout = rollout_key.lower()
-    for left, right in STRUCTURAL_PATTERNS:
-        if left in lowered_train and right in lowered_rollout:
-            return f"structural fusion pattern: {left} -> {right}"
-    return ""
-
 
 def is_activation_like(key: str) -> bool:
     lowered = key.lower()
@@ -124,7 +80,7 @@ def classify_candidate(module_row: dict[str, Any], unmatched_train: list[str], u
     return ("needs_manual_review", "no stronger automatic explanation was found")
 
 
-def run_compare(train_path: Path, rollout_path: Path, out_dir: Path) -> None:
+def run_compare(train_path: Path, rollout_path: Path, mapping_key_path: Path, out_dir: Path) -> None:
     env = os.environ.copy()
     env["PYTHONDONTWRITEBYTECODE"] = "1"
     subprocess.run(
@@ -135,6 +91,8 @@ def run_compare(train_path: Path, rollout_path: Path, out_dir: Path) -> None:
             str(train_path),
             "--rollout",
             str(rollout_path),
+            "--mapping_key",
+            str(mapping_key_path),
             "--out-dir",
             str(out_dir),
         ],
@@ -239,15 +197,17 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Run end-to-end root cause analysis for train/rollout dump mismatch")
     parser.add_argument("--train", required=True)
     parser.add_argument("--rollout", required=True)
+    parser.add_argument("--mapping_key", required=True)
     parser.add_argument("--out-dir", required=True)
     args = parser.parse_args()
 
     train_path = Path(args.train)
     rollout_path = Path(args.rollout)
+    mapping_key = Path(args.mapping_key)
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    run_compare(train_path, rollout_path, out_dir)
+    run_compare(train_path, rollout_path, mapping_key, out_dir)
     report = build_report(train_path, rollout_path, out_dir)
 
     (out_dir / "output_5_root_cause_report.json").write_text(

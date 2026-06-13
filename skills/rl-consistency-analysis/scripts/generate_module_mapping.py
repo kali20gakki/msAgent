@@ -2,133 +2,18 @@
 import argparse
 import csv
 import json
-import re
 from collections import defaultdict
 from functools import reduce
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+from common import load_json, get_module_items, parse_layer_idx, infer_block, EPS, THRESHOLDS_OK, THRESHOLDS_WARN, \
+    is_fused_qkv_pair
 
 
-EPS = 1e-12
-MODULE_PREFIX_PATTERN = r"^Module(\.\d+|\.module)*\.module\."
-MODEL_PREFIX_PATTERN = r"^Module(\.\d+|\.model)*\.model\."
-MODULE_OR_MODEL_PREFIX_PATTERN = f"{MODULE_PREFIX_PATTERN}|{MODEL_PREFIX_PATTERN}"
-
-def load_json(path: Path) -> Dict[str, Any]:
-    with path.open("r", encoding="utf-8") as f:
-        return json.load(f)
-
-
-def get_module_items(dump_data: Dict[str, Any]) -> List[Tuple[str, Dict[str, Any]]]:
-    data = dump_data.get("data", {})
-    if not isinstance(data, dict):
-        return []
-    return [(k, v) for k, v in data.items() if isinstance(k, str) and k.startswith("Module.")]
-
-
-def detect_side(train_path: Path, rollout_path: Path, train_dump: Dict[str, Any], rollout_dump: Dict[str, Any]) -> Tuple[str, str]:
-    # Caller already provides train/rollout paths; this check only guards accidental swap.
-    def score(dump: Dict[str, Any], path: Path) -> int:
-        s = 0
-        p = str(path).lower()
-        if "train" in p:
-            s += 2
-        if "rollout" in p:
-            s -= 2
-        keys = [k for k in dump.get("data", {}).keys() if isinstance(k, str)]
-        if any(re.match(MODEL_PREFIX_PATTERN, k) for k in keys):
-            s -= 1
-        if any(re.match(MODULE_PREFIX_PATTERN, k) for k in keys):
-            s += 1
-        return s
-
-    if score(train_dump, train_path) >= score(rollout_dump, rollout_path):
-        return "train", "rollout"
-    return "rollout", "train"
-
-
-def parse_layer_idx(key: str) -> Optional[int]:
-    m = re.search(r"\.layers\.(\d+)\.", key)
-    return int(m.group(1)) if m else None
-
-
-def infer_block(key: str) -> str:
-    k = key.lower()
-    if "embed" in k:
-        return "embed"
-    if "self_attn" in k or "self_attention" in k or "attention" in k:
-        return "attn"
-    if ".mlp." in k:
-        return "mlp"
-    if "norm" in k:
-        return "norm"
-    if "decoderlayer" in k or "transformerlayer" in k:
-        return "decoder"
-    return "other"
-
-
-def fragment_for_output2(key: str) -> str:
-    """Strip Module / layers.N / trace suffixes; keep native naming (no train↔rollout canonicalization)."""
-    s = key
-    # 匹配开头所有的 Module + 任意层 数字/module|model 组合，全部替换为空
-    s = re.sub(MODULE_OR_MODEL_PREFIX_PATTERN, "", s)
-    s = re.sub(r"\.layers\.\d+\.", ".", s)
-    s = re.sub(r"^layers\.\d+\.", "", s)
-    s = s.strip(".")
-    while True:
-        s2 = re.sub(r"\.forward\.\d+$", "", s)
-        s2 = re.sub(r"\.backward\.\d+$", "", s2)
-        if s2 == s:
-            break
-        s = s2
-    parts = [p for p in s.split(".") if p]
-    if len(parts) >= 2:
-        return f"{parts[-2]}.{parts[-1]}"
-    return parts[-1] if parts else key
-
-
-def normalize_key_for_match(key: str) -> str:
-    # Identity/no-op modules in train have no rollout equivalent — never match
-    if "IdentityOp" in key or "IdentityFuncOp" in key:
-        return key  # unique string, won't collide with any rollout norm
-    s = key
-    # Drop varying prefixes
-    s = re.sub(MODULE_OR_MODEL_PREFIX_PATTERN, "", s)
-    # Strip decoder. prefix (train: decoder.layers.i... vs rollout: layers.i...)
-    s = re.sub(r"^decoder\.", "", s)
-    # Flatten core_attention. nesting (train: core_attention.indexer.X vs rollout: indexer.X)
-    s = s.replace("core_attention.", "")
-    # Normalize naming variants — ORDER MATTERS for overlapping patterns
-    replaces = {
-        "self_attention": "self_attn",
-        "word_embeddings": "embed_tokens",
-        "embedding.embed_tokens": "embed_tokens",   # collapse LanguageModelEmbedding wrapper
-        "q_layernorm": "q_a_layernorm",
-        "post_attention_layernorm": "pre_mlp_layernorm",
-        "final_layernorm": "norm",
-        "linear_q_down_proj": "fused_qkv_a_proj",
-        "linear_kv_down_proj": "fused_qkv_a_proj",
-        "linear_q_up_proj": "q_b_proj",
-        "linear_wq_b": "wq_b",                     # must precede linear_wk
-        "linear_wk": "wk",
-        "linear_weights_proj": "weights_proj",      # must precede linear_proj
-        "linear_fc1": "gate_up_proj",
-        "linear_fc2": "down_proj",
-        "linear_proj": "o_proj",
-        "router": "gate",
-        "DSAttention": "mla_attn.placeholder",      # expand to sub-path; class strip removes .placeholder
-    }
-    for src, dst in replaces.items():
-        s = s.replace(src, dst)
-    # Remove class + forward suffix
-    s = re.sub(r"\.[A-Za-z0-9_]+\.forward\.\d+$", "", s)
-    return s
-
-
-def build_rollout_index(rollout_items: List[Tuple[str, Dict[str, Any]]]) -> Dict[Tuple[Optional[int], str], List[str]]:
-    idx: Dict[Tuple[Optional[int], str], List[str]] = defaultdict(list)
+def build_rollout_index(rollout_items: List[Tuple[str, Dict[str, Any]]]) -> Dict[str, List[str]]:
+    idx: Dict[str, List[str]] = defaultdict(list)
     for k, _ in rollout_items:
-        idx[(parse_layer_idx(k), normalize_key_for_match(k))].append(k)
+        idx[k].append(k)
     return idx
 
 
@@ -156,9 +41,9 @@ def rel_err(a: Optional[float], b: Optional[float]) -> Optional[float]:
 def status_from_rel(err: Optional[float]) -> str:
     if err is None:
         return "missing"
-    if err <= 1e-4:
+    if err <= THRESHOLDS_OK:
         return "ok"
-    if err <= 1e-2:
+    if err <= THRESHOLDS_WARN:
         return "warn"
     return "alert"
 
@@ -212,7 +97,8 @@ def value_priority_bucket(numeric_mismatch: bool, shape_relation: str) -> Tuple[
         return 1, "value_mismatch_numel_match", "alert"
     if numeric_mismatch and shape_relation == "numel_mismatch":
         return 2, "value_mismatch_shape_mismatch", "warn"
-    if (not numeric_mismatch) and shape_relation in {"singleton_compatible_numel_match", "numel_match", "numel_mismatch"}:
+    if (not numeric_mismatch) and shape_relation in {"singleton_compatible_numel_match", "numel_match",
+                                                     "numel_mismatch"}:
         return 3, "value_match_shape_mismatch", "warn"
     return 4, "value_match_shape_match", "ok"
 
@@ -228,9 +114,9 @@ def apply_target_context(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         updated["focus_reason"] = ""
 
         if (
-            updated.get("compare_target") == "parameters.weight"
-            and updated.get("numeric_consistency") == "mismatch"
-            and output_numeric_match
+                updated.get("compare_target") == "parameters.weight"
+                and updated.get("numeric_consistency") == "mismatch"
+                and output_numeric_match
         ):
             updated["priority_rank"] = 5
             updated["priority_bucket"] = "parameter_mismatch_output_aligned"
@@ -391,19 +277,20 @@ def compare_input_kwargs(train_entry: Dict[str, Any], rollout_entry: Dict[str, A
 
 
 def classify_module_behavior(
-    train_key: str,
-    rollout_key: str,
-    output_row: Optional[Dict[str, Any]],
-    parameter_row: Optional[Dict[str, Any]],
-    input_arg_row: Optional[Dict[str, Any]],
-    input_kwargs_summary: Dict[str, Any],
+        train_key: str,
+        rollout_key: str,
+        output_row: Optional[Dict[str, Any]],
+        parameter_row: Optional[Dict[str, Any]],
+        input_arg_row: Optional[Dict[str, Any]],
+        input_kwargs_summary: Dict[str, Any],
 ) -> Dict[str, Any]:
     output_status = summarize_row_alignment(output_row)
     parameter_status = summarize_row_alignment(parameter_row)
     input_arg_status = summarize_row_alignment(input_arg_row)
     input_kwargs_status = input_kwargs_summary.get("status", "missing")
 
-    input_statuses = [status for status in (input_arg_status, input_kwargs_status) if status not in {"missing", "not_applicable"}]
+    input_statuses = [status for status in (input_arg_status, input_kwargs_status) if
+                      status not in {"missing", "not_applicable"}]
     if any(status == "mismatch" for status in input_statuses):
         combined_input_status = "mismatch"
     elif input_statuses:
@@ -415,14 +302,7 @@ def classify_module_behavior(
     if parameter_status == "missing" or input_kwargs_status in {"missing", "partial"}:
         premise_flags.append("comparison_premise_incomplete")
 
-    lowered_train = train_key.lower()
-    lowered_rollout = rollout_key.lower()
-    is_fused_qkv_pair = (
-        ("linear_q_down_proj" in lowered_train or "linear_kv_down_proj" in lowered_train)
-        and "fused_qkv_a_proj" in lowered_rollout
-    )
-
-    if output_status == "mismatch" and combined_input_status == "aligned" and is_fused_qkv_pair:
+    if output_status == "mismatch" and combined_input_status == "aligned" and is_fused_qkv_pair(train_key, rollout_key):
         return {
             "module_priority_rank": 5,
             "module_bucket": "fused_qkv_structural_mismatch",
@@ -538,12 +418,12 @@ def compare_values(train_entry: Dict[str, Any], rollout_entry: Dict[str, Any]) -
 
 
 def build_module_summary(
-    *,
-    train_key: str,
-    rollout_key: str,
-    compare_rows: List[Dict[str, Any]],
-    train_entry: Dict[str, Any],
-    rollout_entry: Dict[str, Any],
+        *,
+        train_key: str,
+        rollout_key: str,
+        compare_rows: List[Dict[str, Any]],
+        train_entry: Dict[str, Any],
+        rollout_entry: Dict[str, Any],
 ) -> Dict[str, Any]:
     output_row = next((row for row in compare_rows if row.get("compare_target") == "output.0"), None)
     input_arg_row = next((row for row in compare_rows if row.get("compare_target") == "input_args.0"), None)
@@ -561,11 +441,14 @@ def build_module_summary(
         "train_key": train_key,
         "rollout_key": rollout_key,
         "output_consistency": summarize_row_alignment(output_row),
-        "output_priority_bucket": output_row.get("priority_bucket", "missing_compare_target") if output_row else "missing_compare_target",
+        "output_priority_bucket": output_row.get("priority_bucket",
+                                                 "missing_compare_target") if output_row else "missing_compare_target",
         "parameter_consistency": summarize_row_alignment(parameter_row),
-        "parameter_priority_bucket": parameter_row.get("priority_bucket", "missing_compare_target") if parameter_row else "missing_compare_target",
+        "parameter_priority_bucket": parameter_row.get("priority_bucket",
+                                                       "missing_compare_target") if parameter_row else "missing_compare_target",
         "input_args_consistency": summarize_row_alignment(input_arg_row),
-        "input_args_priority_bucket": input_arg_row.get("priority_bucket", "missing_compare_target") if input_arg_row else "missing_compare_target",
+        "input_args_priority_bucket": input_arg_row.get("priority_bucket",
+                                                        "missing_compare_target") if input_arg_row else "missing_compare_target",
         "input_kwargs_consistency": input_kwargs_summary.get("status", "missing"),
         "input_kwargs_numeric_consistency": input_kwargs_summary.get("numeric_consistency", "missing"),
         "input_kwargs_shape_relation": input_kwargs_summary.get("shape_relation", "unknown"),
@@ -578,10 +461,10 @@ def build_module_summary(
 
 
 def build_analysis_summary(
-    mapping_rows: List[Dict[str, Any]],
-    value_rows: List[Dict[str, Any]],
-    module_rows: List[Dict[str, Any]],
-    out_dir: Path,
+        mapping_rows: List[Dict[str, Any]],
+        value_rows: List[Dict[str, Any]],
+        module_rows: List[Dict[str, Any]],
+        out_dir: Path,
 ) -> List[str]:
     priority_counts: Dict[str, int] = defaultdict(int)
     missing_compare_target = 0
@@ -629,14 +512,15 @@ def build_analysis_summary(
             lines.append(f"  - {item}")
     lines.append("- output_files:")
     for name in (
-        "output_1_key_mapping.json",
-        "output_1_key_mapping.csv",
-        "output_2_mapping.json",
-        "output_2_mapping.csv",
-        "output_3_value_compare.json",
-        "output_3_value_compare.csv",
-        "output_4_module_analysis.json",
-        "output_4_module_analysis.csv",
+            "output_0_key_mapping.json",
+            "output_1_key_mapping.json",
+            "output_1_key_mapping.csv",
+            "output_2_mapping.json",
+            "output_2_mapping.csv",
+            "output_3_value_compare.json",
+            "output_3_value_compare.csv",
+            "output_4_module_analysis.json",
+            "output_4_module_analysis.csv",
     ):
         lines.append(f"  - {out_dir / name}")
     return lines
@@ -661,42 +545,44 @@ def compact_metric_summary(row: Dict[str, Any]) -> str:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Generate module mapping and value comparison from two dump.json files.")
+    parser = argparse.ArgumentParser(
+        description="Generate module mapping and value comparison from two dump.json files.")
     parser.add_argument("--train", required=True, help="train dump.json path")
     parser.add_argument("--rollout", required=True, help="rollout dump.json path")
+    parser.add_argument("--mapping_key", required=True, help="mapping_key.json path")
     parser.add_argument("--out-dir", default=".", help="output directory")
     args = parser.parse_args()
 
     train_path = Path(args.train)
     rollout_path = Path(args.rollout)
+    mapping_key = load_json(Path(args.mapping_key))
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
     train_dump = load_json(train_path)
     rollout_dump = load_json(rollout_path)
-    side_train, side_rollout = detect_side(train_path, rollout_path, train_dump, rollout_dump)
-    if side_train != "train":
-        # Keep explicit user intent stable if detection is uncertain.
-        train_dump, rollout_dump = rollout_dump, train_dump
-        train_path, rollout_path = rollout_path, train_path
-
     train_items = get_module_items(train_dump)
     rollout_items = get_module_items(rollout_dump)
     rollout_idx = build_rollout_index(rollout_items)
     rollout_data = dict(rollout_items)
 
     mapping_rows: List[Dict[str, Any]] = []
-    # output_2: train_fragment -> rollout fragment(s), SKILL.md order = first occurrence per train_fragment wins
+    # output_2: train_key -> rollout_key
     output2_map: Dict[str, Any] = {}
     value_rows: List[Dict[str, Any]] = []
     module_rows: List[Dict[str, Any]] = []
 
     # Keep train traversal order strictly.
     for train_key, train_entry in train_items:
-        norm = normalize_key_for_match(train_key)
         layer = parse_layer_idx(train_key)
         block = infer_block(train_key)
-        peers = rollout_idx.get((layer, norm), [])
+        mapping_rollout_key = mapping_key.get(train_key)
+        peers = []
+        if mapping_rollout_key and isinstance(mapping_rollout_key, list):
+            for key in mapping_rollout_key:
+                peers.append(rollout_idx.get(key, []))
+        elif mapping_rollout_key and isinstance(mapping_rollout_key, str):
+            peers = rollout_idx.get(mapping_rollout_key, [])
 
         cardinality = "1:1" if len(peers) == 1 else ("1:N" if len(peers) > 1 else "1:0")
         mapping_rows.append(
@@ -712,12 +598,7 @@ def main() -> None:
         )
 
         if peers:
-            tf = fragment_for_output2(train_key)
-            if tf not in output2_map:
-                if len(peers) == 1:
-                    output2_map[tf] = fragment_for_output2(peers[0])
-                else:
-                    output2_map[tf] = [fragment_for_output2(p) for p in peers]
+            output2_map[train_key] = peers
 
         for rk in peers:
             cmp_rows = compare_values(train_entry, rollout_data.get(rk, {}))
@@ -743,7 +624,8 @@ def main() -> None:
         },
         "rows": mapping_rows,
     }
-    (out_dir / "output_1_key_mapping.json").write_text(json.dumps(out1_json, ensure_ascii=False, indent=2), encoding="utf-8")
+    (out_dir / "output_1_key_mapping.json").write_text(json.dumps(out1_json, ensure_ascii=False, indent=2),
+                                                       encoding="utf-8")
 
     with (out_dir / "output_1_key_mapping.csv").open("w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
@@ -751,22 +633,24 @@ def main() -> None:
         for r in mapping_rows:
             peers = r["rollout_keys"] or [""]
             for p in peers:
-                w.writerow([r["train_key"], p, r["cardinality"], r["layer_index"], r["block"], r["confidence"], r["notes"]])
+                w.writerow(
+                    [r["train_key"], p, r["cardinality"], r["layer_index"], r["block"], r["confidence"], r["notes"]])
 
-    # output_2: pure JSON object only (train_fragment -> rollout fragment or list thereof), per SKILL.md
-    (out_dir / "output_2_mapping.json").write_text(json.dumps(output2_map, ensure_ascii=False, indent=2), encoding="utf-8")
+    # output_2
+    (out_dir / "output_2_mapping.json").write_text(json.dumps(output2_map, ensure_ascii=False, indent=2),
+                                                   encoding="utf-8")
 
     with (out_dir / "output_2_mapping.csv").open("w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
-        w.writerow(["mapping_type", "train_fragment", "rollout_fragment", "layer_index", "block", "confidence", "notes"])
+        w.writerow(
+            ["mapping_type", "train_key", "rollout_key", "layer_index", "block", "confidence", "notes"])
         for r in mapping_rows:
             peers = r["rollout_keys"]
             if not peers:
                 continue
-            tf = fragment_for_output2(r["train_key"])
             mt = "1:1" if len(peers) == 1 else "1:N"
             for p in peers:
-                w.writerow([mt, tf, fragment_for_output2(p), r["layer_index"], r["block"], r["confidence"], r["notes"]])
+                w.writerow([mt, r["train_key"], p, r["layer_index"], r["block"], r["confidence"], r["notes"]])
 
     # output_3
     priority_counts: Dict[str, int] = defaultdict(int)
@@ -781,7 +665,7 @@ def main() -> None:
     out3_json = {
         "meta": {
             "eps": EPS,
-            "thresholds": {"ok": 1e-4, "warn": 1e-2},
+            "thresholds": {"ok": THRESHOLDS_OK, "warn": THRESHOLDS_WARN},
             "order_basis": "train_data_insertion_order",
             "left_key": "train_key",
             "priority_policy": [
@@ -797,7 +681,8 @@ def main() -> None:
         },
         "records": value_rows,
     }
-    (out_dir / "output_3_value_compare.json").write_text(json.dumps(out3_json, ensure_ascii=False, indent=2), encoding="utf-8")
+    (out_dir / "output_3_value_compare.json").write_text(json.dumps(out3_json, ensure_ascii=False, indent=2),
+                                                         encoding="utf-8")
 
     with (out_dir / "output_3_value_compare.csv").open("w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
@@ -847,7 +732,8 @@ def main() -> None:
         },
         "records": module_rows,
     }
-    (out_dir / "output_4_module_analysis.json").write_text(json.dumps(out4_json, ensure_ascii=False, indent=2), encoding="utf-8")
+    (out_dir / "output_4_module_analysis.json").write_text(json.dumps(out4_json, ensure_ascii=False, indent=2),
+                                                           encoding="utf-8")
 
     with (out_dir / "output_4_module_analysis.csv").open("w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
