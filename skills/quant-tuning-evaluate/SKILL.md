@@ -211,7 +211,7 @@ python skills/quant-tuning-evaluate/scripts/run_evaluation.py \
 - **路径格式**：必须是 JSON 字符串
 - **设备对齐**：`device_indices` 与 `tensor-parallel-size` 对齐
 - **单轮单次**：每次调用只执行一次完整评测
-- **服务生命周期**：由脚本内部评测服务管理
+- **服务生命周期**：由脚本内部评测服务管理。如果你需要测多个数据集，请你在测完所有数据集后再关闭服务化，**避免**重复多次拉起。
 
 ---
 

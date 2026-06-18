@@ -27,6 +27,10 @@ msmodelslim analyze layer \
 - `model_type` 与模型 `config.json` 中的 `model_type` 并非同一概念，你应该参考 `msmodelslim/config/config.ini`，如 `Qwen3-32B` `DeepSeek-V3` 才是正确合法的 `model_type`。
 - 官方文档：[敏感层分析使用指南](https://gitcode.com/Ascend/msmodelslim/blob/master/docs/zh/feature_guide/sensitive_layer_analysis/usage.md)
 
+**注意事项**
+- 敏感层分析运行时长可能较长，超过 timeout 3600s，将结果输出到 stdout 时，由于 tee 因超时而中断，造成输出丢失。你**应当**使用 nohup 或将输出重定向到文件。**务必避免**在上一个敏感层分析进程未结束时再次拉起一个敏感层分析进程。
+- 当使用 mse_layer_wise 时，topk 按照模型实际层数（config.json 中 num_hidden_layers）填写。
+
 ## 支持的分析指标
 
 | 指标 | 说明 | 适用场景 |
