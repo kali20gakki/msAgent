@@ -28,7 +28,7 @@ evaluation:
     request_rate: 1.0
     retry: 3
     batch_size: 4
-    max_out_len: 2048
+    max_out_len: 32768
     trust_remote_code: false
     pred_postprocessor: extract_non_reasoning_content
     generation_kwargs:
@@ -44,6 +44,9 @@ evaluation:
   datasets:
     gsm8k:
       config_name: "gsm8k_gen_0_shot_cot_str"
+      mode: all
+    gpqa:
+      config_name: "gpqa_gen"
       mode: all
     aime25:
       config_name: "aime2025_gen_0_shot_chat_prompt"
@@ -67,15 +70,14 @@ inference_engine:
   startup_timeout: 600
 
   args:
-    enforce-eager: true
     served-model-name: example-qwen3-32b-w8a8
     trust-remote-code: true
     tensor-parallel-size: 2 # 与 device/device_ids 对齐
     data-parallel-size: 1 # 固定为 1，与模型无关
-    quantization: ascend
+    quantization: ascend  # 测评非量化的浮点权重时，此行改为 dtype: bfloat16
     enable-prefix-caching: false
-    max-model-len: 4096
-    max-num-batched-tokens: 4096
+    max-model-len: 33792
+    max-num-batched-tokens: 33792
     gpu-memory-utilization: 0.9
     enable-auto-tool-choice: true
     tool-call-parser: hermes

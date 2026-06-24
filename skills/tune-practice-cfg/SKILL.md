@@ -103,7 +103,7 @@ msmodelslim analyze layer \
     --metrics mse_layer_wise \
     --calib_dataset ${calib_dataset} \
     --topk 999 \
-    --device npu:0 \
+    --device npu \
   2>&1 | tee "${SAVE_PATH}/analysis_console.log"
 ```
 

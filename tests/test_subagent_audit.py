@@ -320,7 +320,7 @@ def test_delegation_event_records_datasets_when_evaluation_generator_input_valid
     "datasets": [
       {
         "name": "gpqa",
-        "config_name": "gpqa_gen_0_shot_cot_str",
+        "config_name": "gpqa_gen",
         "target": 79.0,
         "tolerance": 1.0
       }

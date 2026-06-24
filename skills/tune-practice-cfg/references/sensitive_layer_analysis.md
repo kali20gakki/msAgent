@@ -11,7 +11,7 @@ msmodelslim analyze layer \
     --metrics mse_layer_wise \
     --calib_dataset ${calib_dataset} \
     --topk 999 \
-    --device npu:0 \
+    --device npu \
 ```
 
 | 参数 | 说明 | 默认值 |
@@ -22,7 +22,7 @@ msmodelslim analyze layer \
 | `calib_dataset` | 校准数据集 | `"mix_calib.jsonl"` |
 | `pattern` | 层匹配模式列表 | `"*"`（全量） |
 | `topk` | 返回 Top-K 敏感层 | `999` |
-| `device` | 执行设备（如 `"npu"`, `"npu:0"`, `"gpu:0"`） | `"npu:0"` |
+| `device` | 执行设备 | `npu` |
 
 - `model_type` 与模型 `config.json` 中的 `model_type` 并非同一概念，你应该参考 `msmodelslim/config/config.ini`，如 `Qwen3-32B` `DeepSeek-V3` 才是正确合法的 `model_type`。
 - 官方文档：[敏感层分析使用指南](https://gitcode.com/Ascend/msmodelslim/blob/master/docs/zh/feature_guide/sensitive_layer_analysis/usage.md)

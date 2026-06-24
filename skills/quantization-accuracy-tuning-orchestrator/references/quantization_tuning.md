@@ -150,6 +150,10 @@
 - 截断 exclude 列表时，不能在 gate_proj/up_proj 配对中间截断
 - 若中位数截断点落在配对中间，向上取整到配对末尾
 
+### 精简数据集的使用
+
+若用户提供了精简数据集和全量数据集，则进行精度调优使用精简数据集进行。当调优（摸高二分搜索）结束后，将数据集切换为全量数据集，并且分别测一次浮点权重和量化权重在全量数据集上的精度表现，作为最终是否达标的结论。
+
 ## 拉起 subagent 的格式（MSAGENT_IO v1）
 
 协议总则见 [subagent_io_protocol.md](./subagent_io_protocol.md)。本文档面向**主 Agent**，重点定义委派 `input`；回传 `output` 一行简述主 Agent 需读取的业务字段。
@@ -232,7 +236,7 @@
     "datasets": [
       {
         "name": "gpqa",
-        "config_name": "gpqa_gen_0_shot_cot_str",
+        "config_name": "gpqa_gen",
         "target": 79.0,
         "tolerance": 1.0
       }

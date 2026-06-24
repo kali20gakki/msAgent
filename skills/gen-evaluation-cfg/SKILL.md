@@ -114,6 +114,7 @@ inference_engine:
 1. 确保所有必填字段存在且符合格式要求
 2. 确保生成的 YAML 文件语法正确，可以被 YAML 解析器成功解析
 3. 如果你在测浮点模型精度基线，则 `demand.expectations[].target` 和 `demand.expectations[].tolerance` **必须**都设置为 100 进行占位。
+4. 确保测评配置一致性，你应确保测评浮点权重和量化权重的配置的通用参数一致，尤其是 `evaluation.aisbench`、`inference_engine.args.max-model-len`**必须**保持一致。在不一致的情况下，你应该修改当前生成的配置文件。例如先前生成了浮点的测评配置且已经测评过了，则你应该修改当前生成的量化测评配置。
 
 ## 执行约束
 
