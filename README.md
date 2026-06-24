@@ -47,6 +47,8 @@ MindStudio-Agent（简称 `msagent`）是面向昇腾 Ascend NPU 开发、调试
 
 除领域 Agent 外，`msagent` 还内置了一批可复用的 Skills，覆盖 Profiling 数据分析、算子性能调优、精度溢出检测、文档体验审查、代码审查等场景。完整技能清单、触发方式与依赖说明，请参见 《[Skills](./skills/README.md)》。
 
+[Trae](https://www.trae.ai/) 用户可直接安装 Skills 并接入 `msprof-mcp`，无需安装 `msagent`，详见 《[Trae 快速上手](./skills/README.md#trae-快速上手)》。
+
 ## 🚀 快速入门
 
 快速体验核心功能，请参见《[msAgent快速入门](docs/zh/getting_started/quick_start.md)》。
