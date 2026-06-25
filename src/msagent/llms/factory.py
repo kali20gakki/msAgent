@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import os
 from typing import Any
-from urllib.parse import urlparse, urlunparse
+from urllib.parse import urlparse
 
 import httpx
 from langchain.chat_models import init_chat_model
@@ -102,7 +102,7 @@ class LLMFactory:
         if cfg.max_tokens > 0:
             kwargs["max_tokens"] = cfg.max_tokens
 
-        normalized_base_url = self._normalize_base_url(provider, cfg.base_url)
+        normalized_base_url = self._normalize_base_url(cfg.base_url)
         if normalized_base_url:
             kwargs["base_url"] = normalized_base_url
             provider_base_url_key = _PROVIDER_BASE_URL_KWARG.get(provider)
@@ -182,26 +182,14 @@ class LLMFactory:
         return raw
 
     @staticmethod
-    def _normalize_base_url(provider: str, base_url: str | None) -> str | None:
-        """Normalize provider-specific base URLs for compatibility."""
+    def _normalize_base_url(base_url: str | None) -> str | None:
+        """Return a trimmed base URL or ``None`` when unset."""
         if base_url is None:
             return None
 
         normalized = base_url.strip()
         if not normalized:
             return None
-
-        if provider != "openai":
-            return normalized
-
-        parsed = urlparse(normalized)
-        host = (parsed.hostname or "").lower()
-        path = parsed.path.rstrip("/")
-
-        # DeepSeek OpenAI-compatible endpoint requires /v1.
-        if host.endswith("deepseek.com") and path in {"", "/"}:
-            parsed = parsed._replace(path="/v1")
-            return urlunparse(parsed)
 
         return normalized
 
