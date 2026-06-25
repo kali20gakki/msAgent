@@ -127,10 +127,10 @@ def test_initializer_filters_skills_by_patterns_with_negative_rules(
     tmp_path: Path,
 ) -> None:
     keep = Skill(
-        name="mindstudio_profiler_data_check",
+        name="ascend-profiler-data-validation",
         description="keep",
         category="default",
-        path=tmp_path / "skills" / "mindstudio_profiler_data_check" / "SKILL.md",
+        path=tmp_path / "skills" / "ascend-profiler-data-validation" / "SKILL.md",
     )
     drop = Skill(
         name="op-mfu-calculator",
@@ -153,4 +153,4 @@ def test_initializer_filters_skills_by_patterns_with_negative_rules(
         ],
     )
 
-    assert [skill.name for skill in filtered] == ["mindstudio_profiler_data_check"]
+    assert [skill.name for skill in filtered] == ["ascend-profiler-data-validation"]

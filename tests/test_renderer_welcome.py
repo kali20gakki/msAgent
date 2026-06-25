@@ -165,22 +165,22 @@ def test_format_tool_call_keeps_execute_command_visible() -> None:
 
 
 def test_strip_frontmatter_fences_removes_yaml_markers() -> None:
-    content = "---\nname: cluster-fast-slow-rank-detector\ndescription: profiler skill\n---\n\n# Body\n"
+    content = "---\nname: ascend-cluster-fast-slow-rank-detector\ndescription: profiler skill\n---\n\n# Body\n"
 
     stripped = renderer_module.Renderer._strip_frontmatter_fences(content)
 
-    assert stripped.startswith("name: cluster-fast-slow-rank-detector")
+    assert stripped.startswith("name: ascend-cluster-fast-slow-rank-detector")
     assert "\n---\n" not in stripped
     assert "# Body" in stripped
 
 
 def test_strip_frontmatter_fences_removes_leading_opening_marker_without_closing_fence() -> None:
-    content = "\n---\nname: cluster-fast-slow-rank-detector\ndescription: profiler skill\n技能正文\n"
+    content = "\n---\nname: ascend-cluster-fast-slow-rank-detector\ndescription: profiler skill\n技能正文\n"
 
     stripped = renderer_module.Renderer._strip_frontmatter_fences(content)
 
     assert not stripped.startswith("---")
-    assert stripped.startswith("name: cluster-fast-slow-rank-detector")
+    assert stripped.startswith("name: ascend-cluster-fast-slow-rank-detector")
     assert "技能正文" in stripped
 
 

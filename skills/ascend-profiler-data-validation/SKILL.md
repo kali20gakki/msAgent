@@ -1,5 +1,5 @@
 ---
-name: mindstudio_profiler_data_check
+name: ascend-profiler-data-validation
 description: 当用户提供 MindStudio profiler 采集的性能数据（框架 profiler、msprof 命令行）时，对数据完整性、采集状态及关键配置进行校验，确保后续分析工具能正常运行。
 keywords: [profiler, 性能分析, 数据检查]
 ---

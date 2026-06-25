@@ -205,10 +205,10 @@ async def test_run_tool_not_found_returns_error_payload() -> None:
 async def test_fetch_skills_returns_display_name_and_filters(tmp_path: Path) -> None:
     skills = [
         Skill(
-            name="cluster-fast-slow-rank-detector",
+            name="ascend-cluster-fast-slow-rank-detector",
             description="Detect slow ranks in distributed runs",
             category="analysis",
-            path=tmp_path / "analysis" / "cluster-fast-slow-rank-detector" / "SKILL.md",
+            path=tmp_path / "analysis" / "ascend-cluster-fast-slow-rank-detector" / "SKILL.md",
         ),
         Skill(
             name="op-mfu-calculator",
@@ -226,9 +226,9 @@ async def test_fetch_skills_returns_display_name_and_filters(tmp_path: Path) -> 
 
     assert payload == [
         {
-            "display_name": "analysis/cluster-fast-slow-rank-detector",
+            "display_name": "analysis/ascend-cluster-fast-slow-rank-detector",
             "category": "analysis",
-            "name": "cluster-fast-slow-rank-detector",
+            "name": "ascend-cluster-fast-slow-rank-detector",
             "description": "Detect slow ranks in distributed runs",
         },
         {

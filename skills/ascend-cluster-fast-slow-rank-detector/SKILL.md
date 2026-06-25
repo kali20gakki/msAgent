@@ -1,5 +1,5 @@
 ---
-name: cluster-fast-slow-rank-detector
+name: ascend-cluster-fast-slow-rank-detector
 description: 专门用于 Ascend 集群 Profiling 性能数据的“快慢卡”诊断专家技能。当用户提供【集群性能数据目录/路径】并要求分析【快慢卡】、【慢节点】、【负载不均衡】或【集群瓶颈】时，必须触发此技能。该技能会自动接收集群路径，调度相关工具输出快慢卡的宏观定性与微观根因（如 Host 下发瓶颈、算子计算劣化）。
 ---
 
@@ -39,7 +39,7 @@ description: 专门用于 Ascend 集群 Profiling 性能数据的“快慢卡”
 * 告知用户，当前数据类型、Rank数量等信息
 
 （2）路由后续操作
-* 用户给的输入数据是 text 格式：请参考 `skills/msprof-analyze-cli` SKILL 的能力二：专家建议分析 (Advisor) 部分进行分析，然后直接进入流程 3 基于证据做快慢卡判定
+* 用户给的输入数据是 text 格式：请参考 `skills/ascend-msprof-analyze-cli` SKILL 的能力二：专家建议分析 (Advisor) 部分进行分析，然后直接进入流程 3 基于证据做快慢卡判定
 * 用户给的输入数据是 db 格式，判断是否已经存在`cluster_analysis_output` 结果文件夹：
   * 若存在，检查是否包含 `cluster_time_summary`、`compute_op_sum`、`hccl_sum`、`slow_rank`、`slow_link`、`cann_api_sum` 等结果。记录缺失项，直接进入流程 2 调用 `msprof-analyze` 集群分析能力补齐；如果结果已完整，直接进入流程 3 基于证据做快慢卡判定
   * 不存在，直接进入流程 2 调用 `msprof-analyze` 集群分析能力
@@ -47,7 +47,7 @@ description: 专门用于 Ascend 集群 Profiling 性能数据的“快慢卡”
 
 2. 调用 `msprof-analyze` 集群分析能力
 流程 2 只负责生成分析结果，不负责直接下结论。  
-必须调用 `msprof-analyze` 执行集群分析。请参考 `skills/msprof-analyze-cli` SKILL 中 “集群综合分析 (Cluster)” 的部分
+必须调用 `msprof-analyze` 执行集群分析。请参考 `skills/ascend-msprof-analyze-cli` SKILL 中 “集群综合分析 (Cluster)” 的部分
 **要求不是只跑 `all`，而是将 README 中与集群分析相关的 `-m` 能力逐项跑全**，至少覆盖下列能力：
 
 | 分析能力 | 介绍 |

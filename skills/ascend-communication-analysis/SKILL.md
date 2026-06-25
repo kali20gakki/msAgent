@@ -126,7 +126,7 @@ When `cluster_analysis_output/cluster_analysis.db` is missing but cluster-level 
 msprof-analyze cluster -m all -d <profiling-root>
 ```
 
-If command options, environment setup, or troubleshooting for `msprof-analyze` are needed, use the dedicated `msprof-analyze-cli` skill.
+If command options, environment setup, or troubleshooting for `msprof-analyze` are needed, use the dedicated `ascend-msprof-analyze-cli` skill.
 
 ```bash
 python3 skills/ascend-communication-analysis/scripts/<script>.py ...

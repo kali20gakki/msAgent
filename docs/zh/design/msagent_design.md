@@ -1,8 +1,10 @@
+# msAgent 设计文档
+
 ## 修订记录
+
 | 日期 | 修订版本 | 修改描述 | 作者 | RFC文档 |
 | -- | -- | -- | -- | -- |
 | 2026-06-03 | 1.0 | 补充 msAgent 详细设计文档，覆盖架构、交互链路、扩展机制与测试设计 | kali20gakki1 |  |
-|  |  |  |  |  |
 
 ## 背景描述
 
@@ -169,11 +171,10 @@ sequenceDiagram
 
 3. **缓存式装配**
    `Initializer` 在 graph 构建后缓存：
-
-- `cached_llm_tools`
-- `cached_tools_in_catalog`
-- `cached_agent_skills`
-- `cached_mcp_server_names`
+   - `cached_llm_tools`
+   - `cached_tools_in_catalog`
+   - `cached_agent_skills`
+   - `cached_mcp_server_names`
 
    这些缓存既服务于 `/tools`、`/skills`、`/mcp` 等交互命令，也服务于后续 Prompt 模板渲染。
 
@@ -482,22 +483,20 @@ sequenceDiagram
 
 1. **AgentContext 注入**
    `MessageDispatcher._build_agent_context()` 会构造：
+   - 当前工作目录
+   - 平台与 OS 版本
+   - 当前时间
+   - 本地环境快照
+   - 当前启用 MCP 列表
+   - 项目 `memory.md`
+   - 当前可见工具目录与 Skill 目录
 
-- 当前工作目录
-- 平台与 OS 版本
-- 当前时间
-- 本地环境快照
-- 当前启用 MCP 列表
-- 项目 `memory.md`
-- 当前可见工具目录与 Skill 目录
-
-   随后 `_SystemMessageMiddleware` 将这些变量渲染进系统提示词模板。这种设计让 Prompt 具备“环境感知能力”，且不需要把环境信息写死在 Prompt 文件里。
+   随后 `_SystemMessageMiddleware` 将这些变量渲染进系统提示词模板。这种设计让 Prompt 具备"环境感知能力"，且不需要把环境信息写死在 Prompt 文件里。
 
 2. **流式渲染与工具活动区**
    `MessageDispatcher` 对 `astream()` 输出做两类处理：
-
-- `messages` 流：聚合 AI token 流、思考预览、工具调用预告。
-- `updates` 流：渲染最终 AIMessage、ToolMessage、token 统计和工具结果。
+   - `messages` 流：聚合 AI token 流、思考预览、工具调用预告。
+   - `updates` 流：渲染最终 AIMessage、ToolMessage、token 统计和工具结果。
 
    这套设计让 CLI 能实时反馈“在做什么”，而不是只在最后吐一段长文本。
 
@@ -704,7 +703,7 @@ tools:
 
 skills:
   patterns:
-    - default:ascend_pytorch_profiler_db_explorer
+    - default:ascend-profiler-db-explorer
     - "!default:op-mfu-calculator"
 ```
 

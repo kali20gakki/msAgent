@@ -21,14 +21,14 @@ tools:
   output_max_tokens: 10000
 skills:
   patterns:
-    - default:ascend_pytorch_profiler_db_explorer
+    - default:ascend-profiler-db-explorer
     - default:ascend-computation-analysis
     - default:ascend-schedule-analysis
     - default:ascend-communication-analysis
-    - default:msprof-analyze-cli
-    - default:cluster-fast-slow-rank-detector
+    - default:ascend-msprof-analyze-cli
+    - default:ascend-cluster-fast-slow-rank-detector
     - default:github-raw-fetch
-    - default:mindstudio_profiler_data_check
+    - default:ascend-profiler-data-validation
     - default:op-mfu-calculator
   use_catalog: false
 compression:

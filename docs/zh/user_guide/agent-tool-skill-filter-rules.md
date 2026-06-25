@@ -51,8 +51,8 @@ tools:
 ```yaml
 skills:
   patterns:
-    - default:mindstudio_profiler_data_check
-    - default:ascend_pytorch_profiler_db_explorer
+    - default:ascend-profiler-data-validation
+    - default:ascend-profiler-db-explorer
     - "!default:op-*"
   use_catalog: false
 ```
@@ -101,8 +101,8 @@ tools:
 
 skills:
   patterns:
-    - default:mindstudio_profiler_data_check
-    - default:ascend_pytorch_profiler_db_explorer
+    - default:ascend-profiler-data-validation
+    - default:ascend-profiler-db-explorer
   use_catalog: false
 ```
 

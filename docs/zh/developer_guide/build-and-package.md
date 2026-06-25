@@ -55,8 +55,14 @@ VERIFY_WHEEL_INSTALL=1 bash scripts/build_whl.sh
 如果你不使用脚本，也可以手动执行等价命令：
 
 ```bash
+# 安裝 uv
+pip install uv
+
+# 确认 skills 目录存在
 test -d skills
+# 检查锁文件是否是最新的、是否和当前项目依赖声明一致
 uv lock --check
+# 构建项目的 wheel 安装包。
 uv build --wheel --out-dir dist .
 ```
 
