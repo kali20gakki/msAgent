@@ -39,7 +39,8 @@ dependencies = [
     "tiktoken>=0.9.0,<1.0.0",
     "openpyxl>=3.1,<3.2",
     "msprof-mcp==0.1.8",
-    "msprof-analyze==8.5.1"
+    "msprof-analyze==8.5.2"
+
 ]
 
 [project.scripts]
