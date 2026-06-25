@@ -119,3 +119,26 @@
    ```ColdFusion
    Successfully installed mindstudio-agent-{version}
    ```
+
+## 4. 升级与卸载
+
+`msagent` 会在当前工作目录下生成 `.msagent/` 本地目录，用于保存缓存、会话历史、日志和运行时配置等内容。
+
+- 升级前，先删除当前工作目录下的 `.msagent/` 文件夹，避免旧缓存影响新版本行为。
+- 卸载时，如果后续不再使用 `msagent`，也建议一并删除 `.msagent/` 文件夹。
+
+常见操作示例：
+
+- 升级：
+
+```shell
+rm -rf .msagent
+pip install mindstudio-agent
+```
+
+- 卸载：
+
+```shell
+rm -rf .msagent
+pip uninstall mindstudio-agent
+```
