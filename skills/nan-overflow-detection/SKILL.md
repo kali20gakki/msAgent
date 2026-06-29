@@ -103,27 +103,21 @@ python3 "<skill_root>/scripts/cross_rank_analyzer.py" <input_path> [output_path]
 
 获取源卡后，追溯该卡上的根因算子：
 
-```bash
-python3 "<skill_root>/scripts/single_rank_tracer.py" <input_path> --rank <source_rank> [output_path]
-
-# 或直接指定 rank 目录：
-python3 "<skill_root>/scripts/single_rank_tracer.py" <rank_path> [output_path]
-```
-
 1. 保持 dump.json 中的执行顺序
 2. 过滤非计算算子和合法 -Infinity
-3. 遍历算子，找到第一个输入正常但输出异常的节点（真正的溢出根因）
+3. 遍历算子，找到第一个可能的异常节点
 4. 利用 construct.json 追溯完整调用链
 5. 利用 stack.json 获取代码位置
+6. 如果找到的第一个可能异常节点，被排除异常可能，则继续找后续可能是异常的节点，重复进行定位
 
 ### 异常节点判定逻辑
 
 ```python
 def is_anomaly(op_data):
-    # 输入无异常，输出有异常 = 真正的溢出点
+    # 输入有异常或者输出有异常
     is_input_anomaly = check_anomaly(input_args)
     is_output_anomaly = check_anomaly(outputs)
-    return (not is_input_anomaly) and is_output_anomaly
+    return is_input_anomaly or is_output_anomaly
 ```
 
 ## 输出
