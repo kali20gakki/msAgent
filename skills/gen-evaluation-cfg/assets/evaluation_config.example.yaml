@@ -33,8 +33,6 @@ evaluation:
     pred_postprocessor: extract_non_reasoning_content
     generation_kwargs:
       temperature: 1.0
-      chat_template_kwargs:
-        enable_thinking: false
     model_meta:
       base_name: vllm_api_general_chat
       subdir: vllm_api
