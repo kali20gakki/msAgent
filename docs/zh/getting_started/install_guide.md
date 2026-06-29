@@ -27,7 +27,7 @@
   使用 PyPI 安装，普通用户建议优先使用 PyPI 安装稳定发布版本。
 
   ```shell
-  pip install -U mindstudio-agent
+  pip install mindstudio-agent
   ```
 
   执行如下命令提示msAgent版本即安装成功。

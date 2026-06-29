@@ -1,14 +1,14 @@
 ﻿<h1 align="center" >MindStudio Agent</h1>
 
 <div align="center">
-<p><b><span style="font-size:24px;">面向 Ascend NPU 场景的一站式调试调优 Agent</span></b></p>
+<p><b><span style="font-size:20px;">面向 Ascend NPU 场景的一站式调试调优</span></b></p>
 
-[![快速入门](https://badgen.net/badge/快速入门/QuickStart/blue)](#-快速入门)
+[![快速入门](https://badgen.net/badge/快速入门/QuickStart/green)](#-快速入门)
 [![精确搜索](https://badgen.net/badge/精确搜索/ReadTheDocs/blue)](https://mindstudio-agent.readthedocs.io/zh-cn/latest/)
-[![安装指南](https://badgen.net/badge/安装指南/Install/blue)](#-安装指南)
-[![配置文档](https://badgen.net/badge/配置文档/Docs/blue)](docs/zh/user_guide/configuration-and-extension.md)
-[![昇腾社区](https://badgen.net/badge/昇腾社区/Community/blue)](https://www.hiascend.com/cn/developer/software/mindstudio)
-[![报告问题](https://badgen.net/badge/报告问题/Issues/blue)](https://gitcode.com/Ascend/msagent/issues)
+[![安装指南](https://badgen.net/badge/安装指南/Install/orange)](#-安装指南)
+[![配置文档](https://badgen.net/badge/配置文档/Docs/purple)](docs/zh/user_guide/configuration-and-extension.md)
+[![昇腾社区](https://badgen.net/badge/昇腾社区/Community/red)](https://www.hiascend.com/cn/developer/software/mindstudio)
+[![报告问题](https://badgen.net/badge/报告问题/Issues/cyan)](https://gitcode.com/Ascend/msagent/issues)
 
 </div>
 
@@ -20,7 +20,7 @@
 🔹 **[2026.05.21]**：`v26.0.0已发布，新增Icarus Agent，覆盖算子性能调优场景`。<br>
 🔹 **[2026.04.27]**：`v26.0.0.alpha1` 发布，新增 `Accuracy` / `Zephyr` Agent，覆盖精度调优与模型量化场景。<br>
 🔹 **[2026.04.08]**：`v0.1.3` 发布，完成 DeepAgents 重构并增强 `Hermes` / `Minos` Agent。<br>
-🔹 **[2026.03.19]**：`mindstudio-agent` 已发布到 PyPI，推荐使用 `pip install -U mindstudio-agent` 安装。
+🔹 **[2026.03.19]**：`mindstudio-agent` 已发布到 PyPI，推荐使用 `pip install mindstudio-agent` 安装。
 
 </span>
 
@@ -47,7 +47,7 @@ MindStudio-Agent（简称 `msagent`）是面向昇腾 Ascend NPU 开发、调试
 
 除领域 Agent 外，`msagent` 还内置了一批可复用的 Skills，覆盖 Profiling 数据分析、算子性能调优、精度溢出检测、文档体验审查、代码审查等场景。完整技能清单、触发方式与依赖说明，请参见 《[Skills](./skills/README.md)》。
 
-[Trae](https://www.trae.ai/) 用户可直接安装 Skills 并接入 `msprof-mcp`，无需安装 `msagent`，详见 《[Trae 快速上手](./skills/README.md#trae-快速上手)》。
+如需将 Skills 或 msprof-mcp 接入 Trae、Claude、Codex 等外部 Agent，可参考 《[接入指南](./docs/zh/user_guide/integration-guide.md)》。
 
 ## 🚀 快速入门
 
