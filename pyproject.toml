@@ -1,6 +1,6 @@
 [project]
 name = "mindstudio-agent"
-version = "26.1.0-alpha.1"
+version = "26.1.0-alpha.2"
 description = "AI assistant for Ascend NPU profiling analysis, bottleneck diagnosis, and optimization guidance"
 readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.11"
@@ -16,10 +16,10 @@ dependencies = [
     "langchain~=1.2.0",
     "langchain-anthropic~=1.3.0",
     "langchain-community~=0.3.0",
-    "langchain-core~=1.2.4",
+    "langchain-core~=1.3.3",
     "langchain-google-genai>=4.1.2,<4.3.0",
     "langchain-mcp-adapters~=0.2.1",
-    "langchain-openai~=1.1.6",
+    "langchain-openai~=1.1.14",
     "langgraph~=1.0.5",
     "langgraph-prebuilt==1.0.8",
     "langgraph-cli[inmem]>=0.4.16,<0.5.0",
