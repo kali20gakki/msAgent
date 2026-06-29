@@ -26,3 +26,11 @@
 | RL训推不一致分析      | `请基于输入的训练和推理dump数据，分析训推的差异来源，给出可能原因。` | <img src="../figures/accuracy_rl_rca_report.jpg" alt="RL训推不一致根因分析报告" width="800"> |
 | loss/gnorm NaN溢出分析 | `请基于输入的训练dump数据，分析其中的NaN溢出，找出源卡和根因算子` | <img src="../figures/nan_overflow_detection_report.jpg" alt="loss/gnorm NaN溢出分析报告" width="800"> |
 | 开启确定性计算、切换软件版本，模型运行两次结果不一致分析 | `请基于输入的md5 dump数据，进行数据比对，寻找比对差异点，给出可能原因。` | <img src="../figures/deterministic_report.png" alt="确定性计算问题分析报告" width="800"> |
+
+## 当出现分析结果不正确
+
+- 可提供额外的辅助信息，包括相关代码、正确的背景知识等
+- 可提出疑问或指出错误，修正Agent的错误观点
+- 可提出分析方向、关键点，指导Agent沿相关线索进一步分析
+
+分析示例可参考 [`accuracy_usage_example.md`](../example/accuracy_usage_example.md)。
