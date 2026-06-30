@@ -19,7 +19,6 @@
 
 更完整的目录说明见 [配置与扩展](configuration-and-extension.md)。
 
-
 ## 2. 如何打开或关闭 MCP 服务？
 
 有两种常见方式：
@@ -58,7 +57,7 @@
 
 加载自定义 Skill，可参考[添加自定义 Skill](configuration-and-extension.md#添加自定义-skill)
 
-## 3. 运行日志在哪里看？
+## 4. 运行日志在哪里看？
 
 启用后，日志会写到当前工作目录下：
 
@@ -71,4 +70,27 @@
 ```bash
 export MSAGENT_LOG_LEVEL=DEBUG
 msagent -v
+```
+
+## 5. 终端界面颜色偏灰/看不清怎么办？
+
+msagent 会自动检测终端主题（深色/浅色）来匹配配色方案。如果检测不准（比如 SSH 连接时误判为浅色主题，导致深色终端上文字偏灰），可通过环境变量手动指定：
+
+```bash
+export MSAGENT_BACKGROUND_THEME=dark
+```
+
+可选值：
+
+| 值 | 含义                               |                                     |
+|----|----------------------------------|-------------------------------------|
+| `dark` | 强制使用背景为深色主题（Tokyo Night），对应字体为浅色 | <img src="../figures/theme_dark.png" width="400">  |
+| `light` | 强制使用背景为浅色主题（Tokyo Day），对应字体为深色   |  <img src="../figures/theme_light.png" width="400">                                   |
+
+## 6. MobaXterm 终端背景为白色/无彩色怎么办？
+
+MobaXterm 默认未设置 `COLORTERM`，导致 prompt_toolkit 无法识别真彩色支持，界面可能显示为白色背景或无彩色。设置以下环境变量即可恢复：
+
+```bash
+export COLORTERM=truecolor
 ```

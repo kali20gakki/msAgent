@@ -98,99 +98,23 @@ def _detect_via_colorfgbg() -> str | None:
     return None
 
 
-def _detect_via_os() -> str | None:
-    """Detect OS-level dark/light mode setting.
-
-    Supports:
-    - macOS: Uses 'defaults read' to check AppleInterfaceStyle
-    - Linux: Uses 'gsettings' to check GTK theme (GNOME/GTK-based)
-
-    Returns:
-        'dark', 'light', or None if detection fails.
-    """
-    import subprocess
-
-    if sys.platform == "darwin":
-        try:
-            result = subprocess.run(
-                ["defaults", "read", "-g", "AppleInterfaceStyle"],
-                capture_output=True,
-                text=True,
-                timeout=1,
-            )
-            # Command succeeds if dark mode is enabled (returns "Dark")
-            # Command fails (exit code 1) if light mode is active
-            return "dark" if result.returncode == 0 else "light"
-        except Exception:
-            pass
-
-    elif sys.platform == "linux":
-        # Try GNOME/GTK first (gsettings)
-        try:
-            # Try freedesktop color-scheme first (modern)
-            result = subprocess.run(
-                ["gsettings", "get", "org.gnome.desktop.interface", "color-scheme"],
-                capture_output=True,
-                text=True,
-                timeout=1,
-            )
-            stdout = result.stdout.strip().lower()
-
-            # Fallback to gtk-theme if color-scheme not set
-            if not stdout or stdout == "''":
-                result = subprocess.run(
-                    ["gsettings", "get", "org.gnome.desktop.interface", "gtk-theme"],
-                    capture_output=True,
-                    text=True,
-                    timeout=1,
-                )
-                stdout = result.stdout.strip().lower()
-
-            if stdout and stdout != "''":
-                if "-dark" in stdout or "'dark'" in stdout:
-                    return "dark"
-                return "light"
-        except Exception:
-            pass
-
-        # Try KDE Plasma (kreadconfig5/kreadconfig6)
-        for cmd in ["kreadconfig6", "kreadconfig5"]:
-            try:
-                result = subprocess.run(
-                    [
-                        cmd,
-                        "--file",
-                        "kdeglobals",
-                        "--group",
-                        "General",
-                        "--key",
-                        "ColorScheme",
-                    ],
-                    capture_output=True,
-                    text=True,
-                    timeout=1,
-                )
-                if result.returncode == 0:
-                    stdout = result.stdout.strip().lower()
-                    if stdout:
-                        return "dark" if "dark" in stdout else "light"
-            except Exception:
-                pass
-
-    return None
-
-
 def detect_terminal_theme() -> str:
     """Detect terminal theme with fallback chain.
 
-    Tries multiple detection methods in order:
-    1. OSC 11 terminal query (most accurate)
-    2. COLORFGBG environment variable
-    3. OS-level dark mode (macOS/Linux)
+    Tries detection methods in order:
+    1. MSAGENT_THEME environment variable (must be 'dark' or 'light')
+    2. OSC 11 terminal query (most accurate)
+    3. COLORFGBG environment variable
     4. Default to 'dark'
+
+    OS-level detection (gsettings/macOS) is NOT used: it reflects the desktop
+    theme rather than the actual terminal appearance, leading to mismatches
+    when connecting via SSH.
 
     Returns:
         'dark' or 'light'
     """
-    result = _detect_via_osc11() or _detect_via_colorfgbg() or _detect_via_os()
-    return result or "dark"
+    msagent_theme = os.environ.get("MSAGENT_BACKGROUND_THEME", "").strip().lower()
+    if msagent_theme in ("dark", "light"):
+        return msagent_theme
+    return _detect_via_osc11() or _detect_via_colorfgbg() or "dark"
