@@ -18,6 +18,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import subprocess
@@ -30,6 +31,7 @@ ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]")
 
 
 def _msagent_command() -> list[str]:
+    source_command = [sys.executable, str(PROJECT_ROOT / "run.py")]
     script_dir = Path(sys.executable).parent
     candidates = [
         script_dir / "msagent",
@@ -37,10 +39,12 @@ def _msagent_command() -> list[str]:
         script_dir / "msagent.cmd",
         script_dir / "msagent.bat",
     ]
+    if os.environ.get("MSAGENT_E2E_USE_INSTALLED", "").strip().lower() not in {"1", "true", "yes"}:
+        return source_command
     for candidate in candidates:
         if candidate.exists():
             return [str(candidate)]
-    return [sys.executable, str(PROJECT_ROOT / "run.py")]
+    return source_command
 
 
 def _run_msagent(*args: str, cwd: Path, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
@@ -64,6 +68,10 @@ def _run_msagent(*args: str, cwd: Path, env: dict[str, str] | None = None) -> su
 
 def _normalize_terminal_output(content: str) -> str:
     return ANSI_ESCAPE_RE.sub("", content).replace("\r", "")
+
+
+def _read_jsonl(path: Path) -> list[dict]:
+    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
 
 
 def test_entrypoint_version_and_config_show(tmp_path: Path) -> None:
@@ -103,3 +111,41 @@ def test_entrypoint_one_shot_tool_call_and_todo_render(tmp_path: Path) -> None:
     todo_stdout = _normalize_terminal_output(todo.stdout)
     assert "TODOs" in todo_stdout
     assert "Review profile bottleneck" in todo_stdout
+
+
+def test_entrypoint_trace_jsonl_records_tools_tokens_and_time(tmp_path: Path) -> None:
+    trace_path = tmp_path / "msagent.events.jsonl"
+    result = _run_msagent(
+        "--no-stream",
+        "--trace-jsonl",
+        str(trace_path),
+        "-w",
+        str(tmp_path),
+        "please run one tool call",
+        cwd=PROJECT_ROOT,
+        env={"MSAGENT_FAKE_BACKEND": "1"},
+    )
+
+    assert result.returncode == 0
+    events = _read_jsonl(trace_path)
+    assert [event["type"] for event in events][:2] == ["session_started", "token_usage"]
+
+    tool_call = next(event for event in events if event["type"] == "tool_call")
+    assert tool_call["tool"] == "run_command"
+    assert tool_call["input"] == {"command": "echo fake-tool-output"}
+
+    tool_result = next(event for event in events if event["type"] == "tool_result")
+    assert tool_result["tool"] == "run_command"
+    assert tool_result["item_id"] == "call-tool-1"
+    assert tool_result["duration_ms"] == 500
+
+    finished = events[-1]
+    assert finished["type"] == "session_finished"
+    assert finished["duration_ms"] >= 0
+    assert finished["token_usage"] == {
+        "available": True,
+        "source": "msagent-cli-jsonl",
+        "input_tokens": 105,
+        "output_tokens": 14,
+        "total_tokens": 119,
+    }

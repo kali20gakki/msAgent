@@ -34,13 +34,15 @@ def test_create_session_parser_defaults_to_interactive_mode() -> None:
     assert args.cli_command == DEFAULT_SESSION_COMMAND
     assert args.resume is False
     assert args.stream is True
+    assert args.trace_jsonl is None
 
 
 def test_create_session_parser_accepts_explicit_agent_selection() -> None:
     parser = create_session_parser()
-    args = parser.parse_args(["--agent", "Minos"])
+    args = parser.parse_args(["--agent", "Minos", "--trace-jsonl", "events.jsonl"])
 
     assert args.agent == "Minos"
+    assert args.trace_jsonl == "events.jsonl"
     assert args.message is None
 
 

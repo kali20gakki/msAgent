@@ -223,6 +223,9 @@ class MessageDispatcher:
                 )
 
         except Exception as e:
+            recorder = getattr(self.session, "run_recorder", None)
+            if recorder is not None:
+                recorder.record_error(e)
             error_msg = self._format_console_error(e)
             console.print_error(f"Error processing message: {error_msg}")
             console.print("")
@@ -402,7 +405,25 @@ class MessageDispatcher:
         """Run a request without token-by-token rendering."""
         context.retry_notice_handler = self._render_retry_notice
         try:
-            result = await self.session.graph.ainvoke(input_data, config, context=context)
+            current_input: dict[str, Any] | Command = input_data
+            max_iterations = 50
+            result: Any = None
+            for _ in range(max_iterations):
+                result = await self.session.graph.ainvoke(current_input, config, context=context)
+                interrupts = self._extract_interrupts(result)
+                if not interrupts:
+                    break
+
+                resume_value = await self.interrupt_handler.handle(interrupts)
+                context.approval_mode = self.session.context.approval_mode
+                if isinstance(resume_value, dict):
+                    current_input = Command(resume=resume_value)
+                else:
+                    current_input = Command(resume={interrupts[0].id: resume_value})
+            else:
+                raise RuntimeError(
+                    f"Non-streaming graph invocation exceeded {max_iterations} interrupt/resume iterations."
+                )
         finally:
             context.retry_notice_handler = None
 
@@ -412,6 +433,7 @@ class MessageDispatcher:
         await self._update_token_tracking(result)
 
         messages = result.get("messages", [])
+        self._record_messages_for_trace(messages)
         for message in messages:
             if isinstance(message, (AIMessage, ToolMessage)):
                 self._record_subagent_audit(message, namespace=())
@@ -1357,6 +1379,11 @@ class MessageDispatcher:
                 message,
                 indent_level=indent_level,
             )
+            self._record_tool_result_for_trace(
+                message,
+                indent_level=indent_level,
+                tool_call=pending_header.tool_call if pending_header is not None else None,
+            )
             self.session.renderer.render_tool_message(message, indent_level=indent_level)
             self._remember_expandable_tool_output(
                 message,
@@ -1424,6 +1451,7 @@ class MessageDispatcher:
 
     def _render_assistant_with_deferred_tools(self, message: AIMessage, indent_level: int) -> None:
         """Render assistant content now and defer tool call headers until results arrive."""
+        self._record_assistant_for_trace(message, indent_level=indent_level)
         if message.tool_calls:
             self._remember_tool_headers(message, indent_level)
             self.session.renderer.render_assistant_message(
@@ -1600,6 +1628,42 @@ class MessageDispatcher:
             self.session.update_context(**updates)
             # Check if auto-compression should be triggered after token update
             await self._check_auto_compression()
+
+    def _record_messages_for_trace(self, messages: Any) -> None:
+        """Record a batch result returned by non-streaming graph invocation."""
+        if not isinstance(messages, list):
+            return
+
+        for message in messages:
+            if isinstance(message, AIMessage):
+                self._record_assistant_for_trace(message, indent_level=0)
+            elif isinstance(message, ToolMessage):
+                self._record_tool_result_for_trace(message, indent_level=0)
+
+    def _record_assistant_for_trace(self, message: AIMessage, *, indent_level: int) -> None:
+        recorder = getattr(self.session, "run_recorder", None)
+        if recorder is None:
+            return
+
+        origin = self._SUBAGENT_ORIGIN_LABEL if indent_level > 0 else None
+        recorder.record_assistant_message(message, origin=origin)
+        for tool_call in getattr(message, "tool_calls", []) or []:
+            if isinstance(tool_call, dict):
+                recorder.record_tool_call(tool_call, origin=origin)
+
+    def _record_tool_result_for_trace(
+        self,
+        message: ToolMessage,
+        *,
+        indent_level: int,
+        tool_call: dict[str, Any] | None = None,
+    ) -> None:
+        recorder = getattr(self.session, "run_recorder", None)
+        if recorder is None:
+            return
+
+        origin = self._SUBAGENT_ORIGIN_LABEL if indent_level > 0 else None
+        recorder.record_tool_result(message, tool_call=tool_call, origin=origin)
 
     async def _check_auto_compression(self) -> None:
         """Check if auto-compression should be triggered."""

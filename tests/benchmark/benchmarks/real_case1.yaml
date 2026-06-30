@@ -1,0 +1,11 @@
+id: real_agent_smoke
+input_data_path: ../data/kv_cache_type_page_seqlen_4096_bs_1_profile_count_0
+prompt: >
+  识别数据中的慢卡
+must_include:
+  - rank3
+must_tool_use:
+  - read_file
+  - msprof-mcp
+scoring_prompt: >
+  按 0-5 分评分。重点看结论是否准确、证据是否来自输入数据、建议是否可执行。

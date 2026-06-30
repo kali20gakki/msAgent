@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "benchmark-builder"
+version = "0.1.0"
+description = "Judge-scored benchmark harness for agent evaluations."
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+  "PyYAML>=6.0",
+]
+
+[project.scripts]
+benchmark-builder = "run_benchmark:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+py-modules = [
+  "judge",
+  "metrics",
+  "mock_agent",
+  "msagent_cli",
+  "run_benchmark",
+  "schema",
+  "trace",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["third_party*"]

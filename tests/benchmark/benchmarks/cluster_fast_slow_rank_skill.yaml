@@ -1,0 +1,20 @@
+id: cluster_fast_slow_rank_skill
+input_data_path: ../data/kv_cache_type_page_seqlen_4096_bs_1_profile_count_0
+skill_path: ../../../skills/cluster-fast-slow-rank-detector
+prompt: >
+  请按照提供的 cluster-fast-slow-rank-detector skill 对 input_data 中的 Ascend
+  集群 profiling 数据做快慢卡诊断。需要明确回答：是否存在快慢卡现象；真正的慢卡
+  Rank ID 和候选快卡 Rank ID；瓶颈类型；关键证据；以及可执行优化建议。
+must_include:
+  - rank3
+  - Host 下发慢或调度瓶颈
+  - Free Time 异常
+  - 不是通信慢链路
+must_include_regex:
+  - 'rank\s*3|Rank\s*3|rank3'
+tool_budget: 30
+scoring_prompt: >
+  按 0-5 分评分。高分答案必须正确指出慢卡是 rank3，解释 Host 下发慢/调度瓶颈，
+  引用 input_data 中的 Free/Compute/Communication/API 或 step_trace_time 证据，
+  排除通信慢链路，并给出具体可执行建议。结论错误、证据不来自输入数据或泛泛而谈
+  应明显扣分。

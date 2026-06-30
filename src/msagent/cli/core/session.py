@@ -12,9 +12,10 @@ from typing import TYPE_CHECKING, Any
 
 from msagent.audit import AuditWriter, SubagentAuditTracker
 from msagent.cli.bootstrap.initializer import initializer
+from msagent.cli.core.trace import CliRunRecorder
+from msagent.cli.core.tool_output import ToolOutputEntry
 from msagent.cli.dispatchers import CommandDispatcher, MessageDispatcher
 from msagent.cli.handlers.bash import BashDispatcher
-from msagent.cli.core.tool_output import ToolOutputEntry
 from msagent.cli.theme import console, theme
 from msagent.cli.ui.prompt import InteractivePrompt
 from msagent.cli.ui.renderer import Renderer
@@ -61,6 +62,9 @@ class Session:
         self._sigint_handler: SignalHandler = None
         self.tool_outputs: list[ToolOutputEntry] = []
         self.latest_tool_output: ToolOutputEntry | None = None
+        self.run_recorder = (
+            CliRunRecorder(context.trace_jsonl) if getattr(context, "trace_jsonl", None) is not None else None
+        )
 
         self.audit_writer = AuditWriter(
             working_dir=context.working_dir,
@@ -95,6 +99,8 @@ class Session:
 
     async def start(self, show_welcome: bool = True) -> None:
         """Start the interactive session."""
+        if self.run_recorder is not None:
+            self.run_recorder.start(context=self.context, stream_output=self.context.stream_output)
         try:
             self.graph_context = initializer.get_graph(
                 agent=self.context.agent,
@@ -121,6 +127,8 @@ class Session:
                     status.start()
                     status.update(f"[{theme.spinner_color}]Cleaning...[/{theme.spinner_color}]")
         finally:
+            if self.run_recorder is not None:
+                self.run_recorder.finish(context=self.context, exit_code=0)
             self._restore_sigint()
 
     async def _main_loop(self) -> None:
@@ -156,6 +164,8 @@ class Session:
 
     async def send(self, message: str) -> int:
         """Send a single message in one-shot mode (non-interactive)."""
+        if self.run_recorder is not None:
+            self.run_recorder.start(context=self.context, stream_output=self.context.stream_output)
         try:
             self.graph_context = initializer.get_graph(
                 agent=self.context.agent,
@@ -169,11 +179,18 @@ class Session:
                 self.graph = graph
 
                 await self.message_dispatcher.dispatch(message)
+                if self.run_recorder is not None:
+                    self.run_recorder.finish(context=self.context, exit_code=0)
                 return 0
 
         except KeyboardInterrupt:
+            if self.run_recorder is not None:
+                self.run_recorder.finish(context=self.context, exit_code=130)
             return 0
         except Exception as e:
+            if self.run_recorder is not None:
+                self.run_recorder.record_error(e)
+                self.run_recorder.finish(context=self.context, exit_code=1)
             console.print_error(f"Error sending message: {e}")
             console.print("")
             logger.exception("CLI message error")

@@ -1,0 +1,4 @@
+{"timestamp":"2026-05-28T10:00:00Z","service":"checkout-api","event":"gateway_timeout_spike_started","p95_latency_ms":7600}
+{"timestamp":"2026-05-28T10:07:00Z","service":"checkout-api","event":"elevated_504_rate","error_rate":0.18}
+{"timestamp":"2026-05-28T10:15:00Z","service":"checkout-api","event":"timeout_budget_increased","timeout_seconds":8}
+{"timestamp":"2026-05-28T10:22:00Z","service":"checkout-api","event":"error_rate_back_to_baseline","error_rate":0.01}

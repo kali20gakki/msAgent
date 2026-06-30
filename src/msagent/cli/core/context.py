@@ -31,6 +31,7 @@ class Context(BaseModel):
     recursion_limit: int
     tool_output_max_tokens: int | None = None
     stream_output: bool = True
+    trace_jsonl: Path | None = None
     audit_log_enabled: bool = False
 
     @staticmethod
@@ -64,6 +65,7 @@ class Context(BaseModel):
         approval_mode: ApprovalMode | None,
         working_dir: Path,
         stream_output: bool = True,
+        trace_jsonl: Path | None = None,
     ) -> "Context":
         """Create context and populate from agent config."""
         with timer("Load agent config"):
@@ -103,6 +105,7 @@ class Context(BaseModel):
             recursion_limit=agent_config.recursion_limit,
             tool_output_max_tokens=tool_output_max_tokens,
             stream_output=stream_output,
+            trace_jsonl=trace_jsonl,
             audit_log_enabled=resolve_audit_log_enabled(agent_config),
         )
 

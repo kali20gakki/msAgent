@@ -1,0 +1,14 @@
+id: agent_default
+input_data_path: ../data/msagent_agents
+prompt: >
+  根据 input_data 中的资料回答：msAgent 的默认 agent 是哪个？它的主要职责是什么？
+must_include:
+  - Hermes
+  - Ascend NPU profiling 分析
+must_include_regex:
+  - "Hermes"
+must_tool_use:
+  - read_file
+scoring_prompt: >
+  按 0-5 分评分。重点看是否正确指出默认 agent 是 Hermes，以及是否正确描述其职责
+  （Ascend NPU profiling 分析）。结论错误或张冠李戴应给低分。

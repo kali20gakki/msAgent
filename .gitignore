@@ -58,4 +58,13 @@ test_data/
 .omx/
 .msagent/
 
-tests/benchmark
+# Benchmark runtime outputs
+tests/benchmark/log/
+tests/benchmark/runs/*
+!tests/benchmark/runs/.gitkeep
+
+# Large local benchmark fixtures
+tests/benchmark/data/kv_cache_type_page_seqlen_4096_bs_1_profile_count_0/
+
+# DS_Store
+.DS_Store

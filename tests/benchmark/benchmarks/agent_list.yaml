@@ -1,0 +1,14 @@
+id: agent_list
+input_data_path: ../data/msagent_agents
+prompt: >
+  根据 input_data 中的资料回答：msAgent 内置了哪些 agent？请列出全部名称。
+must_include:
+  - Hermes
+  - Zephyr
+  - Icarus
+  - Minos
+  - Accuracy
+must_tool_use:
+  - read_file
+scoring_prompt: >
+  按 0-5 分评分。重点看是否完整列出全部 5 个内置 agent 名称，遗漏或编造名称应扣分。

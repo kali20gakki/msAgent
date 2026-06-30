@@ -1,0 +1,15 @@
+id: mock_agent_smoke
+input_data_path: ../data/mock_agent_smoke
+prompt: >
+  Read the files under input_data and produce a concise incident diagnosis.
+  The answer must identify the root cause, the impacted service, and one
+  concrete recommended action.
+must_include:
+  - API gateway timeout spike between 10:00 and 10:15 UTC
+  - checkout-api
+  - raise the gateway timeout budget to 8 seconds
+scoring_prompt: >
+  Score from 0 to 5. Award high scores only when the answer correctly identifies
+  the root cause, names the impacted service, cites evidence from the input
+  files, and gives a concrete action. Penalize unsupported claims, missing
+  required details, or vague remediation.

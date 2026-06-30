@@ -18,6 +18,7 @@
 
 from pathlib import Path
 import signal
+from typing import Any
 
 import pytest
 
@@ -45,6 +46,30 @@ def _patch_prompt_setup(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(InteractivePrompt, "_setup_session", fake_setup_session)
 
 
+class _FakeGraphContext:
+    async def __aenter__(self) -> object:
+        return object()
+
+    async def __aexit__(self, exc_type, exc, tb) -> None:
+        return None
+
+
+class _FakeRunRecorder:
+    def __init__(self) -> None:
+        self.finish_codes: list[int] = []
+        self.errors: list[BaseException] = []
+        self.started = False
+
+    def start(self, **_kwargs: Any) -> None:
+        self.started = True
+
+    def finish(self, *, exit_code: int, **_kwargs: Any) -> None:
+        self.finish_codes.append(exit_code)
+
+    def record_error(self, error: BaseException) -> None:
+        self.errors.append(error)
+
+
 @pytest.mark.asyncio
 async def test_check_updates_background_keeps_sigint_registration(
     monkeypatch: pytest.MonkeyPatch,
@@ -61,6 +86,57 @@ async def test_check_updates_background_keeps_sigint_registration(
     await session._check_updates_background()
 
     assert session._sigint_registered is True
+
+
+@pytest.mark.asyncio
+async def test_send_finishes_recorder_once_on_success(monkeypatch: pytest.MonkeyPatch) -> None:
+    _patch_prompt_setup(monkeypatch)
+    session = Session(_build_context())
+    recorder = _FakeRunRecorder()
+    restore_calls: list[None] = []
+
+    async def fake_dispatch(_message: str) -> None:
+        return None
+
+    monkeypatch.setattr("msagent.cli.core.session.initializer.get_graph", lambda **_kwargs: _FakeGraphContext())
+    session.run_recorder = recorder
+    session.message_dispatcher.dispatch = fake_dispatch
+    session._register_sigint_handler = lambda: None
+    session._restore_sigint = lambda: restore_calls.append(None)
+
+    exit_code = await session.send("hello")
+
+    assert exit_code == 0
+    assert recorder.started is True
+    assert recorder.finish_codes == [0]
+    assert restore_calls == [None]
+
+
+@pytest.mark.asyncio
+async def test_send_finishes_recorder_once_on_exception(monkeypatch: pytest.MonkeyPatch) -> None:
+    _patch_prompt_setup(monkeypatch)
+    session = Session(_build_context())
+    recorder = _FakeRunRecorder()
+    restore_calls: list[None] = []
+    error = RuntimeError("boom")
+
+    async def fake_dispatch(_message: str) -> None:
+        raise error
+
+    monkeypatch.setattr("msagent.cli.core.session.initializer.get_graph", lambda **_kwargs: _FakeGraphContext())
+    monkeypatch.setattr("msagent.cli.core.session.console.print_error", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("msagent.cli.core.session.console.print", lambda *_args, **_kwargs: None)
+    session.run_recorder = recorder
+    session.message_dispatcher.dispatch = fake_dispatch
+    session._register_sigint_handler = lambda: None
+    session._restore_sigint = lambda: restore_calls.append(None)
+
+    exit_code = await session.send("hello")
+
+    assert exit_code == 1
+    assert recorder.finish_codes == [1]
+    assert recorder.errors == [error]
+    assert restore_calls == [None]
 
 
 def test_sigint_handler_delegates_to_prompt_when_idle(

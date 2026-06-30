@@ -1,0 +1,14 @@
+id: agent_pick
+input_data_path: ../data/msagent_agents
+prompt: >
+  根据 input_data 中的资料回答：如果我要做 msModelSlim 的模型分析与适配，应该使用
+  哪个 agent？
+must_include:
+  - Zephyr
+must_include_regex:
+  - "Zephyr"
+must_tool_use:
+  - read_file
+scoring_prompt: >
+  按 0-5 分评分。重点看是否正确选出 Zephyr，并说明它负责 msModelSlim 模型分析与适配。
+  选错 agent 应给 0 分。
