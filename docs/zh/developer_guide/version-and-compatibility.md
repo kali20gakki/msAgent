@@ -39,6 +39,13 @@
 msagent --version
 ```
 
+## 版本变更记录
+
+### 26.1.0-alpha.2
+
+- `langgraph-cli[inmem]` 从默认依赖移至可选 extra `[web]`，默认安装不再引入 starlette 1.x（修复 issue #83）。
+- 从旧版本升级时，已安装的 web 相关包不会自动卸载；若不再使用 Web UI，请手动卸载 `langgraph-cli`、`langgraph-api`、`langgraph-runtime-inmem`。
+
 ## 版本策略
 
 项目遵循语义化版本（SemVer）：

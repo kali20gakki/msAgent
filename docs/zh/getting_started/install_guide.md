@@ -136,6 +136,12 @@ rm -rf .msagent
 pip install mindstudio-agent
 ```
 
+从 **26.1.0-alpha.2** 起，Web UI 依赖 `langgraph-cli[inmem]` 已改为可选 extra `[web]`。`pip install -U` 升级时**不会自动卸载**旧版已安装的 web 相关包；若不再使用 Web UI，可手动执行：
+
+```shell
+pip uninstall -y langgraph-cli langgraph-api langgraph-runtime-inmem
+```
+
 - 卸载：
 
 ```shell

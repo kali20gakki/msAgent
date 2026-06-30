@@ -22,7 +22,6 @@ dependencies = [
     "langchain-openai~=1.1.14",
     "langgraph~=1.0.5",
     "langgraph-prebuilt==1.0.8",
-    "langgraph-cli[inmem]>=0.4.16,<0.5.0",
     "langgraph-checkpoint-sqlite~=3.0.1",
     "markdown-it-py~=4.0.0",
     "mdformat~=1.0.0",
@@ -41,6 +40,11 @@ dependencies = [
     "msprof-mcp==0.1.8",
     "msprof-analyze==8.5.2"
 
+]
+
+[project.optional-dependencies]
+web = [
+    "langgraph-cli[inmem]>=0.4.16,<0.5.0",
 ]
 
 [project.scripts]

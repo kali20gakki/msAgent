@@ -2070,7 +2070,7 @@ wheels = [
 
 [[package]]
 name = "mindstudio-agent"
-version = "26.1.0-alpha.2"
+version = "26.1.0a2"
 source = { editable = "." }
 dependencies = [
     { name = "aiofiles" },
@@ -2089,7 +2089,6 @@ dependencies = [
     { name = "langchain-openai" },
     { name = "langgraph" },
     { name = "langgraph-checkpoint-sqlite" },
-    { name = "langgraph-cli", extra = ["inmem"] },
     { name = "langgraph-prebuilt" },
     { name = "markdown-it-py" },
     { name = "mdformat" },
@@ -2107,6 +2106,11 @@ dependencies = [
     { name = "pyyaml" },
     { name = "rich" },
     { name = "tiktoken" },
+]
+
+[package.optional-dependencies]
+web = [
+    { name = "langgraph-cli", extra = ["inmem"] },
 ]
 
 [package.dev-dependencies]
@@ -2136,7 +2140,7 @@ requires-dist = [
     { name = "langchain-openai", specifier = "~=1.1.14" },
     { name = "langgraph", specifier = "~=1.0.5" },
     { name = "langgraph-checkpoint-sqlite", specifier = "~=3.0.1" },
-    { name = "langgraph-cli", extras = ["inmem"], specifier = ">=0.4.16,<0.5.0" },
+    { name = "langgraph-cli", extras = ["inmem"], marker = "extra == 'web'", specifier = ">=0.4.16,<0.5.0" },
     { name = "langgraph-prebuilt", specifier = "==1.0.8" },
     { name = "markdown-it-py", specifier = "~=4.0.0" },
     { name = "mdformat", specifier = "~=1.0.0" },
@@ -2155,6 +2159,7 @@ requires-dist = [
     { name = "rich", specifier = ">=14.2,<14.4" },
     { name = "tiktoken", specifier = ">=0.9.0,<1.0.0" },
 ]
+provides-extras = ["web"]
 
 [package.metadata.requires-dev]
 dev = [
