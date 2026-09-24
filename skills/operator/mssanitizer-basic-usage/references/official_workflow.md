@@ -24,43 +24,43 @@
 
 2. 进入 ops-transformer 根目录，执行以下命令编译算子：
 
-```shell
-bash build.sh --pkg --soc=<soc_version> --ops=<算子名> --op_debug_config sanitizer -j<number_of_threads>
-```
+    ```shell
+    bash build.sh --pkg --soc=<soc_version> --ops=<算子名> --op_debug_config sanitizer -j<number_of_threads>
+    ```
 
-> `--soc` 按平台（Atlas A2/A3/950）取值，见[架构类型参数获取方式](#9-架构类型参数获取方式)。
-> 算子名参考CMakeLists.txt中指定的编译结果名称。
-> `-j` 参数指定编译线程数可以加速编译过程。为保证加编译，需要通过 `nproc` 命令获取 CPU 核心数，然后设置为最大值的一半。
-> `--op_debug_config sanitizer` 参数说明：`sanitizer` 注入 msSanitizer 检测桩（`--cce-enable-sanitizer`），并生成告警定位所需的「文件:行号」调用栈信息。
+    > `--soc` 按平台（Atlas A2/A3系列产品及Ascend 950PR&950DT系列产品）取值，见[架构类型参数获取方式](#9-架构类型参数获取方式)。
+    > 算子名参考CMakeLists.txt中指定的编译结果名称。
+    > `-j` 参数指定编译线程数可以加速编译过程。为保证加编译，需要通过 `nproc` 命令获取 CPU 核心数，然后设置为最大值的一半。
+    > `--op_debug_config sanitizer` 参数说明：`sanitizer` 注入 msSanitizer 检测桩（`--cce-enable-sanitizer`），并生成告警定位所需的「文件:行号」调用栈信息。
 
-若提示如下信息，说明编译成功:
+    若提示如下信息，说明编译成功:
 
-```shell
-Self-extractable archive "cann-ops-transformer-custom_linux.${arch}.run" successfully created.
-```
+    ```shell
+    Self-extractable archive "cann-ops-transformer-custom_linux.${arch}.run" successfully created.
+    ```
 
 3. 编译成功后，run包存放于项目根目录的build_out目录下，执行以下命令安装：
 
-```shell
-./build_out/cann-ops-transformer-*linux*.run
-```
+    ```shell
+    ./build_out/cann-ops-transformer-*linux*.run
+    ```
 
-该命令会将算子安装在`${ASCEND_HOME_PATH}/opp/vendors`路径中，即CANN软件安装目录。
+    该命令会将算子安装在`${ASCEND_HOME_PATH}/opp/vendors`路径中，即CANN软件安装目录。
 
-安装成功后会打印成功信息，并提示需要设置环境变量：
+    安装成功后会打印成功信息，并提示需要设置环境变量：
 
-```shell
-[ops_custom] [2026-06-26 14:36:14] [INFO] using requirements: when custom module install finished or before you run the custom module, execute the command [ export LD_LIBRARY_PATH=${ASCEND_HOME_PATH}/opp/vendors/custom_transformer/op_api/lib/:${LD_LIBRARY_PATH} ] to set the environment path
-SUCCESS
-```
+    ```shell
+    [ops_custom] [2026-06-26 14:36:14] [INFO] using requirements: when custom module install finished or before you run the custom module, execute the command [ export LD_LIBRARY_PATH=${ASCEND_HOME_PATH}/opp/vendors/custom_transformer/op_api/lib/:${LD_LIBRARY_PATH} ] to set the environment path
+    SUCCESS
+    ```
 
 4. 执行上述提到的环境变量，确保运行时能够找到：
 
-```shell
-export LD_LIBRARY_PATH=${ASCEND_HOME_PATH}/opp/vendors/custom_transformer/op_api/lib/:${LD_LIBRARY_PATH}
-```
+    ```shell
+    export LD_LIBRARY_PATH=${ASCEND_HOME_PATH}/opp/vendors/custom_transformer/op_api/lib/:${LD_LIBRARY_PATH}
+    ```
 
-> 若 CANN 版本 **≤ 9.1.0**（9.1.0 及之前，`--op_debug_config sanitizer` 注入检测桩失效），需直接修改 CANN 包内编译脚本注入 `--cce-enable-sanitizer -g`，版本判断与操作见文末**第 11 节备注**。
+    > 若 CANN 版本 **≤ 9.1.0**（9.1.0 及之前，`--op_debug_config sanitizer` 注入检测桩失效），需直接修改 CANN 包内编译脚本注入 `--cce-enable-sanitizer -g`，版本判断与操作见文末**第 11 节备注**。
 
 ### 2.2 运行检测
 
@@ -88,7 +88,7 @@ bash build.sh --run_example <算子名> <运行模式> <包模式>
 bash build.sh --pkg --soc=<soc_version> --ops=<算子名> --mssanitizer -j<number_of_threads>
 ```
 
-> `--mssanitizer` 等价于自动添加 `-g --cce-enable-sanitizer` 到 kernel 编译选项。`--soc` 按平台（Atlas A2/A3/950）取值，见[架构类型参数获取方式](#10-架构类型参数获取方式)。
+> `--mssanitizer` 等价于自动添加 `-g --cce-enable-sanitizer` 到 kernel 编译选项。`--soc` 按平台（Atlas A2/A3系列产品及Ascend 950PR&950DT系列产品）取值，见[架构类型参数获取方式](#9-架构类型参数获取方式)。
 
 **方式二：使用 `--bisheng_flags=sanitizer` 灵活指定**（用法与 [ops-transformer仓](#2-ops-transformer仓) 相同；与 `--mssanitizer` 互斥，不能同时使用）。
 
@@ -140,17 +140,18 @@ bash build.sh --run_example <算子名> eager cust
 
 2. 加完编译选项后，在 `add` 目录下执行以下命令重新编译：
 
-```shell
-mkdir -p build && cd build                      # 创建并进入build目录
-cmake -DCMAKE_ASC_ARCHITECTURES=<npu-arch> ..   # cmake
-make -j <number_of_threads>                     # 编译工程
-```
+    ```shell
+    mkdir -p build && cd build                      # 创建并进入build目录
+    cmake -DCMAKE_ASC_ARCHITECTURES=<npu-arch> ..   # cmake
+    make -j <number_of_threads>                     # 编译工程
+    ```
 
-> **注意事项**
-> 1. `<npu-arch>` 按平台（Atlas A2/A3/950）取值，见[架构类型参数获取方式](#10-架构类型参数获取方式)
-> 2. `-j` 参数可选，指定编译线程数以加速编译过程，推荐通过 `nproc` 命令获取 CPU 核心数，然后设置为最大值的一半。
+    > **注意事项**
+    > 
+    > 1. `<npu-arch>` 按平台（Atlas A2/A3系列产品及Ascend 950PR&950DT系列产品）取值，见[架构类型参数获取方式](#9-架构类型参数获取方式)
+    > 2. `-j` 参数可选，指定编译线程数以加速编译过程，推荐通过 `nproc` 命令获取 CPU 核心数，然后设置为最大值的一半。
 
-编译完成后，会在build目录下生成可执行文件demo（不同的算子可执行文件名称可能不一样，具体参考CMakeLists.txt中定义的名称，下同）。
+    编译完成后，会在build目录下生成可执行文件demo（不同的算子可执行文件名称可能不一样，具体参考CMakeLists.txt中定义的名称，下同）。
 
 ### 4.2 运行检测
 
@@ -200,7 +201,8 @@ make -j <number_of_threads> <target>
 ```
 
 > **参数说明**：
-> - `<npu-arch>`：catlass 使用纯数字格式，按平台（Atlas A2/A3/950）取值，见[架构类型参数获取方式](#10-架构类型参数获取方式)
+> 
+> - `<npu-arch>`：catlass 使用纯数字格式，按平台（Atlas A2/A3系列产品及Ascend 950PR&950DT系列产品）取值，见[架构类型参数获取方式](#9-架构类型参数获取方式)
 > - `<target>`：算子目录名，此处为 `00_basic_matmul`
 > - `-j` 参数可选，指定编译线程数以加速编译过程，推荐通过 `nproc` 命令获取 CPU 核心数，然后设置为最大值的一半
 
@@ -237,31 +239,31 @@ cann-samples 仓的样例位于 `Samples/<分类>/<story>/` 下（如 `Samples/2
 
 1. 样例的 CMakeLists.txt 无内置 mssanitizer 选项，需在样例目录的 `CMakeLists.txt` 中找到 `target_compile_options` 的 ASC 编译选项块，追加 `-g --cce-enable-sanitizer`：
 
-```cmake
-# 修改前（以 simt_scatter_story 为例，foreach 对样例内所有 .asc 生效）
-target_compile_options(${TARGET_NAME} PRIVATE
-    "$<$<COMPILE_LANGUAGE:ASC>:--npu-arch=${NPU_ARCH}>"
-    "$<$<COMPILE_LANGUAGE:ASC>:-O3>"
-)
+    ```cmake
+    # 修改前（以 simt_scatter_story 为例，foreach 对样例内所有 .asc 生效）
+    target_compile_options(${TARGET_NAME} PRIVATE
+        "$<$<COMPILE_LANGUAGE:ASC>:--npu-arch=${NPU_ARCH}>"
+        "$<$<COMPILE_LANGUAGE:ASC>:-O3>"
+    )
 
-# 修改后
-target_compile_options(${TARGET_NAME} PRIVATE
-    "$<$<COMPILE_LANGUAGE:ASC>:--npu-arch=${NPU_ARCH}>"
-    "$<$<COMPILE_LANGUAGE:ASC>:-O3 -g --cce-enable-sanitizer>"
-)
-```
+    # 修改后
+    target_compile_options(${TARGET_NAME} PRIVATE
+        "$<$<COMPILE_LANGUAGE:ASC>:--npu-arch=${NPU_ARCH}>"
+        "$<$<COMPILE_LANGUAGE:ASC>:-O3 -g --cce-enable-sanitizer>"
+    )
+    ```
 
-2. 在仓库根目录编译（`NPU_ARCH` 为必填项，按平台（Atlas A2/A3/950）取值，见[架构类型参数获取方式](#10-架构类型参数获取方式)）：
+2. 在仓库根目录编译（`NPU_ARCH` 为必填项，按平台（Atlas A2/A3系列产品及Ascend 950PR&950DT系列产品）取值，见[架构类型参数获取方式](#9-架构类型参数获取方式)）：
 
-```shell
-source ${ASCEND_HOME_PATH}/set_env.sh
-cmake -S . -B build -DNPU_ARCH=dav-3510    # Ascend950；Atlas A2/A3 换用 dav-2201
-cmake --build build --parallel          # 全量编译
-# 或只编译单个 story（target 为 story 目录名）
-cmake --build build --target simt_scatter_story
-```
+    ```shell
+    source ${ASCEND_HOME_PATH}/set_env.sh
+    cmake -S . -B build -DNPU_ARCH=dav-3510    # Ascend950；Atlas A2/A3 换用 dav-2201
+    cmake --build build --parallel          # 全量编译
+    # 或只编译单个 story（target 为 story 目录名）
+    cmake --build build --target simt_scatter_story
+    ```
 
-编译产物位于 `./build/Samples/<分类>/<story>/` 下，可执行文件与 target 同名，如 `simt_scatter_0_direct_unique`。
+    编译产物位于 `./build/Samples/<分类>/<story>/` 下，可执行文件与 target 同名，如 `simt_scatter_0_direct_unique`。
 
 ### 6.2 运行检测
 
@@ -296,6 +298,7 @@ rm -rf ~/.triton/cache                  # 清 JIT 缓存，否则 kernel 不重�
 ```
 
 > **注意**：
+> 
 > - Triton 有编译缓存。切换 `TRITON_ENABLE_SANITIZER` 前后或修改算子代码后，均需重新 `rm -rf ~/.triton/cache`，否则 kernel 不会重新插桩编译。
 > - triton-ascend-kernels 的 `build.sh`（build/test 命令）是打包和 CI 全量测试用的，检测场景无需执行，`pip install -e .` 即完成部署。
 
@@ -323,6 +326,7 @@ mssanitizer --tool=memcheck --kernel-name=swiglu -- pytest tests/activation/test
 如用户未提供运行目标，按[统一处理原则](#1-官方算子工作流统一处理原则)获取：triton-ascend-kernels 依据目标算子名在 `tests/<分类>/` 下找同名测试文件（如 swiglu → `tests/activation/test_swiglu.py`），取其默认参数。
 
 > **注意**：
+> 
 > - 手动检测时**不要加 `-n` 并行**（pytest-xdist 多进程会干扰 mssanitizer 的进程拦截），串行跑单文件即可。
 > - triton-ascend-kernels 的测试用例普遍走 `torch.allclose` 精度比对，kernel 算错不等于会报错——**精度断言失败与 sanitizer 告警是两回事**，结果分析时都需关注。
 > - 检测完成后 `unset TRITON_ENABLE_SANITIZER TRITON_DISABLE_LINE_INFO` 恢复环境（对应步骤七"清理编译选项"）。
@@ -339,14 +343,14 @@ shmem 仓为昇腾共享内存通信库，通信算子样例位于 `examples/<de
 
 ```shell
 # 检测库本体
-bash scripts/build.sh -soc_type Ascend950 -mssanitizer     # Ascend950平台
-bash scripts/build.sh -mssanitizer                          # Atlas A2/A3平台（不带 -soc_type，走默认 Ascend910B 后端）
+bash scripts/build.sh -soc_type Ascend950 -mssanitizer     # Ascend 950PR&950DT系列产品
+bash scripts/build.sh -mssanitizer                          # Atlas A2/A3系列产品（不带 -soc_type，走默认Atlas A2/A3系列产品）
 
 # 检测 examples 通信算子样例（加 -examples）
 bash scripts/build.sh -soc_type Ascend950 -examples -mssanitizer
 ```
 
-> Ascend950上是否联编 `--cce-enable-sanitizer` 由 bisheng 版本决定（构建脚本自动选择）：旧版本 CANN 仅添加 `-g`，此时 AscendC API 相关内存检测不可用，如需该能力请升级 CANN 后重新编译。
+> Ascend 950PR&950DT系列产品上是否联编 `--cce-enable-sanitizer` 由 bisheng 版本决定（构建脚本自动选择）：旧版本 CANN 仅添加 `-g`，此时 AscendC API 相关内存检测不可用，如需该能力请升级 CANN 后重新编译。
 
 编译产物：可执行文件位于 `build/bin/<example>`，库位于 `build/lib/`。
 
@@ -380,15 +384,17 @@ python3 -c "import acl; print(acl.get_soc_name())"
 
 | NPU Name | 产品系列 | `--soc`<br>(ops-transformer/nn/math/cv) | `--npu-arch`<br>(asc-devkit) | `CATLASS_ARCH`<br>(catlass) | `NPU_ARCH`<br>(cann-samples) | `-soc_type`<br>(shmem) |
 |----------|---------|---------------------|------------------|----------------------|----------------------|------------------|
-| Ascend910BX | Atlas A2训练/推理 | `ascend910b` | `dav-2201` | `2201` | `dav-2201` | 不指定（默认 Ascend910B 后端） |
-| Ascend910_93XX | Atlas A3训练/推理 | `ascend910_93` | `dav-2201` | `2201` | `dav-2201` | 不指定（默认 Ascend910B 后端） |
-| Ascend950PR/DT | 950系列 | `ascend950` | `dav-3510` | `3510` | `dav-3510` | `Ascend950` |
+| Ascend910BX | Atlas A2系列产品 | `ascend910b` | `dav-2201` | `2201` | `dav-2201` | 不指定（默认Atlas A2/A3系列产品 |
+| Ascend910_93XX | Atlas A3系列产品 | `ascend910_93` | `dav-2201` | `2201` | `dav-2201` | 不指定（默认Atlas A2/A3系列产品）|
+| Ascend950PR/DT | Ascend 950PR&DT系列产品 `ascend950` | `dav-3510` | `3510` | `dav-3510` | `Ascend950` |
 
 > **使用要点**：
+> 
 > - 各仓参数名与取值格式均不同（如 `dav-2201` vs `2201` vs `ascend910b`），请严格按表头对应仓取用。
 > - **A2 与 A3 仅 ops 系列的 `--soc` 区分**（`ascend910b` vs `ascend910_93`）；在 asc-devkit / catlass / cann-samples 上两平台取值相同。
-> - **shmem 只区分 950 与非 950**：不带 `-soc_type` 时默认 Ascend910B 后端（官方注释说明其覆盖A2/A3系列）。
+> - **shmem 只区分 950 与非 950**：不带 `-soc_type` 时默认 Atlas A2/A3系列产品（官方注释说明其覆盖A2/A3系列）。
 > - **cann-samples 的 `NPU_ARCH` 为必填项**，缺省会直接报错，合法值仅 `dav-3510` / `dav-2201` 两个。
+
 ---
 
 ## 10. 备注：ops 系列仓 GE 图模式算子的检测
@@ -403,6 +409,7 @@ ops 系列仓（ops-transformer / ops-nn / ops-math / ops-cv）中 **GE 图模�
 2. **（可选）改 deviceId**：graph 示例源文件（该仓 examples 下对应算子的 `test_geir_<算子名>.cpp`）中 `deviceId = 0;` 若指向被占用的卡，改为空闲卡号；部分仓在特定 arch 下 `build.sh --run_example` 只查示例的 `arch35` 子目录（若存在）。
 3. **生成并验证 graph 示例**：`bash build.sh --run_example <算子名> graph --soc=<soc>`。出现类似 `Run test_geir_<算子名> success.` 即单独运行成功，并生成 `build/test_geir_<算子名>`；失败则按“单独运行失败”处理，不进入检测。
 4. **四类检测**：**进入构建产物目录**（如 `<ops仓库>/build`）后直接对生成的二进制运行，每个命令自动跑两遍（dump → 用 dump 检测）：
+
    ```shell
    cd <ops仓库>/build
    mssanitizer -t memcheck  --log-level=error -- ./test_geir_<算子名> > <结果目录>/memcheck.log  2>&1
@@ -410,6 +417,7 @@ ops 系列仓（ops-transformer / ops-nn / ops-math / ops-cv）中 **GE 图模�
    mssanitizer -t initcheck --log-level=error -- ./test_geir_<算子名> > <结果目录>/initcheck.log  2>&1
    mssanitizer -t synccheck --log-level=error -- ./test_geir_<算子名> > <结果目录>/synccheck.log  2>&1
    ```
+
    工具日志/产物落于执行目录（`build/` 下的 `mindstudio_sanitizer_log/`），结果文件可用绝对路径重定向。
 5. **判读**：运行阶段只有算子自身 INFO 日志、尚无 `Start xxxcheck` 属正常（正在 dump）；算子进程退出后才出现 `[mssanitizer] Start xxxcheck sanitizer on kernel ...` 与 `Sanitizer finished`（时间晚于算子日志属正常）。进程退出后仍无该日志 → dump 未被消费，视为工具未识别到算子（检测失败）。
 6. **产物收集**：把 `mindstudio_sanitizer_log/` 下工具日志拷贝到结果目录，连同四份检测日志一起归档。
@@ -434,13 +442,15 @@ ops 系列仓（ops-transformer / ops-nn / ops-math / ops-cv）中 **GE 图模�
 
 1. **定位文件**：`<CANN包根>/python/site-packages/asc_op_compile_base/asc_op_compiler/ascendc_compile_v220.py`（CANN 包根如 `/usr/local/Ascend/ascend-toolkit/<版本>` 或 `cann/<版本>`；找不到可 `find <CANN包根> -name ascendc_compile_v220.py`）。
 2. **确定修改哪个函数**：按目标芯片选择（判断见第 9 节架构类型参数表）：
-   - Ascend 950（A5系列）→ 修改 `_gen_compile_cmd_c310`；
-   - Atlas A2 / A3 → 修改 `_gen_compile_cmd_v220`。
+   - Ascend 950PR&950DT系列产品 → 修改 `_gen_compile_cmd_c310`；
+   - Atlas A2/A3系列产品 → 修改 `_gen_compile_cmd_v220`。
 3. **追加检测选项**：在该函数内 `compile_cmd` 的 **`-mllvm` 系列选项之后**追加一行：
+
    ```python
    # 追加 msSanitizer 检测编译选项（CANN ≤ 9.1.0 手动注入）
    compile_cmd += ["--cce-enable-sanitizer", "-g", "-fno-jump-tables"]
    ```
+
    （`compile_cmd` 为列表，参照该文件中其它 `compile_cmd += [...]` 的写法即可。）
 4. **重新编译**：按对应 ops 仓“编译选项适配”章节重新执行 `build.sh --pkg` 编译，后续安装、运行检测流程不变。
 
