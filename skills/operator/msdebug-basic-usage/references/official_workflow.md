@@ -31,7 +31,7 @@ msdebug 拉起时需要一个宿主侧可执行文件或 fatbin 作为 target，
 各仓注入方式见覆盖范围表与后续章节。公共注意事项：
 
 - `-O0` 会改变指令调度，某些依赖优化行为的 bug（如乱序踩内存）在 `-O0` 下可能不复现，必要时改用不带 `-O0` 的编译对比行为差异。
-- 部分仓 kernel 内函数被强制 inline 时行号可能缺失（Ascend 950 simd_vf 场景），处理方式见 SKILL.md 第 8 章。
+- 部分仓 kernel 内函数被强制 inline 时行号可能缺失（Ascend 950PR&950DT系列产品的simd_vf 场景），处理方式见 SKILL.md 第 8 章。
 - 编译选项是临时修改的场景，调试完成后恢复原始状态重新编译。
 
 ### 1.3 算子运行参数获取
@@ -116,7 +116,6 @@ msdebug ./build/test_aclnn_<算子名>
 
 > 细节差异：ops-nn 支持 `--example_name=` 选择单个示例，ops-cv 不支持；ops-nn/ops-math 的 eager 可执行文件为 `test_aclnn_<example>`，graph 模式为 `test_geir_<example>`。
 
-
 ## 4. asc-devkit 仓
 
 每个样例目录独立 cmake 构建（顶层 build.sh 只构建库本身，与 examples 无关）。**该仓对调试编译支持最好**：ASC 语言的 per-config 默认 flags 中 `Debug` 配置即 `-O0 -g`（cmake/asc/asc_modules/CMakeASCInformation.cmake 的 `CMAKE_ASC_FLAGS_DEBUG_INIT "-O0 -g"`），只需加 `-DCMAKE_BUILD_TYPE=Debug`，零文件改动：
@@ -157,7 +156,7 @@ bash scripts/build.sh --debug 00_basic_matmul -DCATLASS_ARCH=<catlass_arch> [--c
 msdebug ./output/bin/00_basic_matmul -- 256 512 1024 0    # 参数 m n k deviceId
 ```
 
-> 950系列样例（如 `43_ascend950_basic_matmul`）需 `-DCATLASS_ARCH=3510`；部分样例仅支持特定 arch（见 examples/CMakeLists.txt 的 2201/3510 分组）。
+> Ascend 950PR&950DT系列产品样例（如 `43_ascend950_basic_matmul`）需 `-DCATLASS_ARCH=3510`；部分样例仅支持特定 arch（见 examples/CMakeLists.txt 的 2201/3510 分组）。
 > 若所用 catlass 版本较旧、`scripts/build.sh` 尚无 `--debug` 开关，可退回手动方式：在 `examples/CMakeLists.txt` 的 ASC 编译选项处追加 `add_compile_options("SHELL:$<$<COMPILE_LANGUAGE:ASC>:-O0 -g>")`，调试完成后删除该行并恢复文件原始状态。
 
 ## 6. cann-samples 仓
@@ -178,7 +177,7 @@ target_compile_options(vector_add PRIVATE
 ```
 
 > 部分 story 用集中变量（如 matmul_story 的 `MATMUL_ASCENDC_COMPILE_OPTS`），改一处即可覆盖全部子 target。
-> `NPU_ARCH` 为**必填**，合法值仅 `dav-3510`（Ascend950）/ `dav-2201`（Atlas A2/A3）；每个 story 在 CMakeLists 内联 arch 门禁（`if(NOT "${NPU_ARCH}" IN_LIST SUPPORTED_NPU_ARCHS) ... return()`），不支持的 arch 会跳过该样例。
+> `NPU_ARCH` 为**必填**，合法值仅 `dav-3510`（Ascend 950PR&950DT系列产品）/ `dav-2201`（Atlas A2/A3系列产品）；每个 story 在 CMakeLists 内联 arch 门禁（`if(NOT "${NPU_ARCH}" IN_LIST SUPPORTED_NPU_ARCHS) ... return()`），不支持的 arch 会跳过该样例。
 
 编译与拉起：
 
@@ -205,9 +204,9 @@ python3 -c "import acl; print(acl.get_soc_name())"
 
 | NPU Name | 产品系列 | `--soc`<br>(ops-transformer/nn/math/cv) | `CMAKE_ASC_ARCHITECTURES`<br>(asc-devkit) | `CATLASS_ARCH`<br>(catlass) | `NPU_ARCH`<br>(cann-samples) |
 |----------|---------|---------------------|------------------|----------------------|------------------|
-| Ascend910BX | Atlas A2训练/推理 | `ascend910b` | `dav-2201` | `2201` | `dav-2201` |
-| Ascend910_93XX | Atlas A3训练/推理 | `ascend910_93` | `dav-2201` | `2201` | `dav-2201` |
-| Ascend950PR/DT | 950系列 | `ascend950` | `dav-3510` | `3510` | `dav-3510` |
+| Ascend910BX | Atlas A2系列产品 | `ascend910b` | `dav-2201` | `2201` | `dav-2201` |
+| Ascend910_93XX | Atlas A3系列产品 | `ascend910_93` | `dav-2201` | `2201` | `dav-2201` |
+| Ascend950PR/DT | Ascend 950PR&950DT系列产品 | `ascend950` | `dav-3510` | `3510` | `dav-3510` |
 
 > - 各仓参数名与取值格式不同（`ascend910b` vs `dav-2201` vs `2201`），严格按表头对应仓取用。
 > - A2 与 A3 仅 ops 系列的 `--soc` 区分；asc-devkit/catlass/cann-samples 两平台取值相同。
