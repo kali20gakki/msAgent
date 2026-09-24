@@ -1,6 +1,9 @@
 minimum_pre_commit_version: 4.0.0
 exclude: ^(?:LICENSES/|skills/)|\.(html|csv|svg)$
 
+default_language_version:
+  python: python3.11
+
 default_stages: [pre-commit]
 ci:
   autofix_prs: false
@@ -53,6 +56,7 @@ repos:
       - id: pylint
         name: pylint (Python code quality check)
         types: [python]
+        additional_dependencies: ["packaging>=24.0,<26.0"]
         args: ["--rcfile=pre-commit/pyproject.toml"]
         verbose: false
 
