@@ -15,20 +15,22 @@ msAgent 中的 Skills 实现遵循 Agent Skills 的通用约定，能在不同 a
 
 ### 2.1 方式一：npx skills（推荐）
 
-适用于 Trae、opencode 等支持 `npx skills` 工作流的 agent。一行命令即可安装：
+适用于 Trae、opencode 等支持 `npx skills` 工作流的 agent。克隆仓库后，可按需安装单个、多个或全部 Skill。
+
+`-a` 参数用于指定目标 agent。执行以下命令前，请将 `<agent>` 替换为目标 agent 名称，例如 `trae`、`opencode`、`claude`、`cursor`、`windsurf` 等，具体支持列表以 `npx skills --help` 的输出为准。
 
 ```bash
 git clone https://gitcode.com/Ascend/msagent.git -b master
 cd msagent/skills
 
 # 安装单个 Skill
-npx skills add . --skill ascend-cluster-fast-slow-rank-detector -a trae -y
+npx skills add . --skill ascend-cluster-fast-slow-rank-detector -a <agent> -y
 
 # 安装多个 Skill
-npx skills add . --skill ascend-communication-analysis --skill ascend-computation-analysis -a opencode -y
+npx skills add . --skill ascend-communication-analysis --skill ascend-computation-analysis -a <agent> -y
 
 # 安装全部 Skill
-npx skills add . --all -a trae
+npx skills add . --all -a <agent>
 ```
 
 ### 2.2 方式二：手动拷贝
