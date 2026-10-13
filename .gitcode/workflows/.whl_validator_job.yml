@@ -1,0 +1,112 @@
+name: Linux WHL Validator Job
+
+on:
+  workflow_call:
+    inputs:
+      REMOTE_URL:
+        required: false
+        type: string
+        default: ${{ atomgit.repositoryurl }}
+      pr_id:
+        required: false
+        type: string
+        default: ${{ atomgit.event.pull_request.number }}
+      installer:
+        required: true
+        type: string
+      TARGET_BRANCH:
+        required: false
+        type: string
+        default: ${{ atomgit.event.pull_request.base.ref }}
+      ARTIFACT_NAME:
+        required: true
+        type: string
+    secrets:
+      LLM_API_KEY:
+        required: true
+
+jobs:
+  validate_whl:
+    name: Linux WHL Validator
+    select: selected_by_default
+    runs-on: [ self-hosted, default, x86, cpu=32 ]
+    timeout-minutes: 30
+    container:
+      image: swr.cn-north-4.myhuaweicloud.com/mindspore/mindspore_python3.11:v0.1
+      options: --user root
+    steps:
+      - name: Checkout PR source
+        uses: checkout
+        with:
+          ref: refs/merge-requests/${{ atomgit.event.pull_request.number }}/merge
+
+      # 与 x86 构建任务使用相同的制品名，两个安装器验证同一个 wheel。
+      - name: Download built WHL
+        uses: download-artifact
+        with:
+          name: ${{ format('{0}-{1}', inputs.ARTIFACT_NAME, atomgit.run_number) }}
+          path: dist
+
+      - name: Check WHL and install uv for validation tools
+        shell: bash
+        env:
+          INSTALLER: ${{ inputs.installer }}
+        run: |
+          set -euo pipefail
+          case "$INSTALLER" in
+            conda|uv) ;;
+            *) echo "Unsupported installer: $INSTALLER" >&2; exit 1 ;;
+          esac
+          shopt -s nullglob
+          wheels=(dist/mindstudio_agent-*.whl)
+          if [ "${#wheels[@]}" -ne 1 ]; then
+            echo "Expected exactly one mindstudio-agent wheel in the x86 build artifact" >&2
+            exit 1
+          fi
+          python3.11 -m venv .ci-tools
+          .ci-tools/bin/python -m pip install uv
+
+      - name: Install WHL and test dependencies with Conda
+        if: inputs.installer == 'conda'
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL --retry 3 https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -o .ci-miniconda.sh
+          bash .ci-miniconda.sh -b -p "$PWD/.ci-conda"
+          # 显式使用 conda-forge，创建独立 Python 3.11 环境。
+          .ci-conda/bin/conda create --yes --override-channels -c conda-forge --prefix "$PWD/.whl-conda" python=3.11 pip
+          .whl-conda/bin/python -m pip install dist/mindstudio_agent-*.whl
+          .whl-conda/bin/python -m pip check
+          .whl-conda/bin/python -m pip install -r tests/whl_validator/requirements-test.txt
+
+      - name: Install WHL and test dependencies with uv
+        if: inputs.installer == 'uv'
+        shell: bash
+        run: |
+          set -euo pipefail
+          .ci-tools/bin/uv venv --python python3.11 .whl-uv
+          .ci-tools/bin/uv pip install --python .whl-uv/bin/python dist/mindstudio_agent-*.whl
+          .ci-tools/bin/uv pip install --python .whl-uv/bin/python -r tests/whl_validator/requirements-test.txt
+
+      # 密钥仅传入测试步骤，不进入安装命令或日志。
+      - name: Run WHL end-to-end tests
+        shell: bash
+        working-directory: tests/whl_validator
+        env:
+          INSTALLER: ${{ inputs.installer }}
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          PYTHONIOENCODING: utf-8
+          PYTHONUTF8: "1"
+        run: |
+          set -euo pipefail
+          if [ -z "${LLM_API_KEY:-}" ]; then
+            echo "LLM_API_KEY is required for complete WHL validation" >&2
+            exit 1
+          fi
+          repo_root="$(cd ../.. && pwd)"
+          export PATH="$repo_root/.whl-$INSTALLER/bin:$repo_root/.ci-tools/bin:$PATH"
+          if [ "$INSTALLER" = conda ]; then
+            "$repo_root/.whl-conda/bin/python" -m pytest test_case/ -n auto -v
+          else
+            "$repo_root/.ci-tools/bin/uv" run --no-project --python "$repo_root/.whl-uv/bin/python" pytest test_case/ -n auto -v
+          fi

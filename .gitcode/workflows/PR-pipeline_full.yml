@@ -190,6 +190,30 @@ stages:
           IMAGE_FLAG: "mindstudio-build:26.1.0"
           runs_on_arch: "x64"
 
+  stage_4:
+    name: WHL_Validation
+    select: selected_by_default
+    jobs:
+      WHL_validator_linux_conda:
+        name: WHL_validator_linux_conda
+        if: ${{ jobs.Detect_file_changes.outputs.need_build == 'yes' }}
+        uses: .gitcode/workflows/.whl_validator_job.yml
+        with:
+          installer: conda
+          ARTIFACT_NAME: msagent-run-x86-test
+        secrets:
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+
+      WHL_validator_linux_uv:
+        name: WHL_validator_linux_uv
+        if: ${{ jobs.Detect_file_changes.outputs.need_build == 'yes' }}
+        uses: .gitcode/workflows/.whl_validator_job.yml
+        with:
+          installer: uv
+          ARTIFACT_NAME: msagent-run-x86-test
+        secrets:
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+
 post:
   jobs:
     query_pipeline:
