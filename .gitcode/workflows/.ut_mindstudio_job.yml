@@ -26,7 +26,7 @@ jobs:
   JOB_UT_mindstudio:
     name: JOB_UT_mindstudio
     select: selected_by_default
-    runs-on: [ dedicate-hosted, "${{ inputs.runs_on_arch }}", large ]
+    runs-on: [ self-hosted, default, "${{ inputs.runs_on_arch }}", cpu=32 ]
     container:
       image: swr.cn-north-4.myhuaweicloud.com/mindstudio-image/${{ inputs.IMAGE_FLAG }}
       options: --user root

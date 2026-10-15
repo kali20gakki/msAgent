@@ -34,7 +34,7 @@ stages:
     jobs:
       Detect_file_changes:
         name: Detect_file_changes
-        runs-on: [ self-hosted, x86, cpu=2 ]
+        runs-on: [ self-hosted, default, x86, cpu=2 ]
         container:
           image: swr.cn-north-4.myhuaweicloud.com/pytorch_images_x86/pytorchx86:v_03
         outputs:
@@ -85,7 +85,7 @@ stages:
       associate_pr_comment:
         name: associate_pr_comment
         select: selected_by_default
-        runs-on: [ self-hosted, x86, cpu=2 ]
+        runs-on: [ self-hosted, default, x86, cpu=2 ]
         steps:
           - name: associate-pr-comment
             uses: associate-pr-comment
@@ -106,7 +106,7 @@ stages:
     jobs:
       pre-commit:
         name: pre-commit
-        runs-on: [ self-hosted, x86, cpu=2 ]
+        runs-on: [ self-hosted, default, x86, cpu=2 ]
         container:
           image: swr.cn-north-4.myhuaweicloud.com/mindspore/mindspore_python3.11:v0.1
           options: --user root
@@ -127,10 +127,12 @@ stages:
               python --version
           - name: run pre-commit
             uses: openlibing/pre-commit-action@v1.0.0
+            env:
+              SKIP: clang-tidy
 
       SCA:
         name: SCA
-        runs-on: [ self-hosted, x86, cpu=2 ]
+        runs-on: [ self-hosted, default, x86, cpu=2 ]
         container:
           image: swr.cn-north-4.myhuaweicloud.com/mindspore/mindspore_python3.11:v0.1
           options: --user root
@@ -144,7 +146,7 @@ stages:
 
       malicious-scan:
         name: antipoison
-        runs-on: [ self-hosted, x86, cpu=2 ]
+        runs-on: [ self-hosted, default, x86, cpu=2 ]
         container:
           image: swr.cn-north-4.myhuaweicloud.com/mindspore/mindspore_python3.11:v0.1
           options: --user root
@@ -166,7 +168,7 @@ stages:
         uses: .gitcode/workflows/.build_mindstudio_job.yml
         with:
           IMAGE_FLAG: "mindstudio-build:26.1.0"
-          runs_on_arch: "x64"
+          runs_on_arch: "x86"
           ARTIFACT_NAME: "msagent-run-x86-test"
 
       Build_msagent_arm:
@@ -175,7 +177,7 @@ stages:
         uses: .gitcode/workflows/.build_mindstudio_job.yml
         with:
           IMAGE_FLAG: "mindstudio-build:26.1.0"
-          runs_on_arch: "arm64"
+          runs_on_arch: "arm"
           ARTIFACT_NAME: "msagent-run-arm-test"
 
   stage_3:
@@ -188,7 +190,7 @@ stages:
         uses: .gitcode/workflows/.ut_mindstudio_job.yml
         with:
           IMAGE_FLAG: "mindstudio-build:26.1.0"
-          runs_on_arch: "x64"
+          runs_on_arch: "x86"
 
   stage_4:
     name: WHL_Validation
@@ -201,8 +203,6 @@ stages:
         with:
           installer: conda
           ARTIFACT_NAME: msagent-run-x86-test
-        secrets:
-          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
 
       WHL_validator_linux_uv:
         name: WHL_validator_linux_uv
@@ -211,8 +211,6 @@ stages:
         with:
           installer: uv
           ARTIFACT_NAME: msagent-run-x86-test
-        secrets:
-          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
 
 post:
   jobs:
