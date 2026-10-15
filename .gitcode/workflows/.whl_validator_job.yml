@@ -21,9 +21,6 @@ on:
       ARTIFACT_NAME:
         required: true
         type: string
-    secrets:
-      LLM_API_KEY:
-        required: true
 
 jobs:
   validate_whl:
@@ -88,25 +85,23 @@ jobs:
           .ci-tools/bin/uv pip install --python .whl-uv/bin/python dist/mindstudio_agent-*.whl
           .ci-tools/bin/uv pip install --python .whl-uv/bin/python -r tests/whl_validator/requirements-test.txt
 
-      # 密钥仅传入测试步骤，不进入安装命令或日志。
       - name: Run WHL end-to-end tests
         shell: bash
         working-directory: tests/whl_validator
         env:
           INSTALLER: ${{ inputs.installer }}
-          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
           PYTHONIOENCODING: utf-8
           PYTHONUTF8: "1"
         run: |
           set -euo pipefail
-          if [ -z "${LLM_API_KEY:-}" ]; then
+          if [ -z "${{ secrets.LLM_API_KEY }}" ]; then
             echo "LLM_API_KEY is required for complete WHL validation" >&2
             exit 1
           fi
           repo_root="$(cd ../.. && pwd)"
           export PATH="$repo_root/.whl-$INSTALLER/bin:$repo_root/.ci-tools/bin:$PATH"
           if [ "$INSTALLER" = conda ]; then
-            "$repo_root/.whl-conda/bin/python" -m pytest test_case/ -n auto -v
+            LLM_API_KEY="${{ secrets.LLM_API_KEY }}" "$repo_root/.whl-conda/bin/python" -m pytest test_case/ -n auto -v
           else
-            "$repo_root/.ci-tools/bin/uv" run --no-project --python "$repo_root/.whl-uv/bin/python" pytest test_case/ -n auto -v
+            LLM_API_KEY="${{ secrets.LLM_API_KEY }}" "$repo_root/.ci-tools/bin/uv" run --no-project --python "$repo_root/.whl-uv/bin/python" pytest test_case/ -n auto -v
           fi
