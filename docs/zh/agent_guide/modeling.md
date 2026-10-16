@@ -20,7 +20,7 @@
 - `msmodeling-throughput-optimizer-executor`：用于吞吐规划、硬件对比、聚合/分离/P:D 配比搜索的参数补齐与结果总结
 - `msmodeling-device-config`：用于把自然语言硬件规格转换为设备画像建模输入，并显式标注待校准项
 - `msmodeling-optix-deploy`：用于部署安装 `msmodeling optix` 服务化自动寻优 CLI 工具，包括仓库检查、pip 安装与 CLI 验证
-- `msmodeling-optix-param-recommend`：用于根据硬件、模型、负载和优化目标，推荐 MindIE/vLLM 服务化自动寻优参数、搜索范围、benchmark 配置与 `config.toml` 片段
+- `msmodeling-optix-param-recommend` <sup>Beta</sup>：用于根据硬件、模型、负载和优化目标，推荐 MindIE/vLLM 服务化自动寻优参数、搜索范围、benchmark 配置与 `config.toml` 片段
 
 ## 3. 核心能力
 
