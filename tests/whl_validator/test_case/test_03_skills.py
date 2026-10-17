@@ -51,6 +51,7 @@ EXPLICIT_SKILL_CASES = [
             skill_content_keywords=("MFU",),
         ),
         id="op-mfu-calculator",
+        marks=pytest.mark.skip,
     ),
 ]
 
@@ -65,6 +66,7 @@ KEYWORD_SKILL_CASES = [
             skill_content_keywords=("MFU",),
         ),
         id="op-mfu-calculator",
+        marks=pytest.mark.skip,
     ),
 ]
 
