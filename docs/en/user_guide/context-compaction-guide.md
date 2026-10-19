@@ -19,9 +19,7 @@ In other words, this feature does not directly delete old messages. Instead, it 
 
 ## 2. Default Behavior
 
-The default agent configuration is located at:
-
-- `resources/configs/default/agents/Profiler.yml`
+The default agent configuration is located at `resources/configs/default/agents/Profiler.yml`.
 
 The current default configuration is:
 
@@ -38,20 +36,25 @@ compression:
 The meaning is as follows:
 
 - `auto_compress_enabled: true`
-  - Enables automatic compaction.
+
+  Enables automatic compaction.
 - `auto_compress_threshold: 0.8`
-  - Automatically triggers compaction when the current input context approaches 80% of the model window.
+
+  Automatically triggers compaction when the current input context approaches 80% of the model window.
 - `llm: default`
   - Model used to generate the summary. By default, it reuses the current default model.
 - `prompt`
-  - Prompt template used to generate the summary.
+
+  Prompt template used to generate the summary.
 
 ## 3. How to Use as a Regular User
 
 You can use this capability in the following ways:
 
 - Automatic trigger
-- Manual execution of `/offload`
+- Manual trigger of `/offload`
+
+### 3.1 Automatic Trigger
 
 For example:
 
@@ -75,9 +78,9 @@ Note:
 - Recent messages stay in the active context
 - Earlier messages become a single summary message
 
-### Manually Triggering `/offload`
+### 3.2 Manually Triggering `/offload`
 
-If you do not want to wait until the automatic threshold is reached, you can also manually run the following command in the interactive session:
+If you do not want to wait until the automatic threshold is reached, you can also manually trigger it in the interactive session:
 
 ```text
 /offload
@@ -104,16 +107,16 @@ Note:
 
 ## 4. Where the Compressed Data Is Stored
 
-After compaction, the original historical messages are written in the current working directory:
+After compaction, the original historical messages are written to the global state directory of the current project:
 
 ```text
-<working-dir>/.msagent/conversation_history/<thread_id>.md
+~/.msagent/state/projects/<project-id>/conversation_history/<thread_id>.md
 ```
 
 For example:
 
 ```text
-/path/to/project/.msagent/conversation_history/8d6c4f3f-....md
+~/.msagent/state/projects/my-project-a1b2c3d4e5f6/conversation_history/8d6c4f3f-....md
 ```
 
 This file is appended to over time. Each compaction adds a new section, similar to the following:
@@ -138,10 +141,10 @@ The `file_path` is a logical path:
 /conversation_history/<thread_id>.md
 ```
 
-The actual disk directory it corresponds to is the one shown earlier:
+The actual drive directory it corresponds to is the one shown earlier:
 
 ```text
-<working-dir>/.msagent/conversation_history/<thread_id>.md
+~/.msagent/state/projects/<project-id>/conversation_history/<thread_id>.md
 ```
 
 ## 5. How It Works in Detail
@@ -181,13 +184,17 @@ compression:
 Fields:
 
 - `auto_compress_threshold`
-  - A smaller value triggers compaction earlier. For example, 0.7 triggers it when the context usage reaches 70%.
+
+  A smaller value triggers compaction earlier. For example, 0.7 triggers it when the context usage reaches 70%.
 - `messages_to_keep`
-  - How many of the most recent non-system messages to keep without summarizing during compaction
+
+  How many of the most recent non-system messages to keep without summarizing during compaction
 - `llm`
-  - Can be replaced with a cheaper or faster summarization model.
+
+  Can be replaced with a cheaper or faster summarization model.
 - `prompt`
-  - Customizes the summary style, for example, leaning more toward fact recording or task progress recording.
+
+  Customizes the summary style, for example, leaning more toward fact recording or task progress recording.
 
 Recommendations:
 
@@ -208,7 +215,7 @@ This feature is especially suitable for:
 
 You can confirm it in the following places:
 
-### Terminal Prompts
+### 8.1 Terminal Prompts
 
 When the threshold is reached, you see the automatic compaction prompt and a summary of the compaction results.
 
@@ -219,17 +226,17 @@ If you run `/offload` manually, you also see similar output, including:
 - The token change before and after compaction
 - The path where the historical messages were saved
 
-### Conversation History Files
+### 8.2 Conversation History Files
 
 Check:
 
 ```text
-<working-dir>/.msagent/conversation_history/
+~/.msagent/state/projects/<project-id>/conversation_history/
 ```
 
 Check whether the `.md` file corresponding to the current `thread_id` has been generated.
 
-### Checkpoint Data
+### 8.3 Checkpoint Data
 
 If you are investigating internal state, check whether the checkpoint for the current thread already contains a `_summarization_event`.
 
@@ -237,7 +244,7 @@ If you are investigating internal state, check whether the checkpoint for the cu
 
 If you think compaction was not triggered, check the following in order:
 
-### 1) Whether the Current Agent Has Compression Enabled
+### 9.1 Whether the Current Agent Has Compression Enabled
 
 Check whether the agent configuration contains:
 
@@ -246,15 +253,15 @@ compression:
   auto_compress_enabled: true
 ```
 
-### 2) Whether the Current Model Has `context_window` Configured
+### 9.2 Whether the Current Model Has `context_window` Configured
 
 Automatic compaction depends on the context window size to calculate the threshold. If the context window of the model is empty, the automatic decision may not trigger.
 
-### 3) Whether the Conversation Has Actually Reached the Threshold
+### 9.3 Whether the Conversation Has Actually Reached the Threshold
 
 If the conversation is not long enough, compaction does not happen.
 
-### 4) Whether `.msagent/conversation_history/` Is Writable in the Working Directory
+### 9.4 Whether the Project State Directory in `MSAGENT_HOME` Is Writable
 
 If writing the history file fails, the summary may still be generated, but the original messages are not successfully written to the drive. In this case, a warning appears in the terminal.
 
@@ -263,18 +270,23 @@ If writing the history file fails, the summary may still be generated, but the o
 The main entry points of the current implementation are:
 
 - `src/msagent/cli/handlers/compress.py`
-  - Current CLI compaction entry point
+
+  Current CLI compaction entry point
 - `src/msagent/utils/offload.py`
-  - Summary generation, original message offloading, and summary event construction
+
+  Summary generation, original message offloading, and summary event construction
 - `src/msagent/agents/factory.py`
-  - Exposes `_agent_backend` to the graph and routes `conversation_history` to a persistent directory.
+
+  Exposes `_agent_backend` to the graph and routes `conversation_history` to a persistent directory.
 
 The current design has the following key points:
 
 - Compaction is in-place
-  - Instead of creating a new thread, it updates `_summarization_event` on the current thread
+
+  Instead of creating a new thread, it updates `_summarization_event` on the current thread
 - The original history is recoverable
-  - The `conversation_history/<thread_id>.md` file forms an append-only offload log over time
+
+  The `conversation_history/<thread_id>.md` file forms an append-only offload log over time
 
 If you want to enhance the feature further, the natural directions are:
 
@@ -284,4 +296,4 @@ If you want to enhance the feature further, the natural directions are:
 
 ## 11. One-Sentence Summary
 
-For you, this feature is essentially out of the box. During normal long-running use of `msagent`, when the context approaches its limit, the feature automatically summarizes old messages and offloads them to `.msagent/conversation_history/`, freeing up the context window while keeping the original history traceable.
+For you, this feature is essentially out of the box. During normal long-running use of `msagent`, when the context approaches its limit, the feature automatically summarizes old messages and offloads them to the project state area in the global directory, freeing up the context window while keeping the original history traceable.

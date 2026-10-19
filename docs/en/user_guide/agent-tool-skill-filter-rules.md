@@ -43,7 +43,7 @@ tools:
 ```
 
 - `category`: Usually `default`, but it can also match other categories.
-- `name_pattern`: Skill name, which supports `fnmatch` wildcards.
+- `name_pattern`: skill name, which supports `fnmatch` wildcards.
 - Negative rules: prefix with `!`, for example `!default:op-mfu-calculator`.
 
 Example:
@@ -51,15 +51,15 @@ Example:
 ```yaml
 skills:
   patterns:
-    - default:ascend-profiler-data-validation
-    - default:ascend-profiler-db-explorer
+    - profiler:ascend-profiler-data-validation
+    - profiler:ascend-profiler-db-explorer
     - "!default:op-*"
   use_catalog: false
 ```
 
 ## 3. Filter Rules (Strictly Enforced Semantics)
 
-### Tools Rules
+### 3.1 Tools Rules
 
 - First, collect the positive rules (without `!`) and the negative rules (with `!`).
 - A tool is available only when it matches at least one positive rule and does not match any negative rule.
@@ -69,7 +69,7 @@ skills:
   - `AgentFactory.create` filters once when building the tool list.
   - The model-call middleware filters again to prevent the tools that `deepagents` injects by default from bypassing the filter.
 
-### Skills Rules
+### 3.2 Skills Rules
 
 - A skill is retained only when it matches at least one positive rule and does not match any negative rule.
 - If there are no positive rules, no skills are available.
@@ -101,8 +101,8 @@ tools:
 
 skills:
   patterns:
-    - default:ascend-profiler-data-validation
-    - default:ascend-profiler-db-explorer
+    - profiler:ascend-profiler-data-validation
+    - profiler:ascend-profiler-db-explorer
   use_catalog: false
 ```
 

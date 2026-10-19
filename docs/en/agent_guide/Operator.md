@@ -2,13 +2,13 @@
 
 `Operator` is an agent for performance optimization in Ascend operator development scenarios. It converts complex operator performance data into structured, analyzable, and actionable optimization recommendations and provides end-to-end performance optimization capabilities.
 
-## Agent Positioning
+## 1. Agent Positioning
 
 - Targets performance optimization scenarios for single-operator development on the Ascend NPU.
 - Focuses on locating operator performance bottlenecks and analyzing and outputting optimization recommendations.
 - Focuses on end-to-end operator performance optimization.
 
-## Core Capabilities
+## 2. Core Capabilities
 
 - Generation of operator performance analysis reports
 - MFU calculation, formula explanation, and result interpretation
@@ -16,11 +16,11 @@
 - Operator performance bottleneck analysis
 - One-click end-to-end operator performance optimization
 
-## Recommended Usage
+## 3. Recommended Usage
 
-- Directly provide the operator `msprof op` data from on-board and simulation runs, the operator kernel files used, and the directly executable operator directory.
+Directly provide the operator `msprof op` data from on-board and simulation runs, the operator kernel files used, and the directly executable operator directory.
 
-## Typical Results
+## 4. Typical Results
 
 | Scenario | Example Prompt | Sample Output |
 |-----------|-----------------------------------|-----------------------------------------------------------------------------|

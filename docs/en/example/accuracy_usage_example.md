@@ -8,7 +8,7 @@ In the accuracy analysis interface, select the "RL training-inference inconsiste
 
 User: Enters the example prompt "Based on the input training and inference dump data, analyze the sources of training-inference differences and provide possible causes."
 
-Agent: Prompts you to provide the path of the dump data file.
+Agent: prompts you to provide the path of the dump data file.
 
 User: Enters the training and inference `xxx/dump.json`.
 
@@ -32,7 +32,7 @@ User: Views the analysis file, the layer name mapping file. This time, it looks 
 
 ---
 
-#### Numerical Verification
+**Numerical Verification**
 
 Compare the results using the correct output index (`output.1`):
 
@@ -45,7 +45,7 @@ Compare the results using the correct output index (`output.1`):
 | 20 | 1767.31 | 1760.00 | 0.41% | ✓ Aligned |
 | 23 | 538.36 | 684.00 | 27.05% | ✗ Abnormal |
 
-#### First and Last Layer Abnormality Analysis
+**First and Last Layer Abnormality Analysis**
 
 + Layer 0: The inference-side `output.0` = 55.0 is close to the training-side 55.09, but `output.1` = 5.12 is abnormally low.
 
@@ -79,9 +79,9 @@ Agent:
 
 This is an important question about the module hierarchy output relationship. Let me explain the possible causes:
 
-  Key insight: DecoderLayer output ≠ MLP output
+Key insight: DecoderLayer output ≠ MLP output
 
-  Typical structure of Qwen2DecoderLayer:
+Typical structure of Qwen2DecoderLayer:
 
 ```plain
   def forward(self, hidden_states, ...):
@@ -102,9 +102,9 @@ This is an important question about the module hierarchy output relationship. Le
 
   Key points:
 
-   - `DecoderLayer.output` = `residual` + `mlp.output` (after the residual connection)
+- `DecoderLayer.output` = `residual` + `mlp.output` (after the residual connection)
 
-   - Not directly equal to `mlp.output`
+- Not directly equal to `mlp.output`
 
 ---
 
