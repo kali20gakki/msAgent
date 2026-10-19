@@ -11,13 +11,13 @@
 
 ### 1. Product Positioning
 
-`ascend-npu-snapshot-analyzer` is an Agent Skill for PyTorch Memory Snapshot analysis on Ascend NPUs, designed to provide the LLM with the ability to automatically analyze memory snapshot data exported by `torch_npu.npu.memory._dump_snapshot()`. Its core workflow is:
+`ascend-npu-snapshot-analyzer` is an agent skill for PyTorch Memory Snapshot analysis on Ascend NPUs, designed to provide the LLM with the ability to automatically analyze memory snapshot data exported by `torch_npu.npu.memory._dump_snapshot()`. Its core workflow is:
 
 1. Parse the pickle-format snapshot data and convert it into a SQLite database for efficient querying
 2. Analyze the memory snapshot across multiple dimensions using the preset SQL CTE macros and analysis scripts
 3. Generate a self-contained HTML report with interactive charts that presents the analysis results intuitively
 
-This Skill is not a standalone GUI product. Instead, it is orchestrated through the Agent workflow, in which the LLM reads the workflow definition in `SKILL.md` and invokes the Python tools in the `scripts/` directory on demand to complete the analysis tasks.
+This skill is not a standalone GUI product. Instead, it is orchestrated through the agent workflow, in which the LLM reads the workflow definition in `SKILL.md` and invokes the Python tools in the `scripts/` directory on demand to complete the analysis tasks.
 
 ### 2. Business Pain Points
 
@@ -26,7 +26,7 @@ Locating memory issues on Ascend NPUs has the following difficulties:
 - **Raw data format**: The pickle file exported by `torch_npu.npu.memory._dump_snapshot()` is in a binary serialization format that contains nested Segment/Block/Trace structures. It cannot be queried or analyzed directly and must be parsed with scripts.
 - **No automatic comparison capability**: The official PyTorch memory_viz tool only supports interactive browsing of a single snapshot for the CUDA backend. It does not support the NPU backend or automatic comparison between snapshots.
 - **Scattered analysis dimensions**: Locating memory issues involves multiple dimensions, including peak analysis, fragmentation calculation, expansion statistics, leak detection, and OOM root cause analysis. A unified automated analysis toolchain is lacking.
-- **No NPU-specific tool**: The Huawei Ascend ecosystem has no dedicated analysis tool for NPU Memory Snapshots. Therefore, users can only rely on manually written analysis scripts.
+- **No NPU-specific tool**: The Ascend ecosystem has no dedicated analysis tool for NPU Memory Snapshot. Therefore, users can only rely on manually written analysis scripts.
 - **Missing visualization**: Analysis results such as memory fragmentation, time-series changes, and stack attribution are hard to understand intuitively if they are presented only as text or tables. The tool lacks graphical display capability.
 
 ### 3. Core Values
@@ -146,7 +146,7 @@ sequenceDiagram
 #### 2.3 File Directory Structure
 
 ```text
-skills/ascend-npu-snapshot-analyzer/
+skills/profiler/ascend-npu-snapshot-analyzer/
 ├── SKILL.md                          # Main skill definition (workflow + CTE macros + output specification)
 ├── scripts/
 │   ├── snapshot_to_db.py             # pickle → SQLite conversion tool
@@ -322,7 +322,7 @@ It follows the Track A/Track B dual-channel pattern of `ascend-profiler-db-explo
 
 #### 4.3 Report Template Routing
 
-When the Agent generates a report, it selects the template combination according to the following decision tree:
+When the agent generates a report, it selects the template combination according to the following decision tree:
 
 ```text
 User request
@@ -519,7 +519,7 @@ For scenarios that require interactive drilling into detail data, you can start 
 
 - Complete error handling: clear error messages are provided for missing files, invalid formats, and SQL syntax errors
 - Large-file import uses transactional batch commits and automatically rolls back on failure
-- Trend icons use Unicode-safe characters to avoid Windows GBK encoding problems
+- Trend charts use Unicode-safe characters to avoid Windows GBK encoding problems
 
 ### 8. Programming and Invocation Design
 
@@ -598,7 +598,7 @@ torch_npu.npu.memory._record_memory_history(enabled=None)
 
 ### Unit Tests
 
-Test files: `tests/skills/ascend-npu-snapshot-analyzer/scripts/test_snapshot_to_db.py` and `tests/skills/ascend-npu-snapshot-analyzer/scripts/test_snapshot_analyze.py`
+Test files: `tests/skills/profiler/ascend-npu-snapshot-analyzer/scripts/test_snapshot_to_db.py` and `tests/skills/profiler/ascend-npu-snapshot-analyzer/scripts/test_snapshot_analyze.py`
 
 **test_snapshot_to_db.py coverage**:
 
@@ -651,7 +651,7 @@ Perform end-to-end validation using snapshot pickle files collected from real NP
 | -- | -- | -- |
 | `PyTorch memory_viz` | Official interactive visualization with trace timeline support | CUDA only. It supports browsing only a single snapshot, offers no comparison support, and requires starting a web service. |
 | `torch.cuda.memory_stats()` | Real-time query of current memory statistics | Real-time data only, with no offline snapshot support, and CUDA only |
-| `ascend-profiler-db-explorer` | The SQL analysis Skill for Ascend Profiling DB in this project | Targets the DB collected by the Profiler, not Memory Snapshots. The table structure differs. |
+| `ascend-profiler-db-explorer` | The SQL analysis skill for Ascend Profiling DB in this project | Targets the DB collected by the Profiler, not Memory Snapshots. The table structure differs. |
 | `py-spy`/`memray` | General-purpose Python memory profilers | Not aware of the NPU Caching Allocator and cannot parse segment/block structures |
 
 This tool fills the gap in **automated analysis** and **visualized reporting** for Ascend NPU Memory Snapshots.
@@ -659,7 +659,7 @@ This tool fills the gap in **automated analysis** and **visualized reporting** f
 ## Open Issues
 
 1. **device_traces timeline parsing**: Phase 2 plans to parse the timing of allocation/free events in traces and provide allocation timeline visualization and top-N allocation operator identification
-2. **NPU hardware memory pool (HBM cache)**: Whether the torch_npu Caching Allocator maintains additional hardware memory pool structures needs to be confirmed with the Ascend team
+2. **NPU hardware memory pool (HBM cache)**: Whether the TorchNPU Caching Allocator maintains additional hardware memory pool structures needs to be confirmed with the Ascend team
 3. **Large-file performance benchmarks**: Benchmarks need to be added for the import and analysis performance of snapshot files larger than 5 GB
 4. **ECharts version selection**: The specific version of the embedded ECharts (5.x lightweight vs. full version) needs to be determined based on actual chart requirements
 5. **Report template customization**: Whether the style and layout of the HTML report support user-customized themes

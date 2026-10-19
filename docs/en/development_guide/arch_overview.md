@@ -2,7 +2,7 @@
 
 ## 1.1 Introduction
 
-This document describes the overall architecture design of MindStudio-Agent (msAgent). MindStudio-Agent is an AI agent workbench for Ascend NPU development, debugging, and tuning scenarios. It currently hosts multiple specialized agents through a unified framework, including `Profiler`, `Accuracy`, `Quantizer`, `Modeling`, `Operator`, and `Minos`, and provides a unified CLI interaction entry point.
+This document describes the overall architecture design of MindStudio-Agent (msAgent). MindStudio-Agent is an AI agent workbench for Ascend NPU development, debugging, and tuning scenarios. It currently hosts multiple specialized agents through a unified framework, including `Profiler`, `Accuracy`, `Quantizer`, `Modeling`, `Operator`, `Minos`, and `SpecTrainer`, and provides a unified CLI interaction entry point.
 
 ## 1.2 Motivation
 
@@ -113,7 +113,7 @@ MindStudio-Agent adopts a modular architecture built on the deepagents runtime a
   - Agent configuration: Defines the agent configuration structure (`AgentConfig`).
   - LLM configuration: Defines the LLM configuration structure (`LLMConfig`).
   - MCP configuration: Defines the configuration structure of MCP services.
-  - Other configurations: Define configuration structures such as Checkpointer, Approval, and Sandbox.
+  - Other configurations: Define configuration structures such as checkpointer, approval, and sandbox.
   - Registry: Manages configuration loading, caching, and saving in a unified manner.
 
 #### 3. Tools Module
@@ -126,7 +126,7 @@ MindStudio-Agent adopts a modular architecture built on the deepagents runtime a
 #### 4. Skills Module
 
 - **Responsibilities**:
-  - `SkillFactory`: Loads skill metadata from `skills/` in the repository and `.msagent/skills/` in the working directory.
+  - `SkillFactory`: Loads skill metadata from the `skills/` working directory, the global `~/.msagent/skills/`, and the built-in directory.
   - Skill filtering: Injects skills according to the patterns in the agent configuration.
   - Skill catalog: Provides skill discovery for the CLI and the runtime.
   - Distribution: The build artifacts package the `skills/` directory in the repository into the default resource directory, making it easy for installed versions and external IDEs/agents to reuse.

@@ -1,30 +1,29 @@
 # Contribution Guide
 
-Thank you for your interest in MindStudio-Agent (msAgent). Whether you want to fix a bug, improve the documentation, add a new Skill, or extend the capabilities of agents and the framework, you are welcome to contribute through Issues or Pull Requests.
-
-This document summarizes the common contribution paths, the development workflow, and related reference documentation. For more complete documentation navigation, see [Chinese documentation home page](../../index.md).
+Thank you for your interest in MindStudio-Agent (msAgent). Whether you want to fix a bug, improve the documentation, add a new skill, or extend the capabilities of agents and the framework, you are welcome to contribute through Issues or Pull Requests.
 
 ## What You Can Contribute
 
-MindStudio-Agent is an agent workbench for Ascend NPU scenarios. Its core consists of the CLI, configuration system, MCP tools, built-in Skills, and domain agents. Common contribution types include:
+MindStudio-Agent is an agent workbench for Ascend NPU scenarios. Its core consists of the CLI, configuration system, MCP tools, built-in skills, and domain agents. Common contribution types include:
 
 | Contribution Type | Description | Recommended Reading |
 |---|---|---|
-| **Issue feedback** | Bugs, feature requests, documentation errors, or experience issues | [FAQ](../user_guide/faq.md), [GitCode Issues](https://gitcode.com/Ascend/msagent/issues) |
-| **Documentation improvements** | Installation instructions, usage guides, agent descriptions, architecture documentation | [Getting Started Installation Guide](../getting_started/install_guide.md), [ReadTheDocs local verification](readthedocs-local-build.md) |
+| **Issue feedback** | Bugs, feature requests, documentation errors, or experience issues | [FAQ](../support/faq.md), [AtomGit Issues](https://atomgit.com/Ascend/msagent/issues) |
+| **Documentation improvements** | Installation instructions, usage guides, agent descriptions, architecture documentation | [Installation Guide](../install_guide/msagent_install_guide.md), [ReadTheDocs local verification](../development_guide/readthedocs-local-build.md) |
 | **Skills extension** | Adding or improving domain diagnostic SOPs, scripts, and trigger descriptions | [Configuration and Extension](../user_guide/configuration-and-extension.md), [skills/README.md](../../../skills/README.md) |
-| **Agents/configuration** | Adjusting agent YAML, prompts, and Tool/Skill filter rules | [Agent/Tool/Skill Filter Rules](../user_guide/agent-tool-skill-filter-rules.md) |
-| **Framework code** | Core capabilities such as the CLI, middleware, MCP integration, and configuration loading | [Architecture Overview](arch_overview.md) |
-| **Testing and building** | Unit tests, integration tests, and wheel build verification | [Building and Packaging](build-and-package.md) |
+| **Agents/configuration** | Adjusting agent YAML, prompts, and Tool/skill filter rules | [Agent/Tool/Skill Filter Rules](../user_guide/agent-tool-skill-filter-rules.md) |
+| **Framework code** | Core capabilities such as the CLI, middleware, MCP integration, and configuration loading | [Architecture Overview](../development_guide/arch_overview.md) |
+| **Testing and building** | Unit tests, integration tests, and wheel build verification | [Building and Packaging](../development_guide/build-and-package.md) |
 
 The current built-in agents and their domain positioning are as follows. Before contributing, you can first understand the boundaries of each:
 
-- [Profiler](../agent_guide/Profiler.md): performance tuning
-- [Accuracy](../agent_guide/Accuracy.md): accuracy tuning
-- [Quantizer](../agent_guide/Quantizer.md): model quantization
-- [Modeling](../agent_guide/Modeling.md): simulation modeling
-- [Operator](../agent_guide/Operator.md): operator tuning
-- [Minos](../agent_guide/Minos.md): documentation experience and code review
+- [Profiler](../agent_guide/profiler.md): performance tuning
+- [Accuracy](../agent_guide/accuracy.md): accuracy tuning
+- [Quantizer](../agent_guide/quantizer.md): model quantization
+- [Modeling](../agent_guide/modeling.md): simulation modeling
+- [Operator](../agent_guide/operator.md): operator tuning
+- [Minos](../agent_guide/minos.md): documentation experience and code review
+- [SpecTrainer](../agent_guide/spectrainer.md): speculative decoding data resampling
 
 ## Before You Start
 
@@ -65,23 +64,23 @@ Before contributing code or performing local verification, confirm that your env
 - You are advised to use [uv](https://docs.astral.sh/uv/) to manage dependencies.
 - Prepare at least one usable LLM API key (for interactive verification).
 
-For details, see [Getting Started Installation Guide](../getting_started/install_guide.md) and [Version and Compatibility](version-and-compatibility.md).
+For details, see [Installation Guide](../install_guide/msagent_install_guide.md) and [Version and Compatibility](../development_guide/version-and-compatibility.md).
 
 ### Cloning and Running from Source
 
 ```bash
-git clone https://gitcode.com/Ascend/msagent.git
+git clone https://atomgit.com/Ascend/msagent.git
 cd msagent
 uv sync --dev
 uv run msagent --version
 ```
 
-When running from source, you can replace `msagent` with `uv run msagent` in commands. For the first startup and model configuration, see [Quick Start Guide](../getting_started/quick_start.md).
+When running from source, you can replace `msagent` with `uv run msagent` in commands. For the first startup and model configuration, see [Quick Start Guide](../quick_start/msagent_quick_start.md).
 
 ### Recommended Reading Order
 
-1. [Architecture Overview](arch_overview.md): Understand the layered relationships among the CLI, agent factory, Tools, Skills, MCP, and middleware.
-2. [Configuration and Extension](../user_guide/configuration-and-extension.md): Understand the loading order of `.msagent/` local configurations, MCP, and Skills.
+1. [Architecture Overview](../development_guide/arch_overview.md): Understand the layered relationships among the CLI, agent factory, tools, skills, MCP, and middleware.
+2. [Configuration and Extension](../user_guide/configuration-and-extension.md): Understand global configuration, project state, and the loading order of MCP and skills.
 3. [Agent/Tool/Skill Filter Rules](../user_guide/agent-tool-skill-filter-rules.md): Read this before modifying agent capability boundaries.
 4. The agent guides or user guides relevant to your changes.
 
@@ -89,7 +88,7 @@ When running from source, you can replace `msagent` with `uv run msagent` in com
 
 ### 1. Creating an Issue or Claiming a Task
 
-- Submit bugs or feature suggestions through [GitCode Issues](https://gitcode.com/Ascend/msagent/issues).
+- Submit bugs or feature suggestions through [AtomGit Issues](https://atomgit.com/Ascend/msagent/issues).
 - For larger changes, you are advised to open an Issue first to discuss the approach and avoid conflicting with the maintainers' direction.
 - For security issues, follow the [Security Statement](../legal/SECURITY.md) and avoid publicly disclosing exploitable details.
 
@@ -112,7 +111,7 @@ Before submitting a PR, you are advised to complete at least the following check
 uv sync --dev
 
 # Run tests
-uv run pytest -q
+python3 build.py test
 
 # Verify that the lockfile is in sync (required after modifying pyproject.toml)
 uv lock --check
@@ -127,7 +126,7 @@ To verify the wheel installation, use the following command:
 python3 build.py --extra VERIFY_WHEEL_INSTALL=1
 ```
 
-For build details, see [Building and Packaging](build-and-package.md).
+For build details, see [Building and Packaging](../development_guide/build-and-package.md).
 
 ### 4. Code Quality Checks
 
@@ -150,7 +149,7 @@ In the PR, you are advised to describe the following:
 - How the change was verified locally (test commands and manual verification steps)
 - Whether the documentation has been updated accordingly
 
-For documentation PRs, you can build a Sphinx preview locally. For details, see [ReadTheDocs local build instructions](readthedocs-local-build.md).
+For documentation PRs, you can build a Sphinx preview locally. For details, see [ReadTheDocs local build instructions](../development_guide/readthedocs-local-build.md).
 
 ## Guidelines by Contribution Type
 
@@ -158,31 +157,31 @@ For documentation PRs, you can build a Sphinx preview locally. For details, see 
 
 All documentation is maintained in the `docs/zh/` directory, organized by Quick Start, Agent Guide, User Guide, and Development Guide. When modifying the README, installation steps, or the Quick Start, you are advised to:
 
-1. Walk through the minimal workflow by following the [Quick Start Guide](../getting_started/quick_start.md).
+1. Walk through the minimal workflow by following the [Quick Start Guide](../quick_start/msagent_quick_start.md).
 2. Use the built-in skill [document-ux-review](../user_guide/document-ux-review.md) to review the documentation onboarding experience.
-3. Build the documentation locally to confirm that there are no errors: [ReadTheDocs local build instructions](readthedocs-local-build.md).
+3. Build the documentation locally to confirm that there are no errors: [ReadTheDocs local build instructions](../development_guide/readthedocs-local-build.md).
 
-For common questions, first check the [FAQ](../user_guide/faq.md).
+For common questions, first check the [FAQ](../support/faq.md).
 
 ### Skills Contributions
 
-Skills are one of the most important extension surfaces of the project. The `skills/` directory at the repository root is the source of built-in Skills and is packaged into `resources/configs/default/skills/` when the wheel is built.
+Skills are one of the most important extension surfaces of the project. The `skills/` directory at the repository root is the source of built-in skills and is packaged into `resources/configs/default/skills/` when the wheel is built.
 
-The recommended steps for adding a new Skill are as follows:
+The recommended steps for adding a new skill are as follows:
 
 1. Create a kebab-case directory in `skills/` and provide a `SKILL.md` (with `name` and `description` in the frontmatter).
 2. Put stable, repeatable steps into `scripts/` (if needed).
-3. Enable the Skill in the `skills.patterns` of the corresponding agent.
+3. Enable the skill in the `skills.patterns` of the corresponding agent.
 4. After starting `msagent`, verify its visibility through `/skills`.
-5. Update the Skill list in [skills/README.md](../../../skills/README.md).
+5. Update the skill list in [skills/README.md](../../../skills/README.md).
 
-For detailed conventions, see [Configuration and Extension · Adding Custom Skills](../user_guide/configuration-and-extension.md#adding-a-custom-skill) and [skills/README.md · Recommended Process for Adding New Skills](../../../skills/README.md).
+For detailed conventions, see [Configuration and Extension · Adding Custom Skills](../user_guide/configuration-and-extension.md#9-adding-a-custom-skill) and [skills/README.md · Recommended Process for Adding New Skills](../../../skills/README.md).
 
-For Skill matching and filter rules, see [Agent/Tool/Skill Filter Rules](../user_guide/agent-tool-skill-filter-rules.md).
+For skill matching and filter rules, see [Agent/Tool/Skill Filter Rules](../user_guide/agent-tool-skill-filter-rules.md).
 
 ### Agent and Configuration Contributions
 
-Agent definitions are located in `resources/configs/default/agents/` and are copied to `.msagent/agents/` in the working directory at runtime. When modifying the visible scope of Tools or Skills:
+Built-in agent definitions are located in `resources/configs/default/agents/` and are read directly at runtime; user overrides are located in `~/.msagent/config/agents/`. When modifying the visible scope of tools or skills:
 
 - `tools.patterns` uses the three-part format `<category>:<module>:<name_pattern>`.
 - `skills.patterns` uses the two-part format `<category>:<name_pattern>`.
@@ -190,31 +189,31 @@ Agent definitions are located in `resources/configs/default/agents/` and are cop
 
 For the complete semantics and smoke examples, see [Agent/Tool/Skill Filter Rules](../user_guide/agent-tool-skill-filter-rules.md) and `resources/configs/default/agents/msagent-filter-smoke.yml`.
 
-For MCP integration and field descriptions, see [Configuration and Extension · MCP Configuration](../user_guide/configuration-and-extension.md#mcp-configuration).
+For MCP integration and field descriptions, see [Configuration and Extension · MCP Configuration](../user_guide/configuration-and-extension.md#5-mcp-configuration).
 
 ### Framework Code Contributions
 
-The framework is based on the deepagents runtime and is modularly divided into the interaction layer, scheduling layer, core layer, and infrastructure layer. Before development, you are advised to read the following sections of [Architecture Overview](arch_overview.md):
+The framework is based on the deepagents runtime and is modularly divided into the interaction layer, scheduling layer, core layer, and infrastructure layer. Before development, you are advised to read the following sections of [Architecture Overview](../development_guide/arch_overview.md):
 
 - System architecture and the responsibilities of core modules
 - The startup process and the agent execution process
 - Test design (the test directory is `tests/`)
 
-When modifying dependencies or Python version requirements, update [Version and Compatibility](version-and-compatibility.md) accordingly and describe the compatibility impact in the PR.
+When modifying dependencies or Python version requirements, update [Version and Compatibility](../development_guide/version-and-compatibility.md) accordingly and describe the compatibility impact in the PR.
 
 ### Test Contributions
 
 - Test directory: `tests/`
-- How to run: `uv run pytest -q`
+- How to run: `python3 build.py test`
 - Integration test marker: `@pytest.mark.integration`
 
-For changes involving agent behavior, configuration loading, and Tool/Skill filtering, you are advised to add or update the corresponding unit tests.
+For changes involving agent behavior, configuration loading, and Tool/skill filtering, you are advised to add or update the corresponding unit tests.
 
 ## License and Community
 
-- License: [Mulan PSL v2](http://license.coscl.org.cn/MulanPSL2). For details, see [Legal and Statements](../legal/index.md).
-- Issue feedback: [GitCode Issues](https://gitcode.com/Ascend/msagent/issues)
-- Online documentation: [ReadTheDocs](https://mindstudio-agent.readthedocs.io/zh-cn/latest/)
-- Ascend community: [MindStudio software portal](https://www.hiascend.com/cn/developer/software/mindstudio)
+- License: [Mulan PSL v2](http://license.coscl.org.cn/MulanPSL2)
+- Issue feedback: [AtomGit Issues](https://atomgit.com/Ascend/msagent/issues)
+- Online documentation: [ReadTheDocs](https://mindstudio-docs-master.readthedocs.io)
+- Ascend community: [MindStudio software portal](https://www.hiascend.com/eng/developer/software/mindstudio)
 
-Thank you again for your contribution. Whether you fix a line of documentation, add a Skill, or improve the core framework, your contribution helps more Ascend developers debug and tune faster.
+Thank you again for your contribution. Whether you fix a line of documentation, add a skill, or improve the core framework, your contribution helps more Ascend developers debug and tune faster.

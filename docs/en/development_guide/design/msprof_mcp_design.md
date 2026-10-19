@@ -1,4 +1,7 @@
+# msprof-mcp Design Document
+
 ## Revision History
+
 | Date | Revision | Description | Author | RFC Document |
 | -- | -- | -- | -- | -- |
 | 2026-06-03 | 1.0 | Added the msprof-mcp detailed design document, covering the architecture, tool system, data flows, and test design | kali20gakki1 |  |
@@ -303,6 +306,7 @@ The design goal of `configure_logging()` is to fit the stdio transport scenario 
 msprof-mcp supports two integration methods:
 
 **PyPI mode (recommended)**:
+
 ```json
 {
   "mcpServers": {
@@ -316,6 +320,7 @@ msprof-mcp supports two integration methods:
 ```
 
 **Local source mode (development and debugging)**:
+
 ```json
 {
   "mcpServers": {
@@ -330,6 +335,7 @@ msprof-mcp supports two integration methods:
 ```
 
 In msAgent, the default MCP configuration is as follows:
+
 ```json
 {
   "mcpServers": {
@@ -487,11 +493,13 @@ sequenceDiagram
 #### 9.1 Quick Start
 
 **Method 1: Run directly from PyPI**
+
 ```bash
 uvx msprof-mcp
 ```
 
 **Method 2: Run from local source for development**
+
 ```bash
 git clone <repository_url>
 cd msprof_mcp
@@ -502,7 +510,7 @@ uv run msprof-mcp
 
 msprof-mcp communicates with MCP Hosts through the stdio transport protocol. Typical integration scenarios include:
 
-- msAgent Profiler Agent: Configured through `.msagent/config.mcp.json`, with the Profiler enabling the `mcp:msprof-mcp:*` Tool Pattern by default.
+- msAgent Profiler agent: Overrides the MCP configuration through `~/.msagent/config/config.mcp.json`, and the Profiler can enable the corresponding tools through the `mcp:msprof-mcp:*` tool pattern.
 - Cherry Studio/Claude Desktop: Add the service through the MCP configuration JSON.
 - Other MCP clients: Any client that supports stdio transport can connect.
 
@@ -698,11 +706,11 @@ Representative existing tests: `test_trace_view_analyze.py`
 
 ### 1. References
 
-- msprof-mcp repository: [https://gitcode.com/kali20gakki1/msprof_mcp](https://gitcode.com/kali20gakki1/msprof_mcp)
+- msprof-mcp repository: [https://atomgit.com/kali20gakki1/msprof_mcp](https://atomgit.com/kali20gakki1/msprof_mcp)
 - MCP official documentation: [https://modelcontextprotocol.io/docs/getting-started/intro](https://modelcontextprotocol.io/docs/getting-started/intro)
 - Perfetto official documentation: [https://perfetto.dev/docs/](https://perfetto.dev/docs/)
 - PerfettoSQL syntax: [https://perfetto.dev/docs/analysis/perfetto-sql-syntax](https://perfetto.dev/docs/analysis/perfetto-sql-syntax)
-- msAgent design document: [docs/en/design/msagent_design.md](msagent_design.md)
+- msAgent design document: [docs/en/development_guide/design/msagent_design.md](msagent_design.md)
 
 ### 2. Terminology
 

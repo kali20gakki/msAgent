@@ -5,7 +5,7 @@ msAgent currently uses only official middleware:
 - `init_chat_model(max_retries, timeout)`
 - `ToolRetryMiddleware(max_retries, tools, on_failure, backoff_factor, initial_delay, max_delay, jitter)`
 
-## Corresponding YAML Configuration
+## 1. Corresponding YAML Configuration
 
 ```yaml
 retry:
@@ -26,9 +26,9 @@ retry:
     jitter: true
 ```
 
-## Common Configuration Recommendations
+## 2. Common Configuration Recommendations
 
-### Unstable Network
+### 2.1 Unstable Network
 
 ```yaml
 retry:
@@ -49,7 +49,7 @@ retry:
     jitter: true
 ```
 
-### Keeping Only LLM Retries
+### 2.2 Keeping Only LLM Retries
 
 ```yaml
 retry:
@@ -63,14 +63,14 @@ retry:
     max_retries: 0
 ```
 
-### Completely Disabling Retry Override
+### 2.3 Completely Disabling Retry Override
 
 ```yaml
 retry:
   enabled: false
 ```
 
-## Notes
+## 3. Notes
 
 - When `retry.model.timeout` is `null`, msAgent uses the timeout configured by the LLM itself.
 - When `retry.enabled=false`, msAgent does not mount `ToolRetryMiddleware` and sets the model retry count to 0.

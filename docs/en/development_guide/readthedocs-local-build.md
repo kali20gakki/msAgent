@@ -29,7 +29,7 @@ make -C docs html
 
 After the build completes, open the following file in a browser:
 
-```
+```text
 <project-root-directory>/docs/_build/html/index.html
 ```
 

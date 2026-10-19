@@ -1,15 +1,15 @@
 # Adding a Custom Agent
 
-Agents in msAgent are defined through declarative configuration. Therefore, no Python code is required. To add a new agent, you only need to create a YAML configuration file and the corresponding Prompt file in `resources/configs/default/`.
+Agents in msAgent are defined through declarative configuration. Therefore, no Python code is required. To add a new agent, you only need to create a YAML configuration file and the corresponding prompt file in `resources/configs/default/`.
 
 ## 1. Overview
 
 A complete agent consists of two parts:
 
-- **YAML configuration file**: defines the agent name, model, tools, Skills, subagents, and so on
+- **YAML configuration file**: defines the agent name, model, tools, skills, subagents, and so on
 - **Prompt file**: defines the agent system prompt, which determines its behavior and capabilities
 
-After you edit files in `resources/configs/default/`, they are automatically copied to your `.msagent/` directory on first run.
+Definitions in `resources/configs/default/` are loaded directly as read-only built-in defaults and are not copied as a whole directory on first run. User overrides are located in `~/.msagent/config/`, and user prompts are located in `~/.msagent/prompts/`.
 
 ## 2. Directory Structure
 
@@ -77,11 +77,11 @@ retry:
 | version | Yes | Configuration version. Uses the `__APP_VERSION__` placeholder, which is replaced automatically at runtime. |
 | name | Yes | Unique agent identifier. **Must match the file name** (for example, `MyAgent.yml` corresponds to `name: MyAgent`). |
 | description | Yes | Brief description of the agent, shown in the `/agents` list. |
-| prompt | Yes | List of Prompt file paths (relative to `.msagent/`), concatenated in order. |
+| prompt | Yes | List of prompt file paths. Built-in configurations are relative to the default resource directory, and user override configurations are relative to `~/.msagent/`. |
 | llm | Yes | LLM alias to use. `default` corresponds to the default model. You can also specify `sonnet`, `opus`, and so on. |
 | checkpointer | Yes | Session persistence backend, usually `sqlite`. |
 | default | Yes | Whether this is the default agent. **The entire system must have exactly one `default: true`**. |
-| subagents | No | Names of referenced subagents, which must be defined in `.msagent/subagents/`. |
+| subagents | No | Names of referenced subagents, which can come from built-in configurations or `~/.msagent/config/subagents/`. |
 | tools.patterns | Yes | Tool filtering rules in the `category:module:name` format. The `*` wildcard is supported, and the `!` prefix excludes a tool. |
 | skills.patterns | Yes | Skill filtering rules in the `category:name` format. For the complete list, see [Skills](../../../skills/README.md). |
 
@@ -126,7 +126,7 @@ Prefer the following structure:
 Problem / Evidence / Root Cause / Recommendation
 ```
 
-For how to write Prompt files, refer to the Prompts of existing agents (for example, [Profiler.md](../../../resources/configs/default/prompts/agents/Profiler.md)).
+For how to write prompt files, refer to the prompts of existing agents (for example, [Profiler.md](../../../resources/configs/default/prompts/agents/Profiler.md)).
 
 ## 5. Verification
 

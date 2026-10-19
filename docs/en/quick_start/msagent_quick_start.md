@@ -4,11 +4,19 @@ This topic describes how to configure a model, select agent capabilities, and st
 
 ## 1. Preparing the Environment
 
-```commandline
-pip install mindstudio-agent
+Install msAgent. The one-click installation method is used here.
+
+```shell
+# Applicable operating systems: Linux, macOS, and WSL
+curl -LsSf https://raw.atomgit.com/Ascend/msagent/raw/26.2.0/scripts/install.sh | bash
+
+# Applicable operating systems: Windows (PowerShell 5.1 or later)
+irm https://raw.atomgit.com/Ascend/msagent/raw/26.2.0/scripts/install.ps1 | iex
 ```
 
-For more installation methods, see [msAgent Installation Guide](./install_guide.md).
+For more installation methods, see [msAgent Installation Guide](../install_guide/msagent_install_guide.md).
+
+> If `msagent: command not found` is prompted after the one-click installation, run the command printed at the end of the installer log (usually `source ~/.bashrc`) or reopen the terminal. For details, see [§4.1](../install_guide/msagent_install_guide.md#41-what-to-do-if-command-not-found-is-prompted-after-installation). To uninstall the tool, use `uv tool uninstall mindstudio-agent`; `pip uninstall` does not work. For details, see [§5.2](../install_guide/msagent_install_guide.md#52-selecting-the-upgrade-and-uninstall-command-by-installation-method).
 
 ## 2. Configuring the LLM
 
@@ -42,24 +50,13 @@ For more installation methods, see [msAgent Installation Guide](./install_guide.
 
 ## 3. Starting a Session
 
-- Start and enter the default interactive session.
+Start and enter the default interactive session.
 
-  ```bash
-  msagent
-  ```
+```bash
+msagent
+```
 
-- You can also specify an agent at startup, as shown in the following example:
-
-  | Agent | Description | Startup Command |
-  | --- | --- | --- |
-  | [Profiler](../agent_guide/Profiler.md) | Performance tuning | `msagent --agent Profiler` |
-  | [Accuracy](../agent_guide/Accuracy.md) | Accuracy debugging | `msagent --agent Accuracy` |
-  | [Quantizer](../agent_guide/Quantizer.md) | Model quantization | `msagent --agent Quantizer` |
-  | [Modeling](../agent_guide/Modeling.md) | Simulation modeling and automatic optimization | `msagent --agent Modeling` |
-  | [Operator](../agent_guide/Operator.md) | Operator tuning | `msagent --agent Operator` |
-  | [Minos](../agent_guide/Minos.md) | Documentation assistance | `msagent --agent Minos` |
-
-- For more commands, see [msAgent Usage Guide](../user_guide/usemap.md).
+For more commands, see [msAgent Usage Guide](../user_guide/usemap.md).
 
 ## 4. Usage Tips
 
@@ -77,23 +74,23 @@ Session history is automatically saved as independent threads. You can browse an
 
 ### 4.2 Selecting and Loading a Skill
 
-A Skill is a specialized capability module for specific scenarios (for example, performance analysis and model quantization). When you enter `/skills` and press Enter, an interactive list opens. Use the up and down arrow keys to browse and select, and press Enter to load the desired Skill.
+A skill is a specialized capability module for specific scenarios (for example, performance analysis and model quantization). When you enter `/skills` and press Enter, an interactive list opens. Use the up and down arrow keys to browse and select, and press Enter to load the desired skill.
 
 | Command | Description |
 | --- | --- |
-| `/skills` | Opens the interactive Skill list. Use the up and down arrow keys to browse, and press Enter to load a Skill. |
-| `/skills <skill-name>` | Loads a Skill by directly specifying the Skill name, for example, `/skills ascend-computation-analysis`. |
-| `/skills <skill-name> <prompt>` | Loads a Skill and passes a task for execution, for example, `/skills ascend-computation-analysis analyze whether there are compute-related bottlenecks based on the performance data`. |
+| `/skills` | Opens the interactive skill list. Use the up and down arrow keys to browse, and press Enter to load a skill. |
+| `/skills <skill-name>` | Loads a skill by directly specifying the skill name, for example, `/skills ascend-computation-analysis`. |
+| `/skills <skill-name> <prompt>` | Loads a skill and passes a task for execution, for example, `/skills ascend-computation-analysis analyze whether there are compute-related bottlenecks based on the performance data`. |
 
 ![skills_browser](../figures/skills_browser.png)
 
 ### 4.3 Installing Custom Skills
 
-In addition to built-in Skills, you can install custom Skills from a local path using `/add-skill` to meet the needs of personalized scenarios. You can specify a Skill directory or a `SKILL.md` file, and the installation takes effect immediately.
+In addition to built-in skills, you can install custom skills from a local path using `/add-skill` to meet the needs of personalized scenarios. You can specify a skill directory or a `SKILL.md` file, and the installation takes effect immediately.
 
 | Command | Description |
 | --- | --- |
-| `/add-skill <path-to-skill>` | Installs a Skill directory from a local path, for example, `/add-skill /path/to/my-skill`. |
+| `/add-skill <path-to-skill>` | Installs a skill directory from a local path, for example, `/add-skill /path/to/my-skill`. |
 
 ![add_skill](../figures/add_skill.png)
 
@@ -113,7 +110,7 @@ When tool calls made by an agent produce long output (for example, logs, configu
 
 ### 4.5 Saving Long-Term Memory
 
-If some information needs to remain effective in subsequent sessions, you can use `/remember` to save it as long-term memory for the current project. The memory is written to `.msagent/memory.md`, and subsequent sessions read it automatically.
+If some information needs to remain effective in subsequent sessions, you can use `/remember` to save it as long-term memory for the current project. The memory is written to `~/.msagent/state/projects/<project-id>/memory.md`, and subsequent sessions read it automatically.
 
 | Command | Description |
 | --- | --- |
@@ -124,7 +121,7 @@ This is suitable for saving user preferences, project background, paths that rem
 
 ### 4.6 Recording Output Results
 
-The context window is limited. When performing multi-round complex tasks, you are advised to trigger conclusion recording at key nodes to prevent early analysis results from being pushed out of the window by subsequent interactions. For example, after a Skill completes a round of data analysis, you can manually append a prompt to ask the agent to output an interim report:
+The context window is limited. When performing multi-round complex tasks, you are advised to trigger conclusion recording at key nodes to prevent early analysis results from being pushed out of the window by subsequent interactions. For example, after a skill completes a round of data analysis, you can manually append a prompt to ask the agent to output an interim report:
 
 > Based on the preceding analysis results, output a complete Markdown analysis report that includes a problem summary, root cause analysis, key data, and optimization suggestions.
 
