@@ -19,13 +19,17 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from functools import partial
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
 import httpx
 import pytest
-from langchain_core.messages import SystemMessage
+from deepagents.backends import StateBackend
+from langchain.agents.middleware.types import AgentMiddleware
+from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from typing_extensions import TypedDict
 
 import msagent.agents.factory as factory_module
 from msagent.agents.context import RetryNotice
@@ -395,20 +399,113 @@ def test_patch_third_party_prompt_defaults_overrides_filesystem_prompt() -> None
         factory_module.patch_third_party_prompt_defaults()
 
         patched = deepagents_graph.FilesystemMiddleware
-        assert isinstance(patched, partial)
-        assert patched.func is deepagents_filesystem.FilesystemMiddleware
+        assert isinstance(patched, type)
+        assert patched is not deepagents_filesystem.FilesystemMiddleware
+        assert issubclass(patched, deepagents_filesystem.FilesystemMiddleware)
+        assert patched.__name__ == "FilesystemMiddleware"
 
-        system_prompt = patched.keywords["system_prompt"]
-        assert system_prompt == "\n\n".join(
+        middleware = patched()
+        expected_prompt = "\n\n".join(
             (
                 factory_module._COMPACT_FILESYSTEM_SYSTEM_PROMPT,
                 factory_module._COMPACT_EXECUTION_SYSTEM_PROMPT,
             )
         )
-        assert "Large Tool Results" not in system_prompt
-        assert "Shell paths vs. virtual paths" not in system_prompt
+        assert middleware._custom_system_prompt == expected_prompt
+        assert "Large Tool Results" not in middleware._custom_system_prompt
+        assert "Shell paths vs. virtual paths" not in middleware._custom_system_prompt
     finally:
         deepagents_graph.FilesystemMiddleware = original_filesystem_middleware
+        factory_module._THIRD_PARTY_PROMPTS_PATCHED = original_flag
+
+
+def test_patch_third_party_prompt_defaults_patches_todo_middleware_as_class() -> None:
+    from langchain.agents.middleware.todo import TodoListMiddleware as langchain_todo
+
+    import deepagents.graph as deepagents_graph
+
+    original_flag = factory_module._THIRD_PARTY_PROMPTS_PATCHED
+    original_had_todo_middleware = hasattr(deepagents_graph, "TodoListMiddleware")
+    original_todo_middleware = getattr(deepagents_graph, "TodoListMiddleware", None)
+    original_todo_factory = factory_module._TODO_MIDDLEWARE_FACTORY
+
+    try:
+        factory_module._THIRD_PARTY_PROMPTS_PATCHED = False
+
+        factory_module.patch_third_party_prompt_defaults()
+
+        patched = deepagents_graph.TodoListMiddleware
+        assert isinstance(patched, type)
+        assert patched is not langchain_todo
+        assert issubclass(patched, langchain_todo)
+        assert patched.__name__ == "TodoListMiddleware"
+        assert factory_module._TODO_MIDDLEWARE_FACTORY is patched
+
+        middleware = patched()
+        assert middleware.system_prompt == factory_module._COMPACT_TODO_SYSTEM_PROMPT
+    finally:
+        if original_had_todo_middleware:
+            deepagents_graph.TodoListMiddleware = original_todo_middleware
+        elif hasattr(deepagents_graph, "TodoListMiddleware"):
+            del deepagents_graph.TodoListMiddleware
+        factory_module._TODO_MIDDLEWARE_FACTORY = original_todo_factory
+        factory_module._THIRD_PARTY_PROMPTS_PATCHED = original_flag
+
+
+def test_patch_third_party_prompt_defaults_patches_subagent_middleware_as_class() -> None:
+    import deepagents.graph as deepagents_graph
+    import deepagents.middleware.subagents as deepagents_subagents
+
+    original_flag = factory_module._THIRD_PARTY_PROMPTS_PATCHED
+    original_subagent_middleware = deepagents_graph.SubAgentMiddleware
+
+    try:
+        factory_module._THIRD_PARTY_PROMPTS_PATCHED = False
+
+        factory_module.patch_third_party_prompt_defaults()
+
+        patched = deepagents_graph.SubAgentMiddleware
+        assert isinstance(patched, type)
+        assert patched is not deepagents_subagents.SubAgentMiddleware
+        assert issubclass(patched, deepagents_subagents.SubAgentMiddleware)
+        assert patched.__name__ == "SubAgentMiddleware"
+    finally:
+        deepagents_graph.SubAgentMiddleware = original_subagent_middleware
+        factory_module._THIRD_PARTY_PROMPTS_PATCHED = original_flag
+
+
+def test_patched_subagent_middleware_defaults_to_compact_task_prompt() -> None:
+    from deepagents.backends import StateBackend
+    from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
+    from langchain_core.messages import AIMessage
+
+    import deepagents.graph as deepagents_graph
+
+    original_flag = factory_module._THIRD_PARTY_PROMPTS_PATCHED
+    original_subagent_middleware = deepagents_graph.SubAgentMiddleware
+
+    try:
+        factory_module._THIRD_PARTY_PROMPTS_PATCHED = False
+
+        factory_module.patch_third_party_prompt_defaults()
+        patched_cls = deepagents_graph.SubAgentMiddleware
+        subagents = [
+            {
+                "name": "worker",
+                "description": "test worker",
+                "system_prompt": "do work",
+                "model": GenericFakeChatModel(messages=iter([AIMessage(content="ok")])),
+                "tools": [],
+            },
+        ]
+
+        middleware = patched_cls(backend=StateBackend(), subagents=subagents)
+        assert middleware.system_prompt.startswith(factory_module._COMPACT_TASK_SYSTEM_PROMPT)
+
+        explicit = patched_cls(backend=StateBackend(), subagents=subagents, system_prompt="custom prompt")
+        assert explicit.system_prompt.startswith("custom prompt")
+    finally:
+        deepagents_graph.SubAgentMiddleware = original_subagent_middleware
         factory_module._THIRD_PARTY_PROMPTS_PATCHED = original_flag
 
 
@@ -1248,3 +1345,115 @@ def test_build_compression_middleware_should_prefer_compression_llm_when_separat
 
     assert len(created_configs) == 1
     assert created_configs[0] is compression_llm_config
+
+
+class _CaptureDeepAgent:
+    def __init__(self) -> None:
+        self.middleware: list = []
+
+    def __call__(self, **kwargs):
+        self.middleware = kwargs.get("middleware", [])
+        return SimpleNamespace()
+
+
+class _CaptureStateSchemaDeepAgent:
+    def __init__(self) -> None:
+        self.state_schema: Any = None
+
+    def __call__(self, state_schema=None, **kwargs):
+        self.state_schema = state_schema
+        return SimpleNamespace()
+
+
+async def _run_create_with_fake_deepagents(
+    monkeypatch: pytest.MonkeyPatch,
+    dist_version: str,
+    capture: Any,
+) -> None:
+    class _DummyMCP:
+        module_map: dict[str, str] = {}
+
+        async def tools(self):
+            return []
+
+    monkeypatch.setattr(factory_module, "get_dist_version", lambda _name: dist_version)
+    monkeypatch.setattr(factory_module, "create_deep_agent", capture)
+    await AgentFactory(llm_factory=_DummyLLMFactory()).create(
+        config=SimpleNamespace(
+            name="todo-probe",
+            prompt="test prompt",
+            llm=SimpleNamespace(),
+            tools=None,
+        ),
+        mcp_client=_DummyMCP(),
+        llm_config=SimpleNamespace(),
+    )
+
+
+async def _create_with_fake_deepagents(monkeypatch: pytest.MonkeyPatch, dist_version: str) -> list:
+    capture = _CaptureDeepAgent()
+    await _run_create_with_fake_deepagents(monkeypatch, dist_version, capture)
+    return [type(m).__name__ for m in capture.middleware]
+
+
+@pytest.mark.asyncio
+async def test_agent_factory_should_not_self_mount_todo_middleware_when_deepagents_below_0_7(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    factory_module.patch_third_party_prompt_defaults()
+    names = await _create_with_fake_deepagents(monkeypatch, "0.6.12")
+    assert not any("TodoList" in name for name in names)
+
+
+@pytest.mark.asyncio
+async def test_agent_factory_should_self_mount_todo_middleware_when_deepagents_at_least_0_7(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    factory_module.patch_third_party_prompt_defaults()
+    names = await _create_with_fake_deepagents(monkeypatch, "0.7.10")
+    assert any("TodoList" in name for name in names)
+
+
+@pytest.mark.asyncio
+async def test_agent_factory_should_pass_state_schema_when_deepagents_supports_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    factory_module.patch_third_party_prompt_defaults()
+    capture = _CaptureStateSchemaDeepAgent()
+    await _run_create_with_fake_deepagents(monkeypatch, "0.6.12", capture)
+    assert capture.state_schema is factory_module.AgentState
+
+
+class _SkillsLikeState(TypedDict):
+    skills_metadata: list[str]
+
+
+class _ExtraChannelMiddleware(AgentMiddleware):
+    """Middleware writing a non-standard channel, mirroring skills/summarization."""
+
+    state_schema = _SkillsLikeState
+
+    def before_agent(self, state, runtime):
+        return {"skills_metadata": ["demo"]}
+
+
+class _ToolBindingFakeModel(GenericFakeChatModel):
+    def bind_tools(self, tools, **kwargs):
+        return self
+
+
+def test_create_deep_agent_should_merge_middleware_channels_with_msagent_state_schema() -> None:
+    """Real deepagents (not stubbed): msagent's AgentState must be merged with
+    middleware-declared channels, not used as a replacement schema, so agents
+    with skills/compression enabled can build and run a full turn.
+    """
+    model = _ToolBindingFakeModel(messages=iter([AIMessage(content="ok")]))
+    agent = factory_module.create_deep_agent(
+        model=model,
+        backend=StateBackend(),
+        state_schema=factory_module.AgentState,
+        middleware=[_ExtraChannelMiddleware()],
+    )
+    result = asyncio.run(agent.ainvoke({"messages": [HumanMessage("hi")]}))
+    assert result["skills_metadata"] == ["demo"]
+    assert [m.content for m in result["messages"]] == ["hi", "ok"]

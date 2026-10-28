@@ -18,6 +18,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -244,7 +245,7 @@ def test_msprof_analyze_cli_help_is_available(
     output, content = _tool_output(tool_result, "execute")
     normalized = content.casefold()
     assert output.get("is_error") is False, f"msprof-analyze --version 执行失败: {output!r}"
-    assert "version" in normalized, f"输出不是 msprof-analyze 版本信息: {content!r}"
+    assert re.search(r"msprof-analyze\s+v?\d+(\.\d+)+", normalized), f"输出不是 msprof-analyze 版本信息: {content!r}"
     assert "command succeeded with exit code 0" in normalized, f"msprof-analyze 没有报告成功退出码 0: {content!r}"
     for error_text in ("command not found", "no such file"):
         assert error_text not in normalized, f"msprof-analyze CLI 在目标环境中不可用: {content!r}"

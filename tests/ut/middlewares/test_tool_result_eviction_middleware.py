@@ -32,11 +32,11 @@ class _FakeBackend:
 
     def write(self, path: str, content: str):
         self.writes.append((path, content))
-        return SimpleNamespace(error=None, files_update={path: {"content": content}})
+        return SimpleNamespace(error=None, path=path, files_update={path: {"content": content}})
 
     async def awrite(self, path: str, content: str):
         self.writes.append((path, content))
-        return SimpleNamespace(error=None, files_update={path: {"content": content}})
+        return SimpleNamespace(error=None, path=path, files_update={path: {"content": content}})
 
 
 def _make_request(tool_name: str) -> SimpleNamespace:
@@ -53,6 +53,18 @@ def _non_string_tool_message() -> ToolMessage:
         tool_call_id="call-structured",
         name="run_tool",
     )
+
+
+def _extract_evicted_message(result: ToolMessage | Command) -> ToolMessage:
+    """deepagents 0.4.x wraps eviction in a Command; >=0.6 returns the
+    replacement ToolMessage directly (files go through backend writes).
+    """
+    if isinstance(result, Command):
+        update = result.update or {}
+        assert isinstance(update.get("messages"), list)
+        assert update["messages"]
+        return update["messages"][0]
+    return result
 
 
 def test_evicts_large_tool_result_for_non_excluded_tool() -> None:
@@ -72,11 +84,9 @@ def test_evicts_large_tool_result_for_non_excluded_tool() -> None:
         lambda _request: message,
     )
 
-    assert isinstance(result, Command)
-    update = result.update or {}
     assert backend.writes
     assert backend.writes[0][0].startswith("/large_tool_results/")
-    evicted_message = update["messages"][0]
+    evicted_message = _extract_evicted_message(result)
     assert isinstance(evicted_message, ToolMessage)
     assert "Tool result too large" in str(evicted_message.content)
 
@@ -120,8 +130,10 @@ async def test_async_evicts_large_tool_result() -> None:
 
     result = await middleware.awrap_tool_call(_make_request("run_tool"), _handler)
 
-    assert isinstance(result, Command)
     assert backend.writes
+    evicted_message = _extract_evicted_message(result)
+    assert isinstance(evicted_message, ToolMessage)
+    assert "Tool result too large" in str(evicted_message.content)
 
 
 def test_normalizes_non_string_tool_message_content() -> None:

@@ -23,9 +23,9 @@ import logging
 import string
 import os
 import tempfile
-from functools import partial
 from fnmatch import fnmatch
 from importlib import import_module
+from importlib.metadata import version as get_dist_version
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
@@ -37,8 +37,10 @@ from deepagents.middleware.summarization import SummarizationMiddleware
 import httpx
 from langchain.agents.middleware import ToolRetryMiddleware
 from langchain.agents.middleware.types import AgentMiddleware
+from packaging.version import Version
 
 from msagent.agents.local_context import ensure_local_context_prompt
+from msagent.agents.state import AgentState
 from msagent.configs import AgentConfig, BaseAgentConfig, CompressionConfig, RetryPolicyConfig, SubAgentConfig
 from msagent.core.constants import CONFIG_CONVERSATION_HISTORY_DIR
 from msagent.llms.factory import LLMFactory
@@ -77,6 +79,9 @@ _TAVILY_KEY_VALIDATION_CACHE: dict[str, bool] = {}
 _SEARCH_TOOL_NAME_KEYWORDS = ("search", "web_search")
 _SEARCH_TOOL_DESCRIPTION_KEYWORDS = ("search", "web", "internet", "query")
 _THIRD_PARTY_PROMPTS_PATCHED = False
+_TODO_MIDDLEWARE_FACTORY: Callable[[], AgentMiddleware] | None = None
+
+
 _DEFAULT_MODEL_RETRY_ON_EXCEPTIONS = (
     "httpx.ReadTimeout",
     "asyncio.TimeoutError",
@@ -313,9 +318,23 @@ class _FilteredSkillsMiddleware(SkillsMiddleware):
         return {"skills_metadata": self._sorted_filtered_skills(list(update.get("skills_metadata", [])), runtime)}
 
 
+def _deepagents_dropped_todo_middleware() -> bool:
+    """deepagents >= 0.7 no longer injects TodoListMiddleware, so the todo
+    tool must be provided by msagent's own middleware stack.
+    """
+    try:
+        return Version(get_dist_version("deepagents")) >= Version("0.7.0")
+    except Exception:
+        logger.warning(
+            "Failed to detect deepagents version; assuming TodoListMiddleware is provided by deepagents itself",
+            exc_info=True,
+        )
+        return False
+
+
 def patch_third_party_prompt_defaults() -> None:
     """Patch verbose third-party prompts with compact project defaults."""
-    global _THIRD_PARTY_PROMPTS_PATCHED
+    global _THIRD_PARTY_PROMPTS_PATCHED, _TODO_MIDDLEWARE_FACTORY
     if _THIRD_PARTY_PROMPTS_PATCHED:
         return
 
@@ -323,7 +342,8 @@ def patch_third_party_prompt_defaults() -> None:
     import deepagents.middleware.filesystem as deepagents_filesystem
     import deepagents.middleware.memory as deepagents_memory
     import deepagents.middleware.subagents as deepagents_subagents
-    from langchain.agents.middleware.todo import TodoListMiddleware, WRITE_TODOS_TOOL_DESCRIPTION
+    from langchain.agents.middleware.todo import WRITE_TODOS_TOOL_DESCRIPTION
+    from langchain.agents.middleware.todo import TodoListMiddleware as _LangChainTodoListMiddleware
 
     filesystem_system_prompt = "\n\n".join(
         (
@@ -340,19 +360,37 @@ def patch_third_party_prompt_defaults() -> None:
     ):
         setattr(module, attr, prompt)
 
-    deepagents_graph.FilesystemMiddleware = partial(
-        deepagents_filesystem.FilesystemMiddleware,
-        system_prompt=filesystem_system_prompt,
-    )
-    deepagents_graph.TodoListMiddleware = partial(
-        TodoListMiddleware,
-        system_prompt=_COMPACT_TODO_SYSTEM_PROMPT,
-        tool_description=WRITE_TODOS_TOOL_DESCRIPTION,
-    )
-    deepagents_graph.SubAgentMiddleware = partial(
-        deepagents_subagents.SubAgentMiddleware,
-        system_prompt=_COMPACT_TASK_SYSTEM_PROMPT,
-    )
+    # deepagents resolves these middleware through module globals at both
+    # construction and isinstance checks, so the replacements must stay real
+    # classes; partials would break `isinstance()` in the 0.7.x graph builder.
+    class FilesystemMiddleware(deepagents_filesystem.FilesystemMiddleware):
+        """FilesystemMiddleware defaulting to msagent's compact filesystem prompt."""
+
+        def __init__(self, *args, **kwargs):
+            kwargs.setdefault("system_prompt", filesystem_system_prompt)
+            super().__init__(*args, **kwargs)
+
+    deepagents_graph.FilesystemMiddleware = FilesystemMiddleware
+
+    class TodoListMiddleware(_LangChainTodoListMiddleware):
+        """TodoListMiddleware defaulting to msagent's compact todo prompt."""
+
+        def __init__(self, *args, **kwargs):
+            kwargs.setdefault("system_prompt", _COMPACT_TODO_SYSTEM_PROMPT)
+            kwargs.setdefault("tool_description", WRITE_TODOS_TOOL_DESCRIPTION)
+            super().__init__(*args, **kwargs)
+
+    deepagents_graph.TodoListMiddleware = TodoListMiddleware
+    _TODO_MIDDLEWARE_FACTORY = TodoListMiddleware
+
+    class SubAgentMiddleware(deepagents_subagents.SubAgentMiddleware):
+        """SubAgentMiddleware defaulting to msagent's compact task prompt."""
+
+        def __init__(self, *args, **kwargs):
+            kwargs.setdefault("system_prompt", _COMPACT_TASK_SYSTEM_PROMPT)
+            super().__init__(*args, **kwargs)
+
+    deepagents_graph.SubAgentMiddleware = SubAgentMiddleware
 
     _THIRD_PARTY_PROMPTS_PATCHED = True
 
@@ -535,6 +573,8 @@ class AgentFactory:
             middleware.append(model_retry_middleware)
 
         middleware.append(_SystemMessageMiddleware())
+        if _deepagents_dropped_todo_middleware() and _TODO_MIDDLEWARE_FACTORY is not None:
+            middleware.append(_TODO_MIDDLEWARE_FACTORY())
 
         compression_middleware = None
         if needs_conversation_history:
@@ -560,6 +600,13 @@ class AgentFactory:
             "name": config.name,
             "middleware": middleware,
         }
+        # deepagents 0.6+ stores messages in a DeltaChannel instead of
+        # materializing them in checkpoint channel_values, which breaks direct
+        # state reads (threads/offload). An explicit state_schema restores the
+        # legacy layout. Supported versions (>=0.6.6) all accept this kwarg;
+        # anything older fails loudly at graph build time instead of silently
+        # degrading.
+        kwargs["state_schema"] = AgentState
         if deepagents_subagents:
             kwargs["subagents"] = deepagents_subagents
         if interrupt_on:
