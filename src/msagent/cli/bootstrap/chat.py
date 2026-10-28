@@ -20,6 +20,9 @@ from msagent.cli.bootstrap.timer import enable_timer
 from msagent.cli.core.context import Context
 from msagent.cli.core.session import Session
 from msagent.cli.theme import console
+from msagent.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 async def handle_chat_command(args) -> int:
@@ -62,6 +65,7 @@ async def handle_chat_command(args) -> int:
     except KeyboardInterrupt:
         return 0
     except Exception as e:
+        logger.exception("Chat session startup failed")
         console.print_error(f"Error starting chat session: {e}")
         console.print("")
         return 1
