@@ -21,24 +21,24 @@
 
 #### 2.2.1 描述目标和数据
 
-![描述目标和数据](../figures/best_practices/nan_prompt.jpg)
+![描述目标和数据](../figures/best_practices/nan_prompt.png)
 
 #### 2.2.2 讨论确定分析步骤
 
-![讨论确定分析步骤](../figures/best_practices/nan_plan.jpg)
+![讨论确定分析步骤](../figures/best_practices/nan_plan.png)
 
 #### 2.2.3 得到agent分析结论
 
-![得到agent分析结论](../figures/best_practices/nan_result.jpg)
+![得到agent分析结论](../figures/best_practices/nan_result.png)
 
 #### 2.2.4 核对输入无NaN
 
-![输入无NaN](../figures/best_practices/nan_dump_1.jpg)
+![输入无NaN](../figures/best_practices/nan_dump_1.png)
 
 #### 2.2.5 核对输出为NaN
 
-![输出为NaN](../figures/best_practices/nan_dump_2.jpg)
+![输出为NaN](../figures/best_practices/nan_dump_2.png)
 
 #### 2.2.6 得到分析报告
 
-![分析报告](../figures/best_practices/nan_report.jpg)
+![分析报告](../figures/best_practices/nan_report.png)

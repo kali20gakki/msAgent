@@ -4,7 +4,7 @@ This section uses a model that shows NaN overflow in the first training step on 
 
 ## 1. Background
 
-A model shows NaN overflow in the first training step on 512 devices. You need to locate the source device and the root-cause operator.
+A model shows NaN overflow in the first training step on 512 devices. You need to locate the source Device and the root-cause operator.
 
 ## 2. Localization Steps
 
@@ -21,24 +21,24 @@ A model shows NaN overflow in the first training step on 512 devices. You need t
 
 #### 2.2.1 Describing the Goal and the Data
 
-![Describe the goal and the data](../figures/best_practices/nan_prompt.jpg)
+![Describe the goal and the data](../figures/best_practices/nan_prompt.png)
 
 #### 2.2.2 Discussing and Determining the Analysis Steps
 
-![Discuss and determine the analysis steps](../figures/best_practices/nan_plan.jpg)
+![Discuss and determine the analysis steps](../figures/best_practices/nan_plan.png)
 
 #### 2.2.3 Obtaining the Analysis Conclusion of the Agent
 
-![Obtain the analysis conclusion of the agent](../figures/best_practices/nan_result.jpg)
+![Obtain the analysis conclusion of the agent](../figures/best_practices/nan_result.png)
 
 #### 2.2.4 Verifying That the Input Is Not NaN
 
-![The input is not NaN](../figures/best_practices/nan_dump_1.jpg)
+![The input is not NaN](../figures/best_practices/nan_dump_1.png)
 
 #### 2.2.5 Verifying That the Output Is NaN
 
-![The output is NaN](../figures/best_practices/nan_dump_2.jpg)
+![The output is NaN](../figures/best_practices/nan_dump_2.png)
 
 #### 2.2.6 Obtaining the Analysis Report
 
-![Analysis report](../figures/best_practices/nan_report.jpg)
+![Analysis report](../figures/best_practices/nan_report.png)

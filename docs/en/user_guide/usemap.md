@@ -8,19 +8,19 @@ Once you enter the interactive session, you can type your questions directly, or
 
 | Command | Description |
 |---|---|
-| /hotkeys | View keyboard shortcut help. |
-| /agents | Open the agent selector. Switching starts a new session and records the current agent in the workspace project state. |
-| /model | Open the model selector. |
-| /threads | Browse and resume historical conversation threads. Threads that have been offloaded show `[history offloaded]`. |
-| /tools | View the currently available tools. |
-| /skills | Browse the currently available skills. |
+| `/hotkeys` | View keyboard shortcut help. |
+| `/agents` | Open the agent selector. Switching starts a new session and records the current agent in the workspace project state. |
+| `/model` | Open the model selector. |
+| `/threads` | Browse and resume historical conversation threads. Threads that have been offloaded show `[history offloaded]`. |
+| `/tools` | View the currently available tools. |
+| `/skills` | Browse the currently available skills. |
 | /mcp | Manage the enabled state of MCP services. |
-| /remember <content> | Save long-term memory, such as user preferences, project background, or facts that subsequent sessions need to keep referencing. |
-| /showmemory | View the long-term memory saved for the current project. |
-| /offload | Compress and offload earlier conversation messages. |
-| /tool-output | Open the most recent expandable tool output. |
-| /clear | Clear the screen and start a new thread. |
-| /exit | Exit the current session. |
+| `/remember <content>` | Save long-term memory, such as user preferences, project background, or facts that subsequent sessions need to keep referencing. |
+| `/showmemory` | View the long-term memory saved for the current project. |
+| `/offload` | Compress and offload earlier conversation messages. |
+| `/tool-output` | Open the most recent expandable tool output. |
+| `/clear` | Clear the screen and start a new thread. |
+| `/exit` | Exit the current session. |
 
 ### 1.2 Feature Commands
 
@@ -64,8 +64,8 @@ When a tool call supports expandable viewing, press `Ctrl+O` or use `/tool-outpu
 
 | Command | Description |
 |---|---|
-| /remember <content> | Appends a long-term memory entry, for example `/remember the user wants all answers to use Chinese by default`. |
-| /showmemory | Displays the memory saved for the current project. If no valid memory exists yet, it prompts that there is no content. |
+| `/remember <content>` | Appends a long-term memory entry, for example `/remember the user wants all answers to use Chinese by default`. |
+| `/showmemory` | Displays the memory saved for the current project. If no valid memory exists yet, it prompts that there is no content. |
 
 Suitable content to save includes user preferences, project conventions, long-lived path instructions, troubleshooting conclusions, or background facts that later tasks need to keep referencing. Avoid saving sensitive information such as keys, tokens, and passwords.
 

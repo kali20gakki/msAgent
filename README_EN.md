@@ -1,4 +1,4 @@
-<h1 align="center" >MindStudio Agent</h1>
+﻿<h1 align="center" >MindStudio Agent</h1>
 
 <div align="center">
 <p><b><span style="font-size:20px;">One-Stop Debugging and Tuning for Ascend NPU Scenarios</span></b></p>
@@ -93,7 +93,7 @@ You are welcome to submit Issues, PRs, or new domain skills. For the complete pr
 🔹 [Release Notes](https://atomgit.com/Ascend/msagent/releases)<br>
 🔹 [License Notice](docs/en/legal/license_notice.md)<br>
 🔹 [Security Statement](docs/en/legal/SECURITY.md)<br>
-🔹 [Disclaimer](docs/en/legal/disclaimer.md)
+🔹 [Disclaimer](docs/en/legal/DISCLAIMER.md)
 
 ## 🤝 Suggestions and Communication
 
@@ -101,7 +101,7 @@ You are welcome to contribute to the community. If you have any questions or sug
 
 |                      Live Interaction (WeChat Group)                      |                      Official Updates (Official Account)                      | In-Depth Support (Assistant/Forum)                                        |
 | :----------------------------------------------------------: | :----------------------------------------------------------: | :----------------------------------------------------------- |
-| <img src="https://raw.atomgit.com/mengguangxin/docs/files/dev_0526/common/Writing_Template/figures/qr_code_wechat_work.png" width="120"><br><sub>*Scan the QR code to join the technical discussion group*</sub> | <img src="https://raw.atomgit.com/mengguangxin/docs/files/dev_0526/common/Writing_Template/figures/qr_code_wechat_official_account.png" width="120"><br><sub>*Scan the QR code to follow the official account*</sub> | Scan the QR codes to join the group and follow the official account, providing the fastest way to connect with MindStudio users and developers:<br> **Ask questions quickly:** Discuss technical issues with community members in real time.<br>**Stay up to date:** Get notifications about version releases and feature updates as soon as they are available.<br> **Share experience:** Exchange best practices and hands-on experience with developers.  <br> <br> **More support channels**: 👉 Ascend Assistant: [![WeChat](https://img.shields.io/badge/WeChat-07C160?style=flat-square&logo=wechat&logoColor=white)](https://atomgit.com/Ascend/msit/blob/master/docs/zh/figures/readme/xiaozhushou.png) 👉 Ascend Forum: [![Website](https://img.shields.io/badge/Website-%231e37ff?style=flat-square&logo=RSS&logoColor=white)](https://www.hiascend.com/forum/) |
+| <img src="https://raw.gitcode.com/Ascend/docs/files/master/common/Writing_Template/figures/qr_code_wechat_work.png" width="120"><br><sub>*Scan the QR code to join the technical discussion group*</sub> | <img src="https://raw.gitcode.com/Ascend/docs/files/master/common/Writing_Template/figures/qr_code_wechat_official_account.png" width="120"><br><sub>*Scan the QR code to follow the official account*</sub> | Scan the QR codes to join the group and follow the official account, providing the fastest way to connect with MindStudio users and developers:<br> **Ask questions quickly:** Discuss technical issues with community members in real time.<br>**Stay up to date:** Get notifications about version releases and feature updates as soon as they are available.<br> **Share experience:** Exchange best practices and hands-on experience with developers.  <br> <br> **More support channels**: 👉 Ascend Assistant: [![WeChat](https://img.shields.io/badge/WeChat-07C160?style=flat-square&logo=wechat&logoColor=white)](https://atomgit.com/Ascend/msit/blob/master/docs/zh/figures/readme/xiaozhushou.png) 👉 Ascend Forum: [![Website](https://img.shields.io/badge/Website-%231e37ff?style=flat-square&logo=RSS&logoColor=white)](https://www.hiascend.com/forum/) |
 
 ## 🙏 Acknowledgments
 
