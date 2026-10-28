@@ -1,4 +1,4 @@
-# Mindstudio Agent Skills
+# MindStudio Agent Skills
 
 ## 1. Skill 规范
 
@@ -94,7 +94,7 @@ description: 技能的详细描述，说明它做什么，以及什么时候使�
 | `ops-performance-tuning` | 对 AscendC/CATLASS/Triton/TileLang/PyPTO/SHMEM 算子做编译、profiling 与性能调优 | `对这个算子做性能分析并给出前后对比报告` |
 | `mssanitizer-basic-usage` | Ascend 算子内存、竞争、初始化、同步异常检测、分析和修复，支持各种昇腾官方算子库和自定义算子 | `检测这个算子是否存在异常` |
 | `msdebug-basic-usage` | Ascend 算子调试和 coredump 解析 | `调试这个算子，分析 coredump` |
-| `mstx-report-soft-sync` | 分析算子中自实现的软同步语义（核间 barrier/set-wait、卡间 barrier/signal），接入 mssanitizer Sanitizer 接口上报，避免 racecheck 对软同步误报 | `识别这个算子的软同步并接入 mstx 上报` |
+| `mstx-report-soft-sync` | 分析算子中自实现的软同步语义（核间 barrier/set-wait、卡间 barrier/signal），接入 msSanitizer Sanitizer 接口上报，避免 racecheck 对软同步误报 | `识别这个算子的软同步并接入 mstx 上报` |
 
 ### 2.5 文档审查 Skills
 

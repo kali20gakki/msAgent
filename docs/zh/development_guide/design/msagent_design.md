@@ -264,9 +264,9 @@ flowchart LR
     M --> M4["SubAgents: explorer"]
 
     S --> S1["Prompt: 重采样口径与数据规范"]
- 	  S --> S2["Tools: deepagents"]
- 	  S --> S3["Skills: 预检 / 归一化 / 响应重生成"]
- 	  S --> S4["SubAgents: explorer"]
+    S --> S2["Tools: deepagents"]
+    S --> S3["Skills: 预检 / 归一化 / 响应重生成"]
+    S --> S4["SubAgents: explorer"]
 ```
 
 7 个默认 Agent 共用同一套运行时骨架，在以下维度上形成差异化配置：

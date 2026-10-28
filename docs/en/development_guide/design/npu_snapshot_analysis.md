@@ -598,7 +598,7 @@ torch_npu.npu.memory._record_memory_history(enabled=None)
 
 ### Unit Tests
 
-Test files: `tests/skills/profiler/ascend-npu-snapshot-analyzer/scripts/test_snapshot_to_db.py` and `tests/skills/profiler/ascend-npu-snapshot-analyzer/scripts/test_snapshot_analyze.py`
+Test files: `tests/skills/ascend-npu-snapshot-analyzer/scripts/test_snapshot_to_db.py` and `tests/skills/profiler/ascend-npu-snapshot-analyzer/scripts/test_snapshot_analyze.py`
 
 **test_snapshot_to_db.py coverage**:
 

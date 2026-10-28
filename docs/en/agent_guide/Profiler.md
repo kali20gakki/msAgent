@@ -31,7 +31,7 @@
 |---|---|---|
 | MFU calculation | `Based on path/to/kernel_details.csv, calculate the MFU (10B3) of matmul and explain the basis of each calculation.` | <img src="../figures/kernel-details-mfu-file.png" alt="MFU calculation example" width="800"> |
 | Fast and slow device diagnosis | `Analyze whether /path/to/cluster_profiling/ contains fast and slow device issues, locate the abnormal rank, and provide possible causes.` | <img src="../figures/slow-rank-detect.png" alt="Fast and slow device diagnosis example" width="800"> |
-| Profiling data inspection | `Analyze whether the data in /path/to/xxx_ascend_pt/ was collected properly.` | <img src="../figures/profiler-data-check.jpg" alt="Data integrity verification example" width="800"> |
-| `msprof` tool usage consultation | `How do I compile the run package with msprof?` | <img src="../figures/msprof-build.jpg" alt="Tool consultation example" width="800"> |
+| Profiling data inspection | `Analyze whether the data in /path/to/xxx_ascend_pt/ was collected properly.` | <img src="../figures/profiler-data-check.png" alt="Data integrity verification example" width="800"> |
+| `msprof` tool usage consultation | `How do I compile the run package with msprof?` | <img src="../figures/msprof-build.png" alt="Tool consultation example" width="800"> |
 | DB custom content export to CSV | `Based on ascend_pytorch_profiler_0.db, extract the total duration of each operator type and output them to a CSV file in descending order.` | <img src="../figures/db-export.png" alt="Data export example" width="800"> |
 | VERL reinforcement learning duration breakdown | `Based on ascend_pytorch_profiler_0.db, help me analyze the duration of each RL stage and output a breakdown report` | <img src="../figures/profiling_breakdown.png" alt="Duration breakdown example" width="800"> |

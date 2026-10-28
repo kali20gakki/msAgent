@@ -73,6 +73,6 @@ retry:
 ## 3. 注意事项
 
 - `retry.model.timeout` 为 `null` 时，使用 LLM 自身配置超时。
-- `retry.enabled=false` 时，不挂载 `ToolRetryMiddleware`，且模型重试数置为 `0`。
+- `retry.enabled=false` 时，不挂载 `ToolRetryMiddleware`，且模型重试次数置为 `0`。
 - `tool.tools` 为 `null` 时，表示对所有工具生效。
 - `tool.retry_on` 使用异常类名字符串；当前支持解析内置异常名与 `module.ClassName` 形式。

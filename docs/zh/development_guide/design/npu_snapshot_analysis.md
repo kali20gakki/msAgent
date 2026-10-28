@@ -598,7 +598,7 @@ torch_npu.npu.memory._record_memory_history(enabled=None)
 
 ### 单元测试
 
-测试文件：`tests/skills/profiler/ascend-npu-snapshot-analyzer/scripts/test_snapshot_to_db.py`、`tests/skills/profiler/ascend-npu-snapshot-analyzer/scripts/test_snapshot_analyze.py`
+测试文件：`tests/skills/ascend-npu-snapshot-analyzer/scripts/test_snapshot_to_db.py`、`tests/skills/profiler/ascend-npu-snapshot-analyzer/scripts/test_snapshot_analyze.py`
 
 **test_snapshot_to_db.py 覆盖范围**：
 

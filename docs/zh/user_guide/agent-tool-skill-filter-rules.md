@@ -111,7 +111,7 @@ skills:
 启动后询问：
 
 ```text
-你有哪些mcp、tool、skills
+你有哪些MCP、tool、skills
 ```
 
 预期：

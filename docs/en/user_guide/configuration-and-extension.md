@@ -35,15 +35,15 @@ The runtime generates the following files or directories on demand:
 
 | Path | Description |
 |---|---|
-| ~/.msagent/state/projects/<project-id>/project.json | Working directory identifier, along with the current agent of the project and the model preferences of each agent |
-| ~/.msagent/state/projects/<project-id>/checkpoints.sqlite | Checkpoint database of the current project |
-| ~/.msagent/state/projects/<project-id>/history | Input history of the current project |
-| ~/.msagent/state/projects/<project-id>/memory.md | Long-term memory of the current project |
-| ~/.msagent/state/projects/<project-id>/conversation_history/ | Conversation history of the current project |
-| ~/.msagent/state/projects/<project-id>/audit_log/ | Audit log of the current project |
-| ~/.msagent/cache/mcp/ | Global MCP runtime cache |
-| ~/.msagent/oauth/mcp/ | Global MCP OAuth data |
-| ~/.msagent/logs/ | Global log directory |
+| `~/.msagent/state/projects/<project-id>/project.json` | Working directory identifier, along with the current agent of the project and the model preferences of each agent |
+| `~/.msagent/state/projects/<project-id>/checkpoints.sqlite` | Checkpoint database of the current project |
+| `~/.msagent/state/projects/<project-id>/history` | Input history of the current project |
+| `~/.msagent/state/projects/<project-id>/memory.md` | Long-term memory of the current project |
+| `~/.msagent/state/projects/<project-id>/conversation_history/` | Conversation history of the current project |
+| `~/.msagent/state/projects/<project-id>/audit_log/` | Audit log of the current project |
+| `~/.msagent/cache/mcp/` | Global MCP runtime cache |
+| `~/.msagent/oauth/mcp/` | Global MCP OAuth data |
+| `~/.msagent/logs/` | Global log directory |
 
 ## 3. Project Long-Term Memory
 

@@ -24,4 +24,4 @@ Directly provide the operator `msprof op` data from on-board and simulation runs
 
 | Scenario | Example Prompt | Sample Output |
 |-----------|-----------------------------------|-----------------------------------------------------------------------------|
-| End-to-end operator performance optimization | `Perform end-to-end performance optimization based on the operator directory. The operator kernel function is xxx.cpp.` | <img src="../figures/icarus_e2e_tuning.jpg" alt="MsOpProf adaptation example" width="800"> |
+| End-to-end operator performance optimization | `Perform end-to-end performance optimization based on the operator directory. The operator kernel function is xxx.cpp.` | <img src="../figures/icarus_e2e_tuning.png" alt="MsOpProf adaptation example" width="800"> |

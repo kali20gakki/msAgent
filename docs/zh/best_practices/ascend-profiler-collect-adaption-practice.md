@@ -1,12 +1,12 @@
 # torch_npu.profiler 接口适配最佳实践
 
-## 1. 推理场景 `sglang` 框架适配 `torch_npu.profiler` 接口
+## 1. 推理场景 `SGLang` 框架适配 `torch_npu.profiler` 接口
 
-以推理场景的 `sglang` 框架为例，展示如何通过 msagent 的 `ascend-profiler-collect-adaption` Skill，端到端完成 `torch_npu.profiler` 接口适配。
+以推理场景的 `SGLang` 框架为例，展示如何通过 msagent 的 `ascend-profiler-collect-adaption` Skill，端到端完成 `torch_npu.profiler` 接口适配。
 
 ### 1.1 流程
 
-1. 用户提供 `sglang` 框架代码，并说明需要接入 `torch_npu.profiler`。
+1. 用户提供 `SGLang` 框架代码，并说明需要接入 `torch_npu.profiler`。
 2. msagent 调用 `ascend-profiler-collect-adaption` Skill，识别推理场景的真实启动入口、参数解析位置和 profiler 注入点。
 3. 在不改动原有业务逻辑的前提下，补充 `torch_npu.profiler` 相关参数、默认关闭配置和采集调用逻辑。
 4. 进入验证输出阶段，检查 profiler 参数是否已完成透传，并确认从外部参数到核心采集代码的整条链路已打通。
@@ -14,7 +14,7 @@
 
 ### 1.2 效果演示
 
-![推理场景sglang框架接口适配流程](../figures/best_practices/sglang_torch_npu_profiler.gif)
+![推理场景SGLang框架接口适配流程](../figures/best_practices/sglang_torch_npu_profiler.gif)
 
 ---
 

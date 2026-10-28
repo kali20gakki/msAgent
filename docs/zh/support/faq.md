@@ -17,7 +17,7 @@
 - 用户安装的 Skills
 - 日志、缓存、会话历史和 checkpoint 数据
 
-内置 Agent / SubAgent 定义和 Prompt 默认由安装包直接提供，不会在首次启动时复制到这里。当前 workspace 选择的 Agent 和 Model 记录在对应项目的 `project.json` 中。
+内置 Agent / SubAgent 定义和 Prompt 默认由安装包直接提供，不会在首次启动时复制到这里。当前 Workspace 选择的 Agent 和 Model 记录在对应项目的 `project.json` 中。
 
 更完整的目录说明见 [配置与扩展](../user_guide/configuration-and-extension.md)。
 

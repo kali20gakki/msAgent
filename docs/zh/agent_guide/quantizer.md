@@ -18,7 +18,7 @@
 
 ## 3. 前置准备
 
-- 请准备推理运行环境，推荐使用 vllm-ascend 镜像，使用 Docker 安装 vllm-ascend 指导：[vllm-ascend安装](https://docs.vllm.ai/projects/vllm-ascend-cn/zh-cn/latest/installation.html#set-up-using-docker)，推荐在容器内安装 msagent 并使用 Quantizer
+- 请准备推理运行环境，推荐使用 vLLM-Ascend 镜像，使用 Docker 安装 vLLM-Ascend 指导：[vLLM-Ascend安装](https://docs.vllm.ai/projects/vllm-ascend-cn/zh-cn/latest/installation.html#set-up-using-docker)，推荐在容器内安装 msagent 并使用 Quantizer
 - 请根据模型安装合适的 transformers 版本，特殊说明：如果 msModelSlim 模型量化与推理引擎服务化要求的 transformers 版本不一致，可以将相关信息告知 Agent，让其自行管理使用对应版本。
 - 量化调优需在容器内安装 msModelSlim；安装指导见 [msModelSlim 安装](https://gitcode.com/Ascend/msmodelslim/blob/26.2.0/docs/zh/install_guide/install_guide.md)
 - 调优评测依赖 AISBench 评测服务，安装与使用说明见其 [README](https://github.com/AISBench/benchmark/blob/main/README.md)；评测所需数据集（如 gpqa、aime25 等）须自行准备，可参考 [AISBench 数据集准备指南](https://yh-ais-bench-benchmark.readthedocs.io/zh-cn/latest/base_tutorials/all_params/datasets.html)
