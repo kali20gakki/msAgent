@@ -2,9 +2,11 @@ name: PR-pipeline_msagent
 
 on:
   # PR 流水线通过 PR 评论 /compile 触发 ，不在 PR 打开/更新时自动运行
-  # pull_request:
-  #   types: [open, update]
-  #   branches: [ '*' ]
+  pull_request:
+    types: [open, update]
+    branches: [ 'master' ]
+    paths:
+      - ".gitcode/**"
   pr_comment:
     types: [created]
     keyword: '^compile$'
@@ -65,21 +67,37 @@ stages:
                   - '!**/*.log'
                   - '!**/*.png'
                   - '!**/*.jpg'
+                  - '!**/*.jpeg'
+                  - '!**/*.gif'
+                  - '!**/*.webp'
+                  - '!**/*.svg'
+                  - '!**/*.puml'
                   - '!**/*.doc'
                   - '!**/*.eddx'
-                  - '!**/*.svg'
+                  - '!**/*.xlsx'
+                  - '!**/LICENSE'
+                  - '!docs/**/*.js'
+                  - '!docs/**/*.css'
+                  - '!docs/**/*.yaml'
+                  - '!docs/**/*.txt'
+                  - '!example/**/*.sh'
+                  - '!example/**/*.txt'
+                  - '!example/**/*.asc'
 
           - name: set build skip flag
             id: set-skip
+            env:
+              CHANGED_FILES: ${{ steps.filter.outputs.changed_files }}
+              NON_DOC: ${{ steps.filter.outputs.non-doc }}
             run: |
-              echo "changed: ${{ steps.filter.outputs.changed_files }}"
-              echo "non-doc: ${{ steps.filter.outputs.non-doc }}"
-              if [ "${{ steps.filter.outputs.non-doc }}" = "true" ]; then
+              echo "changed: $CHANGED_FILES"
+              echo "non-doc: $NON_DOC"
+              if [ "$NON_DOC" = "true" ]; then
                 echo "need_build=yes" >> "$ATOMGIT_OUTPUT"
               else
                 echo "need_build=no" >> "$ATOMGIT_OUTPUT"
               fi
-              echo "${{ steps.filter.outputs.changed_files }}" | tr -d '[]" ' | tr ',' '\n' > modify_files.txt
+              printf '%s' "$CHANGED_FILES" | tr -d '[]" ' | tr ',' '\n' | sed '/^$/d' > modify_files.txt
               cat modify_files.txt
 
       associate_pr_comment:
@@ -126,7 +144,7 @@ stages:
               ln -sf /usr/local/bin/python3.11 /usr/bin/python
               python --version
           - name: run pre-commit
-            uses: openlibing/pre-commit-action@v1.0.0
+            uses: openlibing/pre-commit-action@v1.0.3
             env:
               SKIP: clang-tidy
 
