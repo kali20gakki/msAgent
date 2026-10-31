@@ -124,6 +124,7 @@ stages:
     jobs:
       pre-commit:
         name: pre-commit
+        if: ${{ jobs.Detect_file_changes.outputs.need_build == 'yes' }}
         runs-on: [ self-hosted, default, x86, cpu=2 ]
         container:
           image: swr.cn-north-4.myhuaweicloud.com/mindspore/mindspore_python3.11:v0.1
@@ -150,6 +151,7 @@ stages:
 
       SCA:
         name: SCA
+        if: ${{ jobs.Detect_file_changes.outputs.need_build == 'yes' }}
         runs-on: [ self-hosted, default, x86, cpu=2 ]
         container:
           image: swr.cn-north-4.myhuaweicloud.com/mindspore/mindspore_python3.11:v0.1
@@ -164,6 +166,7 @@ stages:
 
       malicious-scan:
         name: antipoison
+        if: ${{ jobs.Detect_file_changes.outputs.need_build == 'yes' }}
         runs-on: [ self-hosted, default, x86, cpu=2 ]
         container:
           image: swr.cn-north-4.myhuaweicloud.com/mindspore/mindspore_python3.11:v0.1
