@@ -20,7 +20,7 @@ The following msModeling dedicated capabilities are currently integrated:
 - `msmodeling-throughput-optimizer-executor`: Completes parameters and summarizes results for throughput planning, hardware comparison, and aggregation, separation, and P:D ratio search.
 - `msmodeling-device-config`: Converts natural language hardware specifications into device profile modeling input and explicitly marks the items to be calibrated.
 - `msmodeling-optix-deploy`: Deploys and installs the `msmodeling optix` serving auto-optimization CLI tool, including repository checking, pip installation, and CLI verification.
-- `msmodeling-optix-param-recommend`: Recommends MindIE/vLLM serving auto-optimization parameters, search ranges, benchmark configurations, and `config.toml` snippets based on hardware, model, workload, and optimization objective.
+- `msmodeling-optix-param-recommend` <sup>Beta</sup>: Recommends MindIE/vLLM serving auto-optimization parameters, search ranges, benchmark configurations, and `config.toml` snippets based on hardware, model, workload, and optimization objective.
 
 ## Core Capabilities
 

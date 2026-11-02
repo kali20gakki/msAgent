@@ -706,7 +706,7 @@ msprof_mcp/
 
 ### 1. 参考资料
 
-- msprof-mcp 仓库: [https://gitcode.com/kali20gakki1/msprof_mcp](https://gitcode.com/kali20gakki1/msprof_mcp)
+- msprof-mcp 仓库: [https://pypi.org/project/msprof-mcp/](https://pypi.org/project/msprof-mcp/)
 - MCP 官方文档: [https://modelcontextprotocol.io/docs/getting-started/intro](https://modelcontextprotocol.io/docs/getting-started/intro)
 - Perfetto 官方文档: [https://perfetto.dev/docs/](https://perfetto.dev/docs/)
 - PerfettoSQL 语法: [https://perfetto.dev/docs/analysis/perfetto-sql-syntax](https://perfetto.dev/docs/analysis/perfetto-sql-syntax)

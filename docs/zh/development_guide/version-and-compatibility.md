@@ -6,11 +6,11 @@
 
 | 项目 | 说明 |
 |---|---|
-| 当前版本 | `0.1.2` |
+| 当前版本 | `26.1.3` |
 | 包名 | `mindstudio-agent` |
 | 命令行入口 | `msagent` |
 | Python 要求 | `>=3.11` |
-| 默认内置 MCP | `msprof-mcp==0.1.6` |
+| 默认内置 MCP | `msprof-mcp==0.1.8` |
 
 ## 当前支持的 LLM Provider
 
