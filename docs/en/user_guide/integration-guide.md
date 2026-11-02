@@ -15,20 +15,22 @@ The Skill implementations in msAgent follow the common conventions of Agent Skil
 
 ### 2.1 Method 1: npx skills (Recommended)
 
-This method applies to agents that support the `npx skills` workflow, such as Trae and OpenCode. You can install Skills with a single command:
+This method applies to agents that support the `npx skills` workflow, such as Trae and OpenCode. After cloning the repository, you can install a single Skill, multiple Skills, or all Skills as needed.
+
+The `-a` parameter specifies the target agent. Before running the following commands, replace `<agent>` with the name of the target agent, for example, `trae`, `opencode`, `claude`, `cursor`, or `windsurf`. For the list of supported agents, see the output of `npx skills --help`.
 
 ```bash
-git clone https://gitcode.com/Ascend/msagent.git
+git clone https://atomgit.com/Ascend/msagent.git
 cd msagent/skills
 
 # Install a single Skill
-npx skills add . --skill ascend-cluster-fast-slow-rank-detector -a trae -y
+npx skills add . --skill ascend-cluster-fast-slow-rank-detector -a <agent> -y
 
 # Install multiple Skills
-npx skills add . --skill ascend-communication-analysis --skill ascend-computation-analysis -a opencode -y
+npx skills add . --skill ascend-communication-analysis --skill ascend-computation-analysis -a <agent> -y
 
 # Install all Skills
-npx skills add . --all -a trae
+npx skills add . --all -a <agent>
 ```
 
 ### 2.2 Method 2: Manual Copy
@@ -36,7 +38,7 @@ npx skills add . --all -a trae
 This method does not depend on `npx` and works with any agent. After cloning the repository, copy the target Skill directory into the agent's skills scanning path:
 
 ```bash
-git clone https://gitcode.com/Ascend/msagent.git
+git clone https://atomgit.com/Ascend/msagent.git
 
 # opencode
 cp -r msagent/skills/ascend-profiler-db-explorer ~/.config/opencode/skills/
@@ -53,7 +55,7 @@ The currently available MCP services are as follows:
 
 | Service | Domain | Repository |
 |----------|------|---------------------------------------------------------|
-| msprof-mcp | Ascend Profiling data analysis | [link](https://gitcode.com/kali20gakki1/msprof_mcp.git) |
+| msprof-mcp | Ascend Profiling data analysis | [link](https://pypi.org/project/msprof-mcp/) |
 
 ### 3.1 msprof-mcp
 

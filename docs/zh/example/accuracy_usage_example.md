@@ -24,7 +24,7 @@ Agent：更新结果。
 
 人：查看分析文件【层名映射文件】，这下看着没什么问题了。
 
-<img src="../figures/accuracy_usage_example_2.png" width="1577" title="" crop="0,0,1,1" id="ueffb9a2d" class="ne-image">
+<img src="../figures/accuracy_usage_example_2.png" width="1577" title="" crop="0,0,1,1" id="ueffb9a2d-1" class="ne-image">
 
 ## 2. 查看分析报告中的分析逻辑和依据
 
@@ -58,8 +58,8 @@ Agent：更新结果。
 从数值验证看，Layer 1、23有较大问题。
 
 使用msprobe的分级可视化工具进行人工查看后发现
-<img src="../figures/accuracy_usage_example_3.png" width="1577" title="" crop="0,0,1,1" id="ueffb9a2d" class="ne-image">
-<img src="../figures/accuracy_usage_example_4.png" width="1577" title="" crop="0,0,1,1" id="ueffb9a2d" class="ne-image">
+<img src="../figures/accuracy_usage_example_3.png" width="1577" title="" crop="0,0,1,1" id="ueffb9a2d-2" class="ne-image">
+<img src="../figures/accuracy_usage_example_4.png" width="1577" title="" crop="0,0,1,1" id="ueffb9a2d-3" class="ne-image">
 
 1. Layer1、Layer23如果打开来看子模块，则结果能对上；
 

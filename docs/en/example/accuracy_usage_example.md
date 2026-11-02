@@ -24,7 +24,7 @@ Agent: Updates the results.
 
 User: Views the analysis file, the layer name mapping file. This time, it looks like there are no problems.
 
-<img src="../figures/accuracy_usage_example_2.png" width="1577" title="" crop="0,0,1,1" id="ueffb9a2d" class="ne-image">
+<img src="../figures/accuracy_usage_example_2.png" width="1577" title="" crop="0,0,1,1" id="ueffb9a2d-1" class="ne-image">
 
 ## 2. Viewing the Analysis Logic and Basis in the Analysis Report
 
@@ -58,8 +58,8 @@ Compare the results using the correct output index (`output.1`):
 According to the numerical verification, Layers 1 and 23 have significant problems.
 
 Manual inspection using the hierarchical visualization tool of msProbe revealed the following:
-<img src="../figures/accuracy_usage_example_3.png" width="1577" title="" crop="0,0,1,1" id="ueffb9a2d" class="ne-image">
-<img src="../figures/accuracy_usage_example_4.png" width="1577" title="" crop="0,0,1,1" id="ueffb9a2d" class="ne-image">
+<img src="../figures/accuracy_usage_example_3.png" width="1577" title="" crop="0,0,1,1" id="ueffb9a2d-2" class="ne-image">
+<img src="../figures/accuracy_usage_example_4.png" width="1577" title="" crop="0,0,1,1" id="ueffb9a2d-3" class="ne-image">
 
 1. When Layers 1 and 23 are expanded to view their submodules, the results match.
 
