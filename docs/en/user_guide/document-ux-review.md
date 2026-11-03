@@ -45,9 +45,3 @@ Local environment:
 
 Please output a detailed Chinese HTML report to `/home/msmonitor`, focusing on whether new users can complete the installation and reach a runnable state by following the documentation in the preceding environment.
 ```
-
-## 🖼️ Sample Results
-
-You can refer to the sample output: [msmonitor-review-run.html](../example/msmonitor-review-run.html).
-
-Because GitHub repository pages do not render this type of HTML report directly, you are advised to download the file to your local machine and open it directly in a browser to view the result.

@@ -155,7 +155,7 @@ For documentation PRs, you can build a Sphinx preview locally. For details, see 
 
 ### Documentation Contributions
 
-All documentation is maintained in the `docs/zh/` directory, organized by Quick Start, Agent Guide, User Guide, and Development Guide. When modifying the README, installation steps, or the Quick Start, you are advised to:
+All documentation is maintained in the `docs/en/` directory, organized by Quick Start, Agent Guide, User Guide, and Development Guide. When modifying the README, installation steps, or the Quick Start, you are advised to:
 
 1. Walk through the minimal workflow by following the [Quick Start Guide](../quick_start/msagent_quick_start.md).
 2. Use the built-in skill [document-ux-review](../user_guide/document-ux-review.md) to review the documentation onboarding experience.

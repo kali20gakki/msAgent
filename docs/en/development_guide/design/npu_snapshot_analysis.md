@@ -598,7 +598,7 @@ torch_npu.npu.memory._record_memory_history(enabled=None)
 
 ### Unit Tests
 
-Test files: `tests/skills/ascend-npu-snapshot-analyzer/scripts/test_snapshot_to_db.py` and `tests/skills/profiler/ascend-npu-snapshot-analyzer/scripts/test_snapshot_analyze.py`
+Test files: `tests/skills/ascend-npu-snapshot-analyzer/scripts/test_snapshot_to_db.py` and `tests/skills/ascend-npu-snapshot-analyzer/scripts/test_snapshot_analyze.py`
 
 **test_snapshot_to_db.py coverage**:
 
@@ -666,14 +666,14 @@ This tool fills the gap in **automated analysis** and **visualized reporting** f
 
 ---
 
-Appendix
+## Appendix
 
 **Reference links**:
 
 - PyTorch CUDACachingAllocator source code: https://github.com/pytorch/pytorch/blob/main/c10/cuda/CUDACachingAllocator.cpp
 - torch.cuda.memory documentation: https://pytorch.org/docs/stable/cuda.html#cuda-memory-management
 - PyTorch memory_viz tool: https://github.com/pytorch/pytorch/tree/main/torch/cuda/_memory_viz.py
-- ECharts official documentation: https://echarts.apache.org/zh/index.html
+- ECharts official documentation: https://echarts.apache.org/en/index.html
 - SQLite ATTACH DATABASE: https://www.sqlite.org/lang_attach.html
 
 **Glossary**:

@@ -83,10 +83,6 @@ skills:
 
 ## 5. 一份可直接实测的完整 yml
 
-可参考：
-
-- `resources/configs/default/agents/msagent-filter-smoke.yml`
-
 关键片段如下：
 
 ```yaml

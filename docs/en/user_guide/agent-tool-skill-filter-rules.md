@@ -83,10 +83,6 @@ skills:
 
 ## 5. Complete YAML Configuration Ready for Direct Testing
 
-For reference:
-
-- `resources/configs/default/agents/msagent-filter-smoke.yml`
-
 The key part is as follows:
 
 ```yaml

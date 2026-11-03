@@ -189,8 +189,6 @@ resources/configs/default/skills/
 
 Therefore, running from source and running from an installation share the same skills content. You no longer need to run `git submodule` synchronization separately.
 
-(custom-skill-guide)=
-
 ## 9. Adding a Custom Skill
 
 If you want to add a new skill to the current project, you are advised to place it directly in the repository root:

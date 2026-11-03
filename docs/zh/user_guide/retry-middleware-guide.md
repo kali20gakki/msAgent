@@ -1,4 +1,4 @@
-# Retry Middleware 使用指南（Deepagents/LangChain）
+# Retry Middleware 使用指南（deepagents/LangChain）
 
 `msagent` 当前只使用官方中间件：
 

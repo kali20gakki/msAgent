@@ -6,11 +6,11 @@ This document summarizes the version, runtime requirements, and compatibility in
 
 | Item | Description |
 |---|---|
-| Current version | 0.1.2 |
+| Current version | 26.1.3 |
 | Package name | mindstudio-agent |
 | CLI entry | msagent |
 | Python requirement | >=3.11 |
-| Default built-in MCP | msprof-mcp==0.1.6 |
+| Default built-in MCP | msprof-mcp==0.1.8 |
 
 ## Currently Supported LLM Providers
 

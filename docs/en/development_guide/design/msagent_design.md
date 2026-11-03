@@ -410,7 +410,7 @@ This means:
 - Packaged and source forms share a unified built-in skill distribution approach.
 - Skills describe their trigger semantics and execution requirements through `SKILL.md`, instead of being tightly bound to Python code entry points.
 
-As of the current repository state, 19 built-in skills with `SKILL.md` can be scanned in the root directory, reflecting the dual-layer positioning of msAgent as a "platform + domain knowledge base".
+As of the current repository state, 59 built-in skills with `SKILL.md` can be scanned in the root directory, reflecting the dual-layer positioning of msAgent as a "platform + domain knowledge base".
 
 #### 7.3 MCP Design
 

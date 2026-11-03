@@ -4,7 +4,7 @@ This document describes how to validate the ReadTheDocs documentation build loca
 
 ## Setting Up the Environment
 
-Ensure that Python 3.8+ and pip are installed.
+Ensure that Python 3.11+ and pip are installed.
 
 ## Installing Dependencies
 

@@ -1,4 +1,4 @@
-# Retry Middleware User Guide (Deep Agents/LangChain)
+# Retry Middleware User Guide (deepagents/LangChain)
 
 msAgent currently uses only official middleware:
 

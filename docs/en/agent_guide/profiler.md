@@ -10,13 +10,13 @@
 
 ## 2. Core Capabilities
 
-- Profiling data inspection and data quality verification
-- MFU calculation, formula explanation, and result interpretation
 - Analysis of fast and slow devices, slow nodes, and load imbalance in clusters
 - Identification of communication bottlenecks, operator hot spots, and host launch and scheduling issues
-- Structured analysis and export of deliverables such as DB, CSV, and Trace files
-- Breakdown of the durations of stages such as RL and inference based on **DB format** deliverables
-- Fact verification of Ascend official documentation, community resources, API and tool semantics, and sample and open-source code (the `ascend-knowledge` subagent is delegated to collect evidence and returns evidence with sources and version or branch information)
+- Structured analysis and export of deliverables such as DB, CSV, and Trace files <sup>Beta</sup>
+- Profiling data inspection and data quality verification <sup>Beta</sup>
+- MFU calculation, formula explanation, and result interpretation <sup>Beta</sup>
+- Breakdown of the durations of stages such as RL and inference based on **DB format** deliverables <sup>Beta</sup>
+- Fact verification of Ascend official documentation, community resources, API and tool semantics, and sample and open-source code (the `ascend-knowledge` subagent is delegated to collect evidence and returns evidence with sources and version or branch information) <sup>Beta</sup>
 
 ## 3. Recommended Usage
 
