@@ -92,6 +92,7 @@ description: 技能的详细描述，说明它做什么，以及什么时候使�
 | Skill | 作用 | 示例 prompt |
 | --- | --- | --- |
 | `msot-msopprof-operator-profiler` | 做 msprof op 算子分析 | `输出这个算子的瓶颈和优化建议` |
+| `msprof-op-simulator-pipeline-analysis` | 分析 SIMD/SIMT 仿真流水并生成 Markdown 报告和优化建议，经用户确认后修改代码、复测并生成优化对比报告；[案例工程由 msopprof 维护](https://gitcode.com/Ascend/msopprof/tree/master/example/sample_simd_vf_double_buffer) | `分析这个 SIMD/SIMT 算子的流水空泡，生成 Markdown 报告和优化建议，并询问是否实施代码优化` |
 | `ops-performance-tuning` | 对 AscendC/CATLASS/Triton/TileLang/PyPTO/SHMEM 算子做编译、profiling 与性能调优 | `对这个算子做性能分析并给出前后对比报告` |
 | `mssanitizer-basic-usage` | Ascend 算子内存、竞争、初始化、同步异常检测、分析和修复，支持各种昇腾官方算子库和自定义算子 | `检测这个算子是否存在异常` |
 | `msdebug-basic-usage` | Ascend 算子调试和 coredump 解析 | `调试这个算子，分析 coredump` |
