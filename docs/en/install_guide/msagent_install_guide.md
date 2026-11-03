@@ -172,7 +172,7 @@ The installer only writes the uv tool directory to the shell startup file and do
 
 Automatic migration of the `.msagent` directory of an old project is not provided at the current stage. When you upgrade or switch versions, retain the old directory. Do not delete the configuration directory as an upgrade step.
 
-When you upgrade the version, pay attention to version compatibility. For details, see the [Release Notes](https://atomgit.com/Ascend/release-management/blob/master/MindStudio/26.2.0/release_notes.md).
+When you upgrade the version, pay attention to version compatibility. For details, see the [Release Notes](https://atomgit.com/Ascend/release-management/blob/master/MindStudio/26.2.0/release_notes_en.md).
 
 ### 5.1 Checking the Current Installation Method
 

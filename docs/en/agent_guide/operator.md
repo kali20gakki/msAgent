@@ -18,7 +18,7 @@
 
 ## 3. Recommended Usage
 
-Directly provide the operator `msprof op` data from on-board and simulation runs, the operator kernel files used, and the directly executable operator directory.
+Directly provide the operator msProf op data from on-board and simulation runs, the operator kernel files used, and the directly executable operator directory.
 
 ## 4. Typical Results
 

@@ -706,7 +706,7 @@ Representative existing tests: `test_trace_view_analyze.py`
 
 ### 1. References
 
-- msprof-mcp repository: [https://atomgit.com/kali20gakki1/msprof_mcp](https://atomgit.com/kali20gakki1/msprof_mcp)
+- msprof-mcp repository: [https://pypi.org/project/msprof-mcp/](https://pypi.org/project/msprof-mcp/)
 - MCP official documentation: [https://modelcontextprotocol.io/docs/getting-started/intro](https://modelcontextprotocol.io/docs/getting-started/intro)
 - Perfetto official documentation: [https://perfetto.dev/docs/](https://perfetto.dev/docs/)
 - PerfettoSQL syntax: [https://perfetto.dev/docs/analysis/perfetto-sql-syntax](https://perfetto.dev/docs/analysis/perfetto-sql-syntax)
