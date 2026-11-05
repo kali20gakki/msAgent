@@ -210,9 +210,7 @@ resources/configs/default/skills/
 
 因此源码运行和安装运行共用同一份 Skills 内容，不再需要额外执行 `git submodule` 同步。
 
-(custom-skill-guide)=
-
-## 9. 添加自定义 Skill
+## 10. 添加自定义 Skill
 
 如果你希望在当前项目里扩展一个新的 Skill，推荐直接放在仓库根目录：
 
@@ -236,7 +234,7 @@ skills/
 - `profiler` 是分类
 - `my-skill` 是 skill 名称
 
-### 9.1 编写 `SKILL.md`
+### 10.1 编写 `SKILL.md`
 
 最小示例：
 
@@ -266,7 +264,7 @@ description: 用于处理某类固定任务的自定义 skill
 - `description` 建议填写，便于在 `/skills` 中识别
 - 如果需要脚本或模板，可以继续放在 skill 目录下，例如 `scripts/`、`templates/`
 
-### 9.2 让 Agent 能看到它
+### 10.2 让 Agent 能看到它
 
 只创建文件还不够，当前 agent 还需要在配置里放开这个 skill。
 
@@ -296,7 +294,7 @@ skills:
 
 这部分更完整的匹配语义，可参考 [Agent / Tool / Skill 过滤规则](agent-tool-skill-filter-rules.md)。
 
-### 9.3 验证是否生效
+### 10.3 验证是否生效
 
 启动 `msagent` 后，可以这样检查：
 
@@ -318,9 +316,9 @@ skills:
 
 (custom-skill-faq)=
 
-## 10. Skill 常见问题
+## 11. Skill 常见问题
 
-### 10.1 `/skills` 看不到新 Skill
+### 11.1 `/skills` 看不到新 Skill
 
 通常优先检查这几项：
 
@@ -328,7 +326,7 @@ skills:
 - 当前 agent 是否配置了对应的 `skills.patterns`
 - 是否被更高优先级目录中的同名 skill 覆盖
 
-### 10.2 Skill 存在，但 Agent 不会自动使用
+### 11.2 Skill 存在，但 Agent 不会自动使用
 
 这通常是以下原因之一：
 
