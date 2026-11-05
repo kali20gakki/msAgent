@@ -8,7 +8,7 @@
 
 同时支持[pip 安装](#32-pip-安装)与[源码安装](#33-源码安装)两种方式。
 
-> 一键安装走 uv 隔离工具环境，**卸载只能用 `uv tool uninstall mindstudio-agent`，`pip uninstall` 无效**；各方式的升级、卸载命令见[按安装方式选择升级与卸载命令](#52-按安装方式选择升级与卸载命令)。
+> 一键安装默认使用 uv 隔离工具环境；若 uv 安装失败并选择虚拟环境回退，则安装到独立 venv。请按实际安装方式卸载，命令见[按安装方式选择升级与卸载命令](#52-按安装方式选择升级与卸载命令)。
 
 ## 2. 环境要求
 
@@ -18,13 +18,14 @@
 
   用于满足 `msprof-mcp` 中 `trace_processor` 二进制依赖（建议操作系统：`Ubuntu >= 21.10`、`openEuler >= 21.09`，其他操作系统请自行查询）
 
-- 使用本工具前需要安装CANN，具体操作请参见《[CANN 快速安装](https://www.hiascend.com/zh/cann/download)》安装昇腾NPU驱动和CANN软件（包含Toolkit和ops包），并配置环境变量。
+- 在昇腾 NPU 环境中使用本工具前，需要安装昇腾 NPU 驱动和 CANN 软件（包含 Toolkit 和 ops 包），并配置环境变量。具体操作请参见《[CANN 快速安装](https://www.hiascend.com/zh/cann/download)》。
+- 在 Windows 上，安装并启动本工具无需预先安装昇腾 NPU 驱动或 CANN。
 
 ## 3. 安装方式
 
 ### 3.1 一键安装
 
-> **安装方式**：uv 隔离工具环境（安装器执行 `uv tool install -U --python 3.11 mindstudio-agent`），**不经过 pip**；升级、卸载只能用 uv 子命令，见[按安装方式选择升级与卸载命令](#52-按安装方式选择升级与卸载命令)。
+> **默认安装方式**：uv 隔离工具环境（安装器执行 `uv tool install`），不经过 pip。若 uv 安装失败，安装器通常会询问是否使用虚拟环境回退；设置 `MSAGENT_YES=1` 时会自动选择回退，设置 `MSAGENT_NO_FALLBACK=1` 时则跳过回退。回退会安装到独立 venv，默认路径为 `~\.msagent-venv`（Linux/macOS 为 `~/.msagent-venv`），也可通过 `MSAGENT_FALLBACK_VENV` 指定。升级、卸载命令见[按安装方式选择升级与卸载命令](#52-按安装方式选择升级与卸载命令)。
 
 安装器默认使用国内镜像（安装快）；若镜像尚未同步最新版本，会自动改用官方 PyPI 获取最新版。
 
@@ -56,6 +57,8 @@ msagent --version
 | `MSAGENT_INDEX` | 指定 PyPI 镜像地址，如 `MSAGENT_INDEX=https://pypi.org/simple` |
 | `MSAGENT_PYTHON` | 工具环境使用的 Python 版本（默认 `3.11`） |
 | `MSAGENT_NO_MODIFY_PATH` | 设为 `1` 时跳过 PATH 修改（由用户自行配置 PATH） |
+| `MSAGENT_NO_FALLBACK` | 设为 `1` 时，uv 安装失败后不询问是否回退到虚拟环境 |
+| `MSAGENT_FALLBACK_VENV` | 指定虚拟环境回退的安装路径（默认 Linux/macOS 为 `~/.msagent-venv`，Windows 为 `%USERPROFILE%\.msagent-venv`） |
 | `MSAGENT_YES` | 设为 `1` 时免交互自动执行（CI/无人值守场景） |
 
 > 提示：如需强制指定某个源，可设置 `MSAGENT_INDEX=<index>`。
@@ -166,6 +169,22 @@ msagent --help
 
 > 除非要自行管理 PATH，否则不要设置 `MSAGENT_NO_MODIFY_PATH=1`（见 §3.1 常用环境变量）。
 
+### 4.2 Windows 一键安装失败后如何清理
+
+安装失败后，可在 PowerShell 中执行以下命令移除 msagent 的 uv 工具环境（如果尚未安装成功，提示未找到工具可忽略）：
+
+```powershell
+uv tool uninstall mindstudio-agent
+```
+
+只有在 uv 安装失败后选择了虚拟环境回退时，才需要卸载该 venv 中的版本。默认路径如下；若设置过 `MSAGENT_FALLBACK_VENV`，请将命令中的路径替换为当时指定的实际路径：
+
+```powershell
+& "$env:USERPROFILE\.msagent-venv\Scripts\pip.exe" uninstall -y mindstudio-agent
+```
+
+以上操作不会卸载 uv 或 Python，也不会删除 `~\.msagent` 中的用户配置和运行数据。除非确认该虚拟环境只用于 msagent，否则不要直接删除整个目录。
+
 ## 5. 升级与卸载
 
 `msagent` 将用户配置和运行状态保存在 `MSAGENT_HOME`（默认 `~/.msagent/`），不会在工作目录生成新的 `.msagent/`。
@@ -179,18 +198,19 @@ msagent --help
 升级、卸载命令随安装方式不同而不同，先自检：
 
 ```shell
-uv tool list                # 含 mindstudio-agent → uv 工具方式（一键安装属于此类）
+uv tool list                # 含 mindstudio-agent → uv 工具方式（一键安装默认使用此方式）
 command -v msagent          # 指向 ~/.local/bin → uv 工具方式；指向 */venv/bin → 虚拟环境 pip
 pip show mindstudio-agent   # 有输出 → 该 pip 环境还装有一份（源码安装的默认落点）
 ```
 
-一键安装不在 pip 环境里留下 `mindstudio-agent`，对它执行 `pip uninstall mindstudio-agent` 只会提示 `Skipping mindstudio-agent as it is not installed`，卸载并未生效。
+一键安装默认使用 uv；只有 uv 安装失败且用户选择虚拟环境回退时，才会通过 pip 将其安装到 venv。对 uv 工具环境执行 `pip uninstall mindstudio-agent` 不会卸载该版本。
 
 ### 5.2 按安装方式选择升级与卸载命令
 
 | 安装方式 | 升级 | 卸载 |
 | --- | --- | --- |
-| 一键安装 / `uv tool install`（uv 工具方式） | 重跑一键安装命令，或 `uv tool upgrade mindstudio-agent` | `uv tool uninstall mindstudio-agent` |
+| 一键安装默认方式 / `uv tool install`（uv 工具方式） | 重跑一键安装命令，或 `uv tool upgrade mindstudio-agent` | `uv tool uninstall mindstudio-agent` |
+| 一键安装的虚拟环境回退 | 使用该 venv 的 pip 执行 `install -U mindstudio-agent` | 使用该 venv 的 pip 执行 `uninstall -y mindstudio-agent` |
 | 虚拟环境 + pip（如 `~/.msagent-venv`） | `~/.msagent-venv/bin/pip install -U mindstudio-agent` | `~/.msagent-venv/bin/pip uninstall -y mindstudio-agent` |
 | 当前 Python 环境 pip（源码安装） | 重新构建 wheel 后 `pip install -U mindstudio-agent` | `pip uninstall mindstudio-agent` |
 

@@ -172,3 +172,16 @@ echo "export PATH=\"$(uv tool dir --bin):\$PATH\"" >> ~/.bashrc  # 持久化
 ```
 
 Windows：PowerShell 用 `$env:PATH = "$(uv tool dir --bin);$env:PATH"`，cmd 用 `set PATH=<工具目录>;%PATH%`。详见[安装指南 §4.1](../install_guide/msagent_install_guide.md#41-安装后提示-command-not-found-怎么办)。
+
+## 11. Windows 执行 `irm ...install.ps1 | iex` 时提示 `Failed to build pydantic-core` 怎么办？
+
+这是 **uv 安装依赖时失败**，不是另一种安装器报错。日志显示 uv 首先从华为云 PyPI 索引解析和下载依赖；`zstandard` 没有可用的预编译包，uv 转而尝试本机编译，但因缺少 MSVC 失败。安装脚本随后切换到官方 PyPI 重试。日志中的 `Python reports SOABI: cp315-win_amd64` 表示 uv 使用了 Python 3.15；`pydantic-core` 构建时需要下载 Rust，但 `CERTIFICATE_VERIFY_FAILED` 表示本机网络或代理的证书校验拦截了下载，因此重试仍失败。
+
+推荐固定使用 Python 3.11 重试：
+
+```powershell
+$env:MSAGENT_PYTHON = '3.11'
+irm https://raw.gitcode.com/Ascend/msagent/raw/master/scripts/install.ps1 | iex
+```
+
+若必须使用 Python 3.15，则需安装 Visual C++ Build Tools、Rust，并配置 Python 信任当前网络代理的根证书。日志中先出现的 `zstandard` / MSVC 错误是镜像安装失败；继续看切换官方 PyPI 后的错误即可。
