@@ -8,7 +8,7 @@
 
 同时支持[pip 安装](#32-pip-安装)与[源码安装](#33-源码安装)两种方式。
 
-> 一键安装走 uv 隔离工具环境，**卸载只能用 `uv tool uninstall mindstudio-agent`，`pip uninstall` 无效**；各方式的升级、卸载命令见[§5.2](#52-按安装方式选择升级与卸载命令)。
+> 一键安装走 uv 隔离工具环境，**卸载只能用 `uv tool uninstall mindstudio-agent`，`pip uninstall` 无效**；各方式的升级、卸载命令见[按安装方式选择升级与卸载命令](#52-按安装方式选择升级与卸载命令)。
 
 ## 2. 环境要求
 
@@ -24,7 +24,7 @@
 
 ### 3.1 一键安装
 
-> **安装方式**：uv 隔离工具环境（安装器执行 `uv tool install -U --python 3.11 mindstudio-agent`），**不经过 pip**；升级、卸载只能用 uv 子命令，见[§5.2](#52-按安装方式选择升级与卸载命令)。
+> **安装方式**：uv 隔离工具环境（安装器执行 `uv tool install -U --python 3.11 mindstudio-agent`），**不经过 pip**；升级、卸载只能用 uv 子命令，见[按安装方式选择升级与卸载命令](#52-按安装方式选择升级与卸载命令)。
 
 安装器默认使用国内镜像（安装快）；若镜像尚未同步最新版本，会自动改用官方 PyPI 获取最新版。
 
@@ -46,7 +46,7 @@ irm https://raw.gitcode.com/Ascend/msagent/raw/master/scripts/install.ps1 | iex
 msagent --version
 ```
 
-> 若提示 `msagent: command not found`，按安装器日志末尾打印的命令执行（通常是 `source ~/.bashrc`）或重开终端，见[§4.1](#41-安装后提示-command-not-found-怎么办)。
+> 若提示 `msagent: command not found`，按安装器日志末尾打印的命令执行（通常是 `source ~/.bashrc`）或重开终端，见[安装后提示 command not found 怎么办](#41-安装后提示-command-not-found-怎么办)。
 
 #### 常用环境变量（可选）
 
@@ -85,7 +85,7 @@ msagent --version
 
 ### 3.3 源码安装
 
-> **安装方式**：`pip install` 到当前 Python 环境（镜像容器或虚拟环境）；升级用重新构建的 wheel 执行 `pip install -U`，卸载用该环境的 `pip uninstall mindstudio-agent`，见[§5.2](#52-按安装方式选择升级与卸载命令)。
+> **安装方式**：`pip install` 到当前 Python 环境（镜像容器或虚拟环境）；升级用重新构建的 wheel 执行 `pip install -U`，卸载用该环境的 `pip uninstall mindstudio-agent`，见[按安装方式选择升级与卸载命令](#52-按安装方式选择升级与卸载命令)。
 
 #### 3.3.1 环境准备
 

@@ -175,7 +175,7 @@ Skills 是项目最重要的扩展面之一。仓库根目录 `skills/` 为内�
 4. 启动 `msagent` 后通过 `/skills` 验证可见性
 5. 更新 [skills/README.md](../../../skills/README.md) 中的技能列表
 
-详细约定见 [配置与扩展 · 添加自定义 Skill](../user_guide/configuration-and-extension.md#9-添加自定义-skill) 与 [skills/README.md · 新增 Skill 建议流程](../../../skills/README.md)。
+详细约定见 [配置与扩展 · 添加自定义 Skill](../user_guide/configuration-and-extension.md#10-添加自定义-skill) 与 [skills/README.md · 新增 Skill 建议流程](../../../skills/README.md)。
 
 Skill 匹配与过滤规则见 [Agent / Tool / Skill 过滤规则](../user_guide/agent-tool-skill-filter-rules.md)。
 
@@ -189,7 +189,7 @@ Skill 匹配与过滤规则见 [Agent / Tool / Skill 过滤规则](../user_guide
 
 完整语义与 smoke 示例见 [Agent / Tool / Skill 过滤规则](../user_guide/agent-tool-skill-filter-rules.md) 及 `resources/configs/default/agents/msagent-filter-smoke.yml`。
 
-MCP 接入与字段说明见 [配置与扩展 · MCP 配置](../user_guide/configuration-and-extension.md#5-mcp-配置)。
+MCP 接入与字段说明见 [配置与扩展 · MCP 配置](../user_guide/configuration-and-extension.md#6-mcp-配置)。
 
 ### 框架代码贡献
 

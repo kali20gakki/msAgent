@@ -57,7 +57,7 @@
 - 当前 Agent 的 `skills.patterns` 是否允许该 Skill
 - 是否被更高优先级目录中的同名 Skill 覆盖
 
-加载自定义 Skill，可参考[添加自定义 Skill](../user_guide/configuration-and-extension.md#9-添加自定义-skill)。
+加载自定义 Skill，可参考[添加自定义 Skill](../user_guide/configuration-and-extension.md#10-添加自定义-skill)。
 
 ## 4. 运行日志在哪里看？
 
