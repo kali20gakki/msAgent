@@ -67,8 +67,25 @@ description: 技能的详细描述，说明它做什么，以及什么时候使�
 | `compare-result-analyzer` | 基于比对结果，分析loss对不齐问题 | `分析比对结果` |
 | `train-infer-op-diff-scanner` | RL 训推算子差异性扫描（融合算子 vs 单算子） | `扫描这个 RL 脚本的训练和推理算子差异` |
 | `verl-omni-msprobe-dump` | 在 verl-omni 中采集训推一致性比对的两侧 dump 数据 | `给 verl-omni 加 msprobe dump 采集代码` |
-| `rl-consistency-analysis` | 做训练与推理一致性根因分析 | `分析这次训练和推理不一致的根因` |
 | `precision-debugger` | 分析定位乱码、复读等推理精度问题 | `我遇到了一个推理精度问题` |
+| `rl-prefill-consistency-dump` | 训推一致性(prefill)采集侧：单独使用采集训推两侧可比的 prefill dump（输入/参数对齐后接入 msprobe）；配合 `rl-consistency-dump-analysis` 使用时，按其打桩指令做 msprobe `load` 覆盖边界再采，隔离差异 | `根据（训练脚本）拉起训练，然后帮我采集训练和推理两侧可比的 prefill dump` |
+| `rl-consistency-dump-analysis` | 训推一致性(prefill)分析侧：单独使用分析已采集的训推两侧 dump，语义边界映射、定位首差异、产出分析报告；配合 `rl-prefill-consistency-dump` 使用时，输出打桩指令驱动再采集数据，迭代枚举所有独立差异点 | `帮我分析这份训推 prefill dump数据，定位训推不一致的根因` | 
+
+> **`rl-prefill-consistency-dump`与 `rl-consistency-dump-analysis`配合使用，可通过打桩寻找全部的差异点**
+>
+> 示例 prompt：`在容器(拉起来训练的环境)中，你可以通过脚本（训练脚本）拉起来模型(模型名称)的训练，通过打桩帮我寻找该模型所有训推不一致的地方，最后输出分析报告。`
+>
+> ```text
+> 采集侧采两侧 dump ──────────→ 分析侧比对、定位首差异
+>       ▲                              │ 输出打桩指令 stub_instruction.json
+>       │                              ▼
+> 采集侧 msprobe `load` 覆盖边界再采 ──→ 分析侧比下游
+>       ▲                              │
+>       └── 仍检出独立差异点 → 输出下一轮打桩指令 ──┘
+>                                       ▼
+>                 下游无差异 / 只剩舍入级差异 → 输出报告
+> ```
+>
 
 ### 2.3 量化 Skills
 

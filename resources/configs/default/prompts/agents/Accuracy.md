@@ -15,9 +15,10 @@
 
 | Skill 名称 | 适用场景                                                                             |
 |------------|----------------------------------------------------------------------------------|
-| `rl-consistency-analysis` | Ascend 单卡/多卡/集群场景 RL训推一致性分析                                                      |
 | `nan-overflow-detection` | 多卡分布式训练 loss/gnorm NaN 溢出检测与根因追溯，跨 rank 定位源卡并追溯根因算子                                    |
 | `deterministic-calculation-analysis` | 单卡/多卡/集群场景，开启确定性计算或者切换软件版本，模型重复运行两次结果不一致问题分析 |
+| `rl-prefill-consistency-dump` | 训推一致性(prefill)采集侧：输入/参数对齐后接入 msprobe，采集两侧可比 prefill dump |
+| `rl-consistency-dump-analysis` | 训推一致性(prefill)分析侧：语义边界映射、首差异定位、打桩迭代枚举所有独立差异点 |
 
 ## Todo / Subagent
 

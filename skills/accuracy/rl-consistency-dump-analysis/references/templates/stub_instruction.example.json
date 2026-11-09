@@ -1,0 +1,26 @@
+{
+  "round": 1,
+  "source_side": "infer",
+  "target_side": "train",
+  "isolate_boundary": "layer0.attn.q_proj_output",
+  "side_operators": {
+    "train": "Module.<训练侧模块路径>.<训练侧算子类名>.forward.<N>",
+    "infer": "Module.<推理侧模块路径>.<推理侧算子类名>.forward.<N>"
+  },
+  "source_dump": "<源侧 dump 根>/<step>/<rank>/dump_tensor_data",
+  "target_run": "<目标侧运行描述,如 train/infer 及卡号>",
+  "modules": [
+    {
+      "target_entry": "Module.<训练侧模块路径>.<训练侧算子类名>.forward.<N>",
+      "source_files": [
+        "Module.<推理侧模块路径>.<推理侧算子类名>.forward.<N>.output.<n>.pt"
+      ],
+      "transform": "融合输出按权重行序取 q 段: x[:, :num_heads*head_dim] → squeeze 前导 batch 维 → 转 bf16; 融合布局(q|kv 还是 kv|q)现场 bitwise 验证后定切片",
+      "dtype": "bf16",
+      "note": "q_dim / kv_dim 与融合布局以现场语义映射为准, 勿沿用旧结论"
+    }
+  ],
+  "dump_after_load": true,
+  "expected": "覆盖后 train 侧 q_proj 输入与 infer 侧 q 段 bitwise 一致; 若下游仍逻辑级差异 → 确认下一独立差异",
+  "stop_if": "下游全 EXACT → 结束枚举; 只剩余舍入级 → 记已知 gap"
+}

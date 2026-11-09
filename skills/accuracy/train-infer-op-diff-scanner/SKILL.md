@@ -23,7 +23,7 @@ description: RL 强化学习训练与推理（rollout）路径的算子差异性
 
 ## 不适用场景
 
-- 运行时 dump 数据的逐值对比（应使用 `rl-consistency-analysis` skill）
+- 运行时 dump 数据的逐值对比（应使用 `rl-consistency-dump-analysis` skill）
 - 纯性能 profiling 分析（应使用 msprof-analyze-cli skill）
 - 无法执行脚本或 NPU 不可用的环境
 

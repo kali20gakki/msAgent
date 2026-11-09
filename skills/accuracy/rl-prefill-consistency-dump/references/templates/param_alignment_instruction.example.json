@@ -1,0 +1,26 @@
+{
+  "round": 0,
+  "mismatch_points": ["P1", "P2"],
+  "alignment": [
+    {
+      "point_id": "P1",
+      "align_side": "train",
+      "semantic": "Hyper-Connections (mHC) enable 开关",
+      "method": "config/code",
+      "target": {"field": "enable_mhc_connections", "value": true},
+      "action": "修 Megatron-Bridge deepseek_v4_bridge.py: L463 enable_hyper_connections -> enable_mhc_connections (上游字段名笔误, 训练侧开关落空); 重建训练模型后重跑校验",
+      "verify": "重跑参数对齐校验, P1 变 EXACT; 训练侧模型结构出现 decoder.hc_head_* / layers.*.hc_attn_* 参数"
+    },
+    {
+      "point_id": "P2",
+      "align_side": "train",
+      "semantic": "Hyper-Connections 流数 (hc_mult)",
+      "method": "config/code",
+      "target": {"field": "mhc_num_residual_streams", "value": 4},
+      "action": "deepseek_v4_bridge.py L465 num_residual_streams -> mhc_num_residual_streams; 与 config.json hc_mult=4 一致",
+      "verify": "重跑校验, P2 变 EXACT"
+    }
+  ],
+  "then": "对齐 -> 重建模型 -> 重跑校验(阶段 5)全部 EXACT -> 接入采集(阶段 6)跑 dump; 对齐改动登记进改动清单, 阶段 9 一并恢复",
+  "note": "对齐方向以权威侧为准: 推理侧 vllm 直接读 config.json 启用 mHC (权威), 训练侧对齐到推理侧. msprobe load 不覆盖参数, 本指令走 config/code 重建, 不走 load"
+}

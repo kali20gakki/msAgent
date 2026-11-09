@@ -1,0 +1,57 @@
+{
+  "model": "<模型名>(<权重路径,如 xxx 诊断权重/完整权重>)",
+  "collection_scope": "确定性单样本 prefill (固定样本, seed 固定, TP=1, 关 shuffle/eval)",
+  "evidence_tool": "msprobe PrecisionDebugger (level=mix)",
+  "train_framework": "<训练框架,如 verl/slime/vime>",
+  "train_framework_version": "<版本>",
+  "train_backend": "<FSDP / Megatron / DeepSpeed / 自研>",
+  "architecture_mode": "<显式 micro_batch 循环 (FSDP 型, 包循环体) / 连续前向 (Megatron 型, 插 forward 内部)>",
+  "inference_engine": "<vLLM / SGLang / Transformers / 自研>",
+  "inference_engine_version": "<版本>",
+  "hardware": "<硬件后端,如 Ascend NPU> 卡 <M,N> (actor 1 + rollout 1)",
+  "stop_condition": "采到两侧可比的 prefill dump (level=mix)",
+
+  "stage3_onsite": {
+    "crop_location": "<现场 grep 定位的 PROMPTS_ONLY 裁剪位置,以现场符号为准>",
+    "instrument_location": "<现场定位的 log_prob 主前向接入位置;判断包循环体还是插 forward 内部>",
+    "main_forward_gate": "<主前向是否被缓存跳过(类似 can_reuse_log_probs_in_loss),采不到数据先怀疑它>",
+    "request_id": "<推理侧调度日志与训练 rollout 数据的对应字段;无现成日志就在接入处自己打>",
+    "padding": "<去训练端 padding 的开关/做法,两侧输入 shape 对齐真实 prompt 长度 (P18)>",
+    "infer_msprobe": "<引擎是否原生集成 msprobe(vLLM-ascend/SGLang 原生, 传 config 即启用);无原生集成按 new-framework.md §2 手写接入>"
+  },
+
+  "authorization": {
+    "AUTH_STOP_RUNNING_SERVICES": false,
+    "AUTH_EDIT_TARGET_CODE": true,
+    "AUTH_RUN_DUMP_JOB": true,
+    "AUTH_CLEAN_APPROVED_DIRS": true,
+    "AUTH_RESTORE_CODE": true,
+    "notes": "<按 SKILL 阶段 2 一次性问清并记录;停服务范围 / 允许改的代码 / 允许删的目录 / 采集后恢复,避免流程中反复打断>"
+  },
+
+  "environment": {
+    "ssh_target": null,
+    "container": "<容器标识,以现场为准(不预设容器形态,见框架线索卡对应说明)>",
+    "conda_env": "<环境激活方式>",
+    "workdir": "<工作目录,绝对路径>",
+    "log_path": "<日志位置>",
+    "artifact_root": "<会话/产物根目录>",
+    "credentials_note": "凭据不写入本卡或报告"
+  },
+
+  "assets": {
+    "model_path": "<权重路径>",
+    "baseline_command": "<基线命令,绝对路径>",
+    "train_msprobe_config": "<session>/train_dump_config.json (task=statistics, level=mix)",
+    "infer_msprobe_config": "<session>/infer_dump_config.json (task=statistics, level=mix)",
+    "train_dump_path": "<session>/dumps/train",
+    "infer_dump_path": "<session>/dumps/infer"
+  },
+
+  "constraints": {
+    "padding": "训练端 padding 必须去掉, 两侧输入 shape 对齐真实 prompt 长度 (P18)",
+    "determinism": "seed 固定, 关 shuffle, 单样本小 batch (num-rollout 1 / rollout-batch-size 1 / n-samples-per-prompt 1 / rollout-max-response-len 4 / rollout-temperature 0 / global-batch-size 1), enforce_eager",
+    "e2e_target": "response 段 E2E 指标(PROMPTS_ONLY 下为 0 值是'没算', 需补跑 PROMPTS_ONLY=0 标准 step 才有实测)",
+    "prefill_logprob_diff": "训练循环内直接算并打印训练日志 (主指标, mean≈0 是训推一致)"
+  }
+}
