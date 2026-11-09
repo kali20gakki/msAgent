@@ -11,7 +11,7 @@ Intended audience: developers who use agents such as Trae, Claude, Codex, and Op
 
 ## 2. Skill: Out-of-the-Box Domain Knowledge Packages
 
-The skill implementations in msAgent follow the common conventions of Agent Skills and can be reused and migrated across different agents. For complete information, see [Skill list](../../../skills/README.md).
+The skill implementations in msAgent follow the common conventions of Agent Skills and can be reused and migrated across different agents. For complete information, see [Skill list](../../../skills/README_EN.md).
 
 ### 2.1 Method 1: npx skills (Recommended)
 
