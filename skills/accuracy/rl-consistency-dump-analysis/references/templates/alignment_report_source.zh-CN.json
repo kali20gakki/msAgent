@@ -1,0 +1,112 @@
+{
+  "schema_version": 1,
+  "language": "zh-CN",
+  "title": "训推 Prefill 一致性报告",
+  "generated_at": null,
+  "acceptance_contract": {
+    "status": "not_run",
+    "objective": "待填写：最终模型与目标运行路径的端到端训推一致对齐",
+    "requested_model_scope": "待填写",
+    "required_gates": [
+      "static_tensor_prefill",
+      "weight_sync",
+      "stateful_training",
+      "long_horizon_e2e",
+      "reduced_model_transfer",
+      "requested_model_final",
+      "production_patch_hygiene",
+      "clean_runtime_activation",
+      "performance_regression"
+    ],
+    "long_horizon_required": true,
+    "historical_failure_step": null,
+    "stop_condition": "全部必过门禁都有新鲜、可复核证据"
+  },
+  "scope": {
+    "phase": "prefill",
+    "model": "待填写",
+    "coverage": "待填写：Prompt 长度与已验证语义边界",
+    "training_backend": "待填写",
+    "inference_backend": "待填写",
+    "hardware_backend": "待填写",
+    "evidence_provider": "待填写",
+    "topology": {
+      "tp": 1,
+      "pp": 1,
+      "ep": 1
+    }
+  },
+  "results": {
+    "native_prefill_status": "not_run",
+    "conditional_prefill_status": "not_run",
+    "unresolved_replay_ids": [],
+    "e2e_metric_name": "prefill_logprob_diff_mean",
+    "e2e_metric_status": "not_run",
+    "e2e_metric_value": null,
+    "e2e_metric_evidence": "未执行"
+  },
+  "verification_axes": {
+    "truth_role": "multi_axis_summary",
+    "tensor_prefill": {"status": "not_run", "evidence": "未执行"},
+    "weight_sync": {"status": "not_run", "evidence": "未执行"},
+    "stateful_training": {"status": "not_run", "evidence": "未执行"},
+    "long_horizon_e2e": {"status": "not_run", "evidence": "未执行"},
+    "reduced_model_transfer": {"status": "not_run", "evidence": "未执行"},
+    "requested_model_final": {"status": "not_run", "evidence": "未执行"},
+    "production_patch_hygiene": {"status": "not_run", "evidence": "未执行"},
+    "clean_runtime_activation": {"status": "not_run", "evidence": "未执行"},
+    "performance_regression": {"status": "not_run", "evidence": "未执行"}
+  },
+  "validation_matrix": {
+    "truth_role": "e2e_and_transfer_evidence",
+    "entries": []
+  },
+  "production_alignment_profile": null,
+  "clean_run_gate": null,
+  "timing": {
+    "session_started_at": null,
+    "session_ended_at": null,
+    "total_wall_seconds": null,
+    "minimum_observed_window_seconds": null,
+    "timing_basis": "待填写",
+    "module_1_seconds": null,
+    "module_2_seconds": null,
+    "module_3_seconds": null,
+    "module_4_seconds": null,
+    "module_5_seconds": null,
+    "module_6_seconds": null,
+    "discovery_seconds": null,
+    "repair_wave_wall_seconds": null,
+    "summed_repair_agent_seconds": null,
+    "repair_queue_wait_seconds": null,
+    "integration_seconds": null,
+    "accelerator_run_seconds": null,
+    "accelerator_run_count": null
+  },
+  "metric_progression": null,
+  "differences": [],
+  "comparison": {
+    "prompt_token_length": null,
+    "train_input_token_length": null,
+    "infer_prefill_token_length": null,
+    "train_prompt_slice": "待填写",
+    "logit_causal_shift": "待填写"
+  },
+  "provenance": {},
+  "artifacts": {
+    "case_readme": null,
+    "report_source": "report_source.json",
+    "raw_tensor_included": false,
+    "raw_dump_included": false,
+    "prompt_included": false,
+    "raw_training_log_included": false,
+    "production_patch": null,
+    "apply_check": null,
+    "production_patch_hygiene_audit": null,
+    "clean_runtime_audit": null,
+    "validation_matrix_evidence": null
+  },
+  "limitations": [
+    "待填写：当前证据范围与仍未解决的问题。"
+  ]
+}

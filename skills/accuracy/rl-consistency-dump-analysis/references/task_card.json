@@ -1,0 +1,60 @@
+{
+  "model": null,
+  "scope": "prefill 训推一致性 dump 分析",
+  "train_dump_dir": null,
+  "infer_dump_dir": null,
+  "step": null,
+  "rank": null,
+  "request_id": null,
+  "prompt_token_length": null,
+  "train_input_token_length": null,
+  "infer_prefill_token_length": null,
+  "padding_handling": null,
+  "train_framework": null,
+  "inference_engine": null,
+  "inference_engine_version": null,
+  "hardware": null,
+  "topology": { "tp": null, "pp": null, "ep": null },
+  "evidence_tool": "msprobe PrecisionDebugger(或等价)",
+  "target": "首差异位置 + 根因 + 证据链 + 是否可解(默认;可改为仅首差异)",
+  "stop_condition": "首差异有确定性根因并完成 ULP 定性;产出分析结论记录与分析报告",
+
+  "stage1_probe": {
+    "dump_metadata": null,
+    "construct_op_counts": null,
+    "tensor_file_counts": null,
+    "common_ops": [],
+    "prefix_patterns": null,
+    "fused_candidates": []
+  },
+  "stage2_mapping": {
+    "mapping_file": null,
+    "boundary_count": null,
+    "evidence_missing_boundaries": []
+  },
+  "stage3_compare": {
+    "results_file": null,
+    "total": null,
+    "exact": null,
+    "not_exact": null,
+    "evidence_missing": null
+  },
+  "stage4_first_divergence": {
+    "name": null,
+    "semantic_boundary": null,
+    "max_abs_diff": null,
+    "nz_count": null
+  },
+  "stage5_ulp": {
+    "ulp_multiplier_dist": null,
+    "classification": null
+  },
+  "stage6_excluded_hypotheses": [],
+  "stage7_conclusion": null,
+  "stage8_reports": {
+    "report_source": null,
+    "output_dir": null
+  },
+
+  "notes": "只记事实,不知道的字段留 null / [],不编默认值。"
+}

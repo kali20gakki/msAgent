@@ -1,0 +1,96 @@
+{
+  "model": "DeepSeek-V4-Flash-Vision (起点示例; 新模型按现场重建映射)",
+  "items": [
+    {
+      "semantic": "Hyper-Connections enable 开关",
+      "train": "enable_mhc_connections",
+      "infer": null,
+      "infer_expected": true,
+      "note": "推理侧无独立开关(结构上恒启用), 训练侧必须为 True"
+    },
+    {
+      "semantic": "Hyper-Connections 流数 (hc_mult)",
+      "train": "mhc_num_residual_streams",
+      "infer": "hc_mult",
+      "note": ""
+    },
+    {
+      "semantic": "Hyper-Connections Sinkhorn 迭代",
+      "train": "mhc_sinkhorn_iterations",
+      "infer": "hc_sinkhorn_iters",
+      "note": ""
+    },
+    {
+      "semantic": "Hyper-Connections eps",
+      "train": null,
+      "infer": "hc_eps",
+      "note": "训练侧无对应字段时标 MISSING_SIDE, 查训练代码是否硬编码同值"
+    },
+    {
+      "semantic": "CSA 窗口",
+      "train": "csa_window_size",
+      "infer": "sliding_window",
+      "note": ""
+    },
+    {
+      "semantic": "CSA 压缩率",
+      "train": "csa_compress_ratios",
+      "infer": "compress_ratios",
+      "note": ""
+    },
+    {
+      "semantic": "DSA indexer heads",
+      "train": "dsa_indexer_n_heads",
+      "infer": "index_n_heads",
+      "note": ""
+    },
+    {
+      "semantic": "DSA indexer head_dim",
+      "train": "dsa_indexer_head_dim",
+      "infer": "index_head_dim",
+      "note": ""
+    },
+    {
+      "semantic": "DSA indexer topk",
+      "train": "dsa_indexer_topk",
+      "infer": "index_topk",
+      "note": ""
+    },
+    {
+      "semantic": "MTP 层数",
+      "train": "mtp_num_layers",
+      "infer": "num_nextn_predict_layers",
+      "note": ""
+    },
+    {
+      "semantic": "Hash 层数",
+      "train": "moe_n_hash_layers",
+      "infer": "num_hash_layers",
+      "note": ""
+    },
+    {
+      "semantic": "隐藏维度",
+      "train": "hidden_size",
+      "infer": "hidden_size",
+      "note": ""
+    },
+    {
+      "semantic": "层数",
+      "train": "num_layers",
+      "infer": "num_hidden_layers",
+      "note": ""
+    },
+    {
+      "semantic": "注意力头",
+      "train": "num_attention_heads",
+      "infer": "num_attention_heads",
+      "note": ""
+    },
+    {
+      "semantic": "词表大小",
+      "train": "actual_vocab_size",
+      "infer": "vocab_size",
+      "note": ""
+    }
+  ]
+}
