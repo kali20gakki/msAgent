@@ -73,9 +73,27 @@ def _replace_once(path: Path, pattern: str, replacement: str) -> None:
         path.write_text(updated, encoding="utf-8")
 
 
+def _sync_version_info(path: Path, version: str) -> None:
+    # Update only the value.  Rewriting the file through ConfigParser would
+    # change key casing/spacing and discard comments, which are part of the
+    # version.info format consumed by packaging scripts.
+    content = path.read_text(encoding="utf-8")
+    updated, count = re.subn(
+        r"(?m)^([ \t]*Version[ \t]*=[ \t]*)[^\r\n]*(?=\r?$)",
+        rf"\g<1>{version}",
+        content,
+        count=1,
+    )
+    if count != 1:
+        _die(f"Could not update Version in {path}")
+    if updated != content:
+        path.write_text(updated, encoding="utf-8", newline="")
+
+
 def main() -> int:
     repo_root = Path(__file__).resolve().parent.parent
     version = _resolve_version(repo_root)
+    _sync_version_info(repo_root / "version.info", version)
 
     _replace_once(
         repo_root / "pyproject.toml",
