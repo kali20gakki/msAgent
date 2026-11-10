@@ -68,6 +68,7 @@ description: 技能的详细描述，说明它做什么，以及什么时候使�
 | `train-infer-op-diff-scanner` | RL 训推算子差异性扫描（融合算子 vs 单算子） | `扫描这个 RL 脚本的训练和推理算子差异` |
 | `verl-omni-msprobe-dump` | 在 verl-omni 中采集训推一致性比对的两侧 dump 数据 | `给 verl-omni 加 msprobe dump 采集代码` |
 | `precision-debugger` | 分析定位乱码、复读等推理精度问题 | `我遇到了一个推理精度问题` |
+| `msprobe-dump-enable` | 在 PyTorch 动态图训练/推理代码中使能 msProbe PrecisionDebugger 精度数据采集（环境检查、配置逐项确认、打点与验证、开关说明） | `帮我给训练代码使能 dump` |
 | `rl-prefill-consistency-dump` | 训推一致性(prefill)采集侧：单独使用采集训推两侧可比的 prefill dump（输入/参数对齐后接入 msprobe）；配合 `rl-consistency-dump-analysis` 使用时，按其打桩指令做 msprobe `load` 覆盖边界再采，隔离差异 | `根据（训练脚本）拉起训练，然后帮我采集训练和推理两侧可比的 prefill dump` |
 | `rl-consistency-dump-analysis` | 训推一致性(prefill)分析侧：单独使用分析已采集的训推两侧 dump，语义边界映射、定位首差异、产出分析报告；配合 `rl-prefill-consistency-dump` 使用时，输出打桩指令驱动再采集数据，迭代枚举所有独立差异点 | `帮我分析这份训推 prefill dump数据，定位训推不一致的根因` | 
 
@@ -86,6 +87,7 @@ description: 技能的详细描述，说明它做什么，以及什么时候使�
 >                 下游无差异 / 只剩舍入级差异 → 输出报告
 > ```
 >
+
 
 ### 2.3 量化 Skills
 

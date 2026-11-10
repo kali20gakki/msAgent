@@ -4,6 +4,7 @@
 
 ## 1. Agent 定位
 
+- 支持在用户的 PyTorch 动态图（eager）训练/推理代码中使能 msProbe 精度数据采集（dump），为精度分析准备数据
 - 面向单卡、多卡、集群等 Ascend 精度分析场景
 - 适用于dump数据解读与调优建议输出
 - 适用于RL训推算子差异扫描，RL训推不一致根因分析，loss/gnorm NaN与梯度尖刺问题定位
@@ -11,6 +12,7 @@
 
 ## 2. 核心能力
 
+- msProbe 动态图（eager）精度数据采集使能
 - loss/gnorm NaN问题定位
 - 确定性计算问题定位
 - loss、gnorm对不齐问题定位
@@ -21,6 +23,7 @@
 
 ## 3. 推荐使用方式
 
+- 需要在自己的训练/推理代码中使能 dump 采集时，明确使能 dump 采集的需求并提供训练或推理脚本路径
 - 进行loss/gnorm NaN问题定位、确定性计算问题定位、loss、gnorm不齐问题定位、RL训推不一致根因分析时，直接提供 dump 数据目录路径，并说明你想解决的问题
 - 进行RL训推算子差异扫描时，需要提供运行环境信息与RL训练脚本
 - 进行梯度尖刺分析时，除 msprobe 的 dump 统计数据外，也支持提供梯度监控数据（由 [Monitor训练状态轻量化监测工具](https://gitcode.com/Ascend/msprobe/blob/master/docs/zh/user_guide/monitor_instruct.md) 产生的 monitor CSV，或由 [趋势可视化](https://gitcode.com/Ascend/msprobe/blob/master/docs/zh/user_guide/accuracy_compare/trend_visualization_instruct.md) 解析 CSV 获得的 trend.db 文件），并说明异常现象，便于定位分析
@@ -31,6 +34,7 @@
 
 | 场景             | 示例提示词 | 效果展示 |
 |----------------|---|--|
+| 使能 dump 采集 | `给训练代码接入 msProbe 精度数据采集功能` | <img src="../figures/dump_enable_report.jpg" alt="使能 dump 采集效果展示" width="800"> |
 | loss/gnorm NaN溢出分析 | `请基于输入的训练dump数据，分析其中的NaN溢出，找出源卡和根因算子` | <img src="../figures/nan_overflow_detection_report.jpg" alt="loss/gnorm NaN溢出分析报告" width="800"> |
 | 开启确定性计算、切换软件版本，模型运行两次结果不一致分析 | `请基于输入的md5 dump数据，进行数据比对，寻找比对差异点，给出可能原因。` | <img src="../figures/deterministic_report.png" alt="确定性计算问题分析报告" width="800"> |
 | loss、gnrom不一致分析 | `分析dump数据，找出loss不一致的根因` | <img src="../figures/loss_gnorm_diff_analyzer.png" alt="loss对不齐问题分析报告" width="800"> |
