@@ -33,12 +33,23 @@ irm https://raw.gitcode.com/Ascend/msagent/raw/master/scripts/install.ps1 | iex
 
    包括 LLM 服务的环境变量（*_API_KEY）、通过`msagent config`命令的`--llm-provider`参数配置LLM 服务的协议类型、`--llm-base-url`参数配置模型服务商地址、`--llm-model`参数配置模型名称（模型名称从模型服务商网站的模型广场获取）。
 
-   | 配置场景 | 示例                                                                                                                                                                     |
-   | --- |------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-   | OpenAI 兼容接口 | `export OPENAI_API_KEY="your-key"`<br>`msagent config --llm-provider openai --llm-base-url "https://api.deepseek.com" --llm-model "deepseek-v4-flash" # 以DeepSeek为例`   |
-   | 本地 OpenAI 兼容服务 | `export OPENAI_API_KEY="dummy"  # 如本地模型服务无密钥，可填入任意非空字符串`<br>`msagent config --llm-provider openai --llm-base-url "http://127.0.0.1:8000/v1" --llm-model "your-model"` |
+   **Linux / macOS / WSL：**
+
+   | 配置场景 | 示例 |
+   | --- | --- |
+   | OpenAI 兼容接口（以 DeepSeek 为例） | `export OPENAI_API_KEY="your-key"`<br>`msagent config --llm-provider openai --llm-base-url "https://api.deepseek.com" --llm-model "deepseek-v4-flash"` |
+   | 本地 OpenAI 兼容服务（无密钥时可填入任意非空字符串） | `export OPENAI_API_KEY="dummy"`<br>`msagent config --llm-provider openai --llm-base-url "http://127.0.0.1:8000/v1" --llm-model "your-model"` |
    | Anthropic 兼容服务 | `export ANTHROPIC_API_KEY="your-key"`<br>`msagent config --llm-provider anthropic --llm-base-url "https://example.com/anthropic" --llm-model "claude-sonnet-4-20250514"` |
-   | Google / Gemini 服务 | `export GOOGLE_API_KEY="your-key"`<br>`msagent config --llm-provider google --llm-base-url "https://example.com/google" --llm-model "gemini-2.5-pro"`                  |
+   | Google / Gemini 服务 | `export GOOGLE_API_KEY="your-key"`<br>`msagent config --llm-provider google --llm-base-url "https://example.com/google" --llm-model "gemini-2.5-pro"` |
+
+   **Windows（PowerShell 5.1 及以上）：**
+
+   | 配置场景 | 示例 |
+   | --- | --- |
+   | OpenAI 兼容接口（以 DeepSeek 为例） | `$env:OPENAI_API_KEY = "your-key"`<br>`msagent config --llm-provider openai --llm-base-url "https://api.deepseek.com" --llm-model "deepseek-v4-flash"` |
+   | 本地 OpenAI 兼容服务（无密钥时可填入任意非空字符串） | `$env:OPENAI_API_KEY = "dummy"`<br>`msagent config --llm-provider openai --llm-base-url "http://127.0.0.1:8000/v1" --llm-model "your-model"` |
+   | Anthropic 兼容服务 | `$env:ANTHROPIC_API_KEY = "your-key"`<br>`msagent config --llm-provider anthropic --llm-base-url "https://example.com/anthropic" --llm-model "claude-sonnet-4-20250514"` |
+   | Google / Gemini 服务 | `$env:GOOGLE_API_KEY = "your-key"`<br>`msagent config --llm-provider google --llm-base-url "https://example.com/google" --llm-model "gemini-2.5-pro"` |
 
 3. 查看当前配置。
 
