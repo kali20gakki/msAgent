@@ -55,6 +55,12 @@ if SKILL_SCRIPTS not in sys.path:
 import npu_query  # noqa: E402
 import procfs  # noqa: E402
 import topology  # noqa: E402
+import discover  # noqa: E402
+import emit_plan  # noqa: E402
+import feasibility  # noqa: E402
+import model  # noqa: E402
+import unit_alloc  # noqa: E402
+import zone_alloc  # noqa: E402
 
 FIXTURES = os.path.join(_THIS_DIR, "fixtures")
 
@@ -364,3 +370,40 @@ class MockProcfs:
 def temp_out():
     """测试产物目录：临时目录，不写 skill 目录。"""
     return tempfile.mkdtemp(prefix="hostcpu-bindtune-test-")
+
+
+def build_a2_plan(form="in_run", out_dir=None, uid=OTHER_UID, preflight_overrides=None):
+    """用 A2 实机 fixture 跑完整求解链，返回 (plan, plan_path, verify_path, report_path, topo)。
+
+    该夹具依赖求解层脚本，随求解层一起交付（采集层单独合入时不包含本函数）。
+    """
+    info, topo_info = load_a2_npu_raw()
+    topo = a2_topo(info, topo_info)
+    out_dir = out_dir or temp_out()
+    with MockProcfs(uid=uid):
+        discovered = discover.collect_units(info, topo)
+    units = discovered["units"]
+    modeled = model.build(topo, units)
+    zones = zone_alloc.allocate(topo, units, {"irq_reserve_per_node": 2, "interference_reserve_per_node": 1})
+    for unit in units:
+        unit_alloc.allocate(unit, zones["alloc"].get(unit["unit_id"]) or [])
+    checks = feasibility.check(topo, units)
+    checks["flags"]["view_limited"] = discovered["view_limited"]
+    preflight_info = {
+        "npu_smi": "/usr/local/sbin/npu-smi",
+        "in_container": False,
+        "cgroup_version": "v1",
+        "has_taskset": True,
+        "user": "tester",
+        "uid": 1000,
+        "is_root": False,
+        "proc_hidden": False,
+        "numa_maps_self_ok": True,
+        "unknown_hbm_npus": discover.unknown_hbm(info),
+        "findings": modeled.get("findings") or [],
+    }
+    preflight_info.update(preflight_overrides or {})
+    plan, plan_path, verify_path, report_path = emit_plan.build_plan(
+        topo, units, zones, checks, preflight_info, form, out_dir
+    )
+    return plan, plan_path, verify_path, report_path, topo

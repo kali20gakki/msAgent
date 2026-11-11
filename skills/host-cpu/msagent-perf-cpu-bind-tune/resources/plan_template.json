@@ -1,0 +1,158 @@
+{
+  "schema_version": "hostcpu-plan/1",
+  "plan_id": "hostcpu-plan-<host>-<ts>",
+  "host": "<host>",
+  "ts_ns": 0,
+  "mode": "host|container|cluster",
+  "form": "in_run|pre_run",
+  "fabric": "ub|hccs_supernode|pcie|unknown",
+  "locality_mode": "topo_affinity|global_slice|unknown",
+  "privilege": {
+    "current_user": "<user>",
+    "current_uid": 1000,
+    "is_root": false,
+    "target_uids": [0],
+    "own_processes": false,
+    "can_read_numa_maps": false,
+    "can_taskset": false,
+    "requires_privilege": true,
+    "execution_mode": "delegated|self|plan_only",
+    "notes": []
+  },
+  "topology_ref": {
+    "source": "self.topology",
+    "schema": "static-snapshot/topology",
+    "hash": "<hash>"
+  },
+  "executable": true,
+  "plan_file": "hostcpu_plan_<host>_<ts>.json",
+  "apply": {
+    "script": "<skill>/scripts/apply_plan.py",
+    "command": "python3 <skill>/scripts/apply_plan.py <plan.json> --roles comm,io",
+    "rollback": "python3 <skill>/scripts/apply_plan.py <plan.json> --rollback",
+    "roles": "comm,io",
+    "bind_compute": false,
+    "dynamic_task_scan": true,
+    "cgroup_clip": true
+  },
+  "before": {
+    "container_cpuset": "<cpuset>",
+    "source": "/proc/<pid>/cgroup"
+  },
+  "policy": {
+    "smt": "exclusive",
+    "irq_reserve_per_node": 2,
+    "interference_reserve_per_node": 1
+  },
+  "zones": {
+    "<node>": {
+      "node": 0,
+      "cpulist": "<cpus>",
+      "system_irq": "<cpus>",
+      "interference": "<cpus>",
+      "business": "<cpus>",
+      "unit_ids": []
+    }
+  },
+  "units": [
+    {
+      "unit_id": 0,
+      "unit_type": "rank|instance",
+      "framework": "vllm|sglang|verl|megatron|mindspeed|unknown",
+      "pid": 0,
+      "pids": [],
+      "primary_npu": 0,
+      "npus": [],
+      "npus_significant": [],
+      "numa_node": 0,
+      "target_node_source": "topo_affinity|global_slice|none",
+      "npu_affinity": "<cpus>",
+      "current_node": 0,
+      "current_affinity": "<cpus>",
+      "target_uid": 0,
+      "is_own_process": false,
+      "requires_privilege": true,
+      "evidence_level": "full|affinity+last_cpu|affinity_only|npu_smi_only",
+      "last_cpu": 0,
+      "last_cpu_node": 0,
+      "mems_allowed": "0-7",
+      "cgroup_mems": "0-7",
+      "cpuset": "<cpus>",
+      "main_cpuset": "<cpus>",
+      "compute_cpuset": "<cpus>",
+      "work_cpuset": "<cpus>",
+      "thread_binding": [
+        {"role": "main", "match_comm": [], "cpuset": "<cpus>", "apply": "exec", "note": "主线程（tid == pid）"},
+        {"role": "comm", "match_comm": ["hccl", "aoe_rtkb"], "cpuset": "<cpus>", "apply": "exec|skip", "note": ""},
+        {"role": "io", "match_comm": ["zmq", "tokenizer", "detokenizer", "dataloader", "network"], "cpuset": "<cpus>", "apply": "exec|skip", "note": ""},
+        {"role": "compute", "match_comm": ["vllm", "caffe", "python", "pt_autograd", "acl_thread", "compl", "omp"], "cpuset": "<cpus>", "apply": "exec", "note": "绑定到 compute 核集，与 OMP_NUM_THREADS 核数一致"}
+      ],
+      "roles": {
+        "compute": {"cpus": "<cpus>", "cores": 0, "threads": 0},
+        "comm": {"cpus": "<cpus>", "cores": 0, "threads": 0},
+        "io": {"cpus": "<cpus>", "cores": 0, "threads": 0},
+        "main": {"cpus": "<cpus>", "cores": 0, "threads": 0}
+      },
+      "env": {
+        "OMP_NUM_THREADS": "0",
+        "OMP_PROC_BIND": "close",
+        "OMP_PLACES": "cores"
+      },
+      "mechanism": "sched_setaffinity|launch_wrapper|cpuset",
+      "command_source": "runtime_task_scan|user|env_only",
+      "commands": [],
+      "before": {
+        "Cpus_allowed_list": "<cpus>",
+        "cgroup_cpuset": "<cpus>",
+        "source": "/proc/<pid>/status"
+      },
+      "rollback": [],
+      "deviations": [],
+      "capacity_gap": 0
+    }
+  ],
+  "baseline": {
+    "metrics": {
+      "sched_delay_p99_us": null,
+      "migration_per_s": null,
+      "remote_page_ratio": null,
+      "step_time_ms": null
+    },
+    "source": "none",
+    "window": null
+  },
+  "verify": {
+    "config_effective": {
+      "commands": [
+        "grep -m1 '^Cpus_allowed_list:' /proc/<pid>/status"
+      ]
+    },
+    "runtime": {
+      "consumer": "tracing --plan <plan.json>",
+      "check": "units[].roles[].cpus 落核/迁移/越界"
+    },
+    "effect": {
+      "metrics": ["sched_delay_p99_us", "remote_page_ratio", "migration_per_s"],
+      "threshold": "改善 ≥ 收益上限的 30%",
+      "window": "同参数复采"
+    }
+  },
+  "expected_effect": {
+    "level": "high|medium|low",
+    "basis": [],
+    "upper_bound": ""
+  },
+  "verify_script": "hostcpu_verify_<host>_<ts>.sh",
+  "report": "hostcpu_report_<host>_<ts>.html",
+  "unresolved": [],
+  "warnings": [],
+  "findings": [],
+  "flags": {
+    "smt_shared": false,
+    "oversubscribed": false,
+    "cross_numa": false,
+    "l3_split": false,
+    "view_limited": false
+  },
+  "notes": []
+}
