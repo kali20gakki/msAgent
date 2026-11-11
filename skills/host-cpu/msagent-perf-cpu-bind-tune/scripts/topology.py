@@ -31,6 +31,9 @@ from cpu_list import parse_cpulist
 
 _LOG = logging.getLogger(__name__)
 
+# locality_mode legacy 别名唯一映射表：model / emit_plan / report 统一引用
+LOCALITY_ALIAS = {"npu_local": "topo_affinity", "balanced_partition": "global_slice"}
+
 
 def _read(path, default=None):
     try:

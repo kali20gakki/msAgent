@@ -93,6 +93,20 @@ class TestAllocate(unittest.TestCase):
         main_binding = [b for b in unit["thread_binding"] if b["role"] == "main"][0]
         self.assertEqual(main_binding["cpuset"], unit["main_cpuset"])
 
+    def test_main_heavy_threshold_matches_a2_profile(self):
+        """A2 画像 main=15 且核数充足：达到阈值应给 2 核（阈值不得高于画像）。"""
+        unit = unit_alloc.allocate(_unit({"comm": 24, "io": 4, "main": 15, "compute": 47}), list(range(0, 16)))
+        self.assertEqual(unit["roles"]["main"]["cores"], 2)
+
+    def test_main_below_threshold_keeps_single_core(self):
+        unit = unit_alloc.allocate(_unit({"comm": 24, "io": 4, "main": 11, "compute": 47}), list(range(0, 16)))
+        self.assertEqual(unit["roles"]["main"]["cores"], 1)
+
+    def test_compute_shortage_is_reported(self):
+        """核数不足不能静默抬到 1 核：必须落显式偏差。"""
+        unit = unit_alloc.allocate(_unit({"comm": 24, "io": 4, "main": 15}), [])
+        self.assertIn("compute_core_shortage", [d["kind"] for d in unit["deviations"]])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -119,6 +119,13 @@ class TestInRunPlan(unittest.TestCase):
     def test_plan_id_includes_pid(self):
         self.assertTrue(self.plan["plan_id"].endswith("-%d" % os.getpid()))
 
+    def test_hostname_is_sanitized_in_plan_id_and_files(self):
+        """hostname 含空格/特殊字符时不能直接进 plan_id 与文件名。"""
+        with mock.patch("socket.gethostname", return_value="host name/01:x"):
+            plan = testutils.build_a2_plan()[0]
+        self.assertTrue(plan["plan_id"].startswith("hostcpu-plan-host_name_01_x-"))
+        self.assertTrue(plan["plan_file"].startswith("hostcpu_plan_host_name_01_x_"))
+
     def test_expected_effect_and_notes(self):
         self.assertEqual(self.plan["expected_effect"]["level"], "high")
         basis = self.plan["expected_effect"]["basis"]
