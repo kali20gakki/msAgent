@@ -33,12 +33,23 @@ For more installation methods, see [msAgent Installation Guide](../install_guide
 
    This configuration includes the environment variables of the LLM service (`*_API_KEY`). Use the `--llm-provider` parameter of the `msagent config` command to configure the protocol type of the LLM service, the `--llm-base-url` parameter to configure the model provider address, and the `--llm-model` parameter to configure the model name (obtain the model name from the model marketplace on the model provider website).
 
+   **Linux / macOS / WSL:**
+
    | Configuration Scenario | Example |
    | --- | --- |
-   | OpenAI-compatible API | `export OPENAI_API_KEY="your-key"`<br>`msagent config --llm-provider openai --llm-base-url "https://api.deepseek.com" --llm-model "deepseek-v4-flash" # DeepSeek is used here as an example` |
-   | Local OpenAI-compatible service | `export OPENAI_API_KEY="dummy"  # If the local model service has no API key, you can enter any non-empty string`<br>`msagent config --llm-provider openai --llm-base-url "http://127.0.0.1:8000/v1" --llm-model "your-model"` |
+   | OpenAI-compatible API (DeepSeek is used here as an example) | `export OPENAI_API_KEY="your-key"`<br>`msagent config --llm-provider openai --llm-base-url "https://api.deepseek.com" --llm-model "deepseek-v4-flash"` |
+   | Local OpenAI-compatible service (use any non-empty string if no API key is required) | `export OPENAI_API_KEY="dummy"`<br>`msagent config --llm-provider openai --llm-base-url "http://127.0.0.1:8000/v1" --llm-model "your-model"` |
    | Anthropic-compatible service | `export ANTHROPIC_API_KEY="your-key"`<br>`msagent config --llm-provider anthropic --llm-base-url "https://example.com/anthropic" --llm-model "claude-sonnet-4-20250514"` |
    | Google/Gemini service | `export GOOGLE_API_KEY="your-key"`<br>`msagent config --llm-provider google --llm-base-url "https://example.com/google" --llm-model "gemini-2.5-pro"` |
+
+   **Windows (PowerShell 5.1+):**
+
+   | Configuration Scenario | Example |
+   | --- | --- |
+   | OpenAI-compatible API (DeepSeek is used here as an example) | `$env:OPENAI_API_KEY = "your-key"`<br>`msagent config --llm-provider openai --llm-base-url "https://api.deepseek.com" --llm-model "deepseek-v4-flash"` |
+   | Local OpenAI-compatible service (use any non-empty string if no API key is required) | `$env:OPENAI_API_KEY = "dummy"`<br>`msagent config --llm-provider openai --llm-base-url "http://127.0.0.1:8000/v1" --llm-model "your-model"` |
+   | Anthropic-compatible service | `$env:ANTHROPIC_API_KEY = "your-key"`<br>`msagent config --llm-provider anthropic --llm-base-url "https://example.com/anthropic" --llm-model "claude-sonnet-4-20250514"` |
+   | Google/Gemini service | `$env:GOOGLE_API_KEY = "your-key"`<br>`msagent config --llm-provider google --llm-base-url "https://example.com/google" --llm-model "gemini-2.5-pro"` |
 
 3. View the current configuration.
 
