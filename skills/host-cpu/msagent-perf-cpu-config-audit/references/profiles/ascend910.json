@@ -1,0 +1,18 @@
+{
+  "match": {"cpu": "", "npu": "Ascend910"},
+  "notes": "Ascend 910 家族通用 profile（910B 有专属 profile 时按最长匹配优先路由到更精确的）。覆盖 A2/A3/A5 三个拓扑类检查项的机型输入：A2_remote_distance 为 8 node 机型的跨组距离线显式声明；snc_expected 待机型标定后填入（当前 null=不校验，仅报 FACT）；npu_numa_override 仅 PCIe/Box8 形态可标定（当前 null）——UB（灵衢）/HCCS_SW 交换互联机型 NPU 与所有 CPU 等距，本来就没有 NPU→NUMA 亲和，A5 输出「无（UB/等距）」属合法形态，无需标定，绑核按 global_slice 均衡分配。die_topo 为 A3/910C 双 die 实测事实：8 封装 × 2 die = 16 逻辑设备（davinci0-15），Phy-ID (0,1)(2,3)...(14,15) 成对经 SIO 片内互联，跨封装 HCCS_SW/UB；绑核 CPU 域按封装划分（同封装两 die 的 Host 线程放同一 NUMA node，不可跨 node 拆分）。",
+  "thresholds": {
+    "A2_remote_distance": 21
+  },
+  "snc_expected": null,
+  "npu_numa_override": null,
+  "npu_numa_override_calibratable": "仅 pcie_or_box8 形态可标定；fabric 为 ub / hccs_sw 时不存在亲和关系，标定无意义",
+  "npu_numa_override_example": {"0": 0, "1": 1, "2": 2, "3": 3, "4": 4, "5": 5, "6": 6, "7": 7},
+  "die_topo": {
+    "dies_per_package": 2,
+    "in_package_link": "SIO",
+    "cross_package_link": "HCCS_SW",
+    "binding_unit": "package",
+    "note": "A3 实测；绑定单位=封装（同封装 die 对不可跨 node 拆分），die 分组与 Logic ID 映射由采集层从 npu-smi info -m 获取"
+  }
+}

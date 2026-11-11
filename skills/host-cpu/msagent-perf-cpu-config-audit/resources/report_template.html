@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>主机配置审计报告 · Host CPU Config Audit</title>
+<style>
+  :root { --crit:#c0392b; --warn:#e67e22; --ok:#27ae60; --fact:#7f8c8d;
+          --bg:#f5f6f7; --card:#fff; --text:#2c3e50; --muted:#7f8c8d;
+          --advice:#2c6e8f; }
+  * { box-sizing: border-box; }
+  body { font-family: "Segoe UI", "Microsoft YaHei", sans-serif; background: var(--bg);
+         color: var(--text); margin: 0; padding: 24px; }
+  .wrap { max-width: 1080px; margin: 0 auto; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .meta { color: var(--muted); font-size: 13px; margin-bottom: 16px; }
+  .summary, .domain { background: var(--card); border-radius: 8px; padding: 16px 20px;
+             margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+  .score { font-size: 28px; font-weight: 700; }
+  .counts { display: flex; gap: 16px; margin-top: 8px; font-size: 14px; flex-wrap: wrap; }
+  .counts span { padding: 2px 10px; border-radius: 4px; color: #fff; }
+  .c-CRIT { background: var(--crit); } .c-WARN { background: var(--warn); }
+  .c-OK { background: var(--ok); } .c-FACT { background: var(--fact); }
+  h2 { font-size: 16px; margin: 0 0 12px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  h2.collapsible { cursor: pointer; user-select: none; color: var(--muted); }
+  h2.collapsible:hover { color: var(--text); }
+  .toggle-mark { display: inline-block; width: 1em; color: var(--muted); }
+  h3 { font-size: 14px; color: var(--muted); margin: 14px 0 6px; }
+  /* 问题卡片（第一眼） */
+  .issue-list { display: grid; gap: 12px; }
+  .issue-card { border-left: 4px solid var(--warn); padding: 10px 14px;
+                background: #fdf6ec; border-radius: 4px; }
+  .issue-card.c-CRIT { border-left-color: var(--crit); background: #fdecea; }
+  .issue-title { font-weight: 600; font-size: 14px; }
+  .issue-explain { font-size: 13px; margin-top: 4px; color: var(--text); }
+  .issue-advice { font-size: 13px; margin-top: 4px; color: var(--advice); }
+  /* 表格 */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #eee;
+           vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; }
+  .st { font-weight: 700; white-space: nowrap; }
+  .st.CRIT { color: var(--crit); } .st.WARN { color: var(--warn); }
+  .st.OK { color: var(--ok); } .st.FACT { color: var(--fact); }
+  .findings li, .suspects li { margin: 6px 0; font-size: 14px; }
+  code { background: #f0f0f0; padding: 1px 6px; border-radius: 3px; font-size: 12px; }
+  pre.cmd { background: #2c3e50; color: #ecf0f1; padding: 10px 12px; border-radius: 6px;
+            overflow-x: auto; font-size: 12px; margin: 6px 0; }
+  details.rollback { margin-top: 6px; }
+  details.rollback summary { cursor: pointer; font-size: 12px; color: var(--muted); }
+  pre.rollback { background: #f7f0e8; color: #8a6d3b; }
+  .action-meta { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .empty { color: var(--muted); font-style: italic; }
+</style>
+</head>
+<body>
+<div class="wrap" id="root">加载中…（本报告需由 audit.py 渲染）</div>
+<script>
+const DATA = __PAYLOAD__;
+
+function el(tag, cls, text) {
+  const node = document.createElement(tag);
+  if (cls) node.className = cls;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
+function fmt(value) {
+  if (value === null || value === undefined) return "-";
+  if (typeof value === "object") return JSON.stringify(value);
+  return String(value);
+}
+
+/* 检查项取值的人可读形式：有 value_text 优先（避免结构化值直接摊 JSON） */
+function disp(item) {
+  return item.value_text || fmt(item.value);
+}
+
+function score() {
+  const counts = DATA.counts || {};
+  return Math.max(0, 100 - (counts.CRIT || 0) * 20 - (counts.WARN || 0) * 5);
+}
+
+function allItems() {
+  const out = [];
+  for (const items of Object.values(DATA.domains || {})) out.push(...items);
+  return out;
+}
+
+/* ============ 摘要（得分 + 一句话结论） ============ */
+function renderSummary(root) {
+  const meta = DATA.meta || {};
+  const counts = DATA.counts || {};
+  const sec = el("section", "summary");
+  sec.appendChild(el("h1", null, "主机配置审计报告"));
+  sec.appendChild(el("div", "meta",
+    `${meta.host || "?"} · 模式：${meta.mode === "in-process" ? "事中（进程在跑）" : "事前（进程未起）"}` +
+    ` · ${meta.quick ? "快检" : "深检"} · 视图受限：${meta.view_limited ? "是（部分检查降级）" : "否"}`));
+  sec.appendChild(el("span", "score", `环境得分 ${score()}/100`));
+  const verdict = (counts.CRIT > 0) ? "有高危配置，需在下次启动前修正"
+              : (counts.WARN > 0) ? "整体可用，以下配置值得优化"
+              : "未发现配置问题";
+  sec.appendChild(el("div", "meta", `结论：${verdict}`));
+  const bar = el("div", "counts");
+  for (const key of ["CRIT", "WARN", "FACT", "OK"]) {
+    bar.appendChild(el("span", "c-" + key, `${key} ${counts[key] || 0}`));
+  }
+  sec.appendChild(bar);
+  root.appendChild(sec);
+}
+
+/* ============ 第一眼：问题与优化建议（含可直接执行的修复命令） ============ */
+function renderIssues(root) {
+  const issues = allItems().filter(it => it.status === "CRIT" || it.status === "WARN");
+  const order = { "CRIT": 0, "WARN": 1 };
+  issues.sort((a, b) => (order[a.status] - order[b.status]) || (a.id < b.id ? -1 : 1));
+  const actById = {};
+  for (const a of (DATA.actions || [])) actById[a.action_id] = a;
+
+  const sec = el("section", "domain");
+  const h = el("h2");
+  h.appendChild(el("span", null, `问题与优化建议（${issues.length} 项）`));
+  sec.appendChild(h);
+  if (!issues.length) {
+    sec.appendChild(el("div", "empty", "未发现不合理配置，全部检查通过 ✅"));
+    root.appendChild(sec);
+    return;
+  }
+  const list = el("div", "issue-list");
+  for (const item of issues) {
+    const card = el("div", "issue-card c-" + item.status);
+    const title = el("div", "issue-title");
+    title.textContent = `${item.status} · ${item.id} ${item.name}：当前 ${disp(item)}` +
+      (item.threshold ? `（合理参考 ${fmt(item.threshold)}）` : "");
+    card.appendChild(title);
+    if (item.explain) card.appendChild(el("div", "issue-explain", `这是什么：${item.explain}`));
+    if (item.advice) card.appendChild(el("div", "issue-advice", `建议：${item.advice}`));
+    const act = actById["A-" + item.id];
+    if (act) {
+      const cmd = el("pre", "cmd");
+      cmd.textContent = (act.commands || []).join("\n");
+      card.appendChild(cmd);
+      const rb = el("details", "rollback");
+      rb.appendChild(el("summary", null, "回滚命令"));
+      const pre = el("pre", "cmd rollback");
+      pre.textContent = (act.rollback || []).join("\n");
+      rb.appendChild(pre);
+      card.appendChild(rb);
+      card.appendChild(el("div", "action-meta",
+        `验证：${act.verify || "-"} · 执行前确认`));
+    }
+    list.appendChild(card);
+  }
+  sec.appendChild(list);
+  root.appendChild(sec);
+}
+
+/* ============ 组合诊断（多检查项联合判定；无命中不占版面） ============ */
+function renderFindings(root) {
+  const findings = DATA.findings || [];
+  if (!findings.length) return;
+  const sec = el("section", "domain");
+  sec.appendChild(el("h2", null, `组合诊断（${findings.length} 项）`));
+  {
+    const list = el("ul", "findings");
+    for (const f of findings) {
+      const li = el("li");
+      li.appendChild(el("b", null, `[${f.rule}] ${f.problem}`));
+      if (f.suggested_cpuset) {
+        const isSlice = f.locality_mode === "global_slice";
+        li.appendChild(el("div", null, isSlice
+          ? "均衡切片示例（本机无 NPU 亲和，非方案，需 bind-tune 精算）："
+          : "建议核集（按 NPU 亲和）："));
+        li.appendChild(el("code", null, f.suggested_cpuset));
+      }
+      li.appendChild(el("div", null, `证据：${(f.evidence || []).join("；")}`));
+      list.appendChild(li);
+    }
+    sec.appendChild(list);
+  }
+  root.appendChild(sec);
+}
+
+/* ============ 可疑项（需时序确认；无则不占版面） ============ */
+function renderSuspects(root) {
+  const suspects = DATA.suspects || [];
+  if (!suspects.length) return;
+  const sec = el("section", "domain");
+  sec.appendChild(el("h2", null, "需持续观察的可疑项（单点看可疑，需时序确认）"));
+  {
+    const list = el("ul", "suspects");
+    for (const s of suspects) {
+      list.appendChild(el("li", null,
+        `${s.item} ${s.name}：${fmt(s.value)} → ${s.suggest_observe}`));
+    }
+    sec.appendChild(list);
+  }
+  root.appendChild(sec);
+}
+
+/* ============ 正常/事实配置：默认折叠，供按需查阅 ============ */
+function renderNormal(root) {
+  const domains = DATA.domains || {};
+  const groups = [];
+  let total = 0;
+  for (const [name, items] of Object.entries(domains)) {
+    const norm = items.filter(it => it.status === "OK" || it.status === "FACT");
+    if (norm.length) { groups.push([name, norm]); total += norm.length; }
+  }
+  if (!total) return;
+
+  const sec = el("section", "domain");
+  const head = el("h2", "collapsible");
+  const mark = el("span", "toggle-mark", "▶");
+  head.appendChild(mark);
+  head.appendChild(el("span", null, `正常与事实配置（${total} 项，默认折叠，点击展开查阅）`));
+  const body = el("div");
+  body.style.display = "none";
+  head.addEventListener("click", () => {
+    const collapsed = body.style.display === "none";
+    body.style.display = collapsed ? "" : "none";
+    mark.textContent = collapsed ? "▼" : "▶";
+  });
+  for (const [name, items] of groups) {
+    body.appendChild(el("h3", null, name));
+    body.appendChild(renderNormalTable(items));
+  }
+  sec.appendChild(head);
+  sec.appendChild(body);
+  root.appendChild(sec);
+}
+
+function renderNormalTable(items) {
+  const table = el("table");
+  const thead = el("thead");
+  const trh = el("tr");
+  for (const h of ["项", "检查项", "判定", "当前值"]) {
+    trh.appendChild(el("th", null, h));
+  }
+  thead.appendChild(trh);
+  table.appendChild(thead);
+  const tbody = el("tbody");
+  for (const item of items) {
+    const tr = el("tr");
+    tr.appendChild(el("td", null, item.id || ""));
+    tr.appendChild(el("td", null, item.name || ""));
+    tr.appendChild(el("td", "st " + (item.status || ""), item.status || ""));
+    tr.appendChild(el("td", null, disp(item)));
+    tbody.appendChild(tr);
+  }
+  table.appendChild(tbody);
+  return table;
+}
+
+/* ============ 基线对比（有 diff 才显示） ============ */
+function renderBaselineDiff(root) {
+  const diffs = DATA.baseline_diff || [];
+  if (!diffs.length) return;
+  const sec = el("section", "domain");
+  sec.appendChild(el("h2", null, "与上轮基线对比"));
+  const table = el("table");
+  const thead = el("tr");
+  for (const h of ["项", "上轮", "本轮", "方向"]) thead.appendChild(el("th", null, h));
+  table.appendChild(thead);
+  const tbody = el("tbody");
+  for (const d of diffs) {
+    const tr = el("tr");
+    tr.appendChild(el("td", null, d.item));
+    tr.appendChild(el("td", null, fmt(d.old)));
+    tr.appendChild(el("td", null, fmt(d.new)));
+    tr.appendChild(el("td", null, {improved: "改善 ↑", degraded: "恶化 ↓"}[d.direction] || "变化"));
+    tbody.appendChild(tr);
+  }
+  table.appendChild(tbody);
+  sec.appendChild(table);
+  root.appendChild(sec);
+}
+
+(function main() {
+  const root = document.getElementById("root");
+  root.textContent = "";
+  renderSummary(root);
+  renderIssues(root);
+  renderFindings(root);
+  renderSuspects(root);
+  renderNormal(root);
+  renderBaselineDiff(root);
+})();
+</script>
+</body>
+</html>

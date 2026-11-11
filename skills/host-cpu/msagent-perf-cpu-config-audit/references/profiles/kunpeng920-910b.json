@@ -1,0 +1,12 @@
+{
+  "match": {"cpu": "Kunpeng-920", "npu": "Ascend910B"},
+  "notes": "鲲鹏 920 + 昇腾 910B 典型训练机型 profile（cpu+npu 双条件精确路由，最长匹配优先于 910 家族通用 profile）。阈值与默认表当前一致（机型确认值），差异项待调优经验补充。",
+  "thresholds": {
+    "A1_node_mem_imbalance_pct": 20,
+    "C4_swappiness": 10,
+    "D2_freq_ratio_min": 0.8,
+    "E1_single_cpu_irq_pct": 30,
+    "E1_cpu0_irq_pct": 50,
+    "G1_omp_threads": "num_cpus"
+  }
+}
