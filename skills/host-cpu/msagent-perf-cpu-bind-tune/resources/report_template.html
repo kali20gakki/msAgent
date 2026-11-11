@@ -1,0 +1,43 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Host CPU 绑核方案 · NUMA 亲和报告</title>
+<style>$css</style></head><body><div class="wrap">
+<header class="hero"><div><div class="eyebrow">msagent-perf-cpu-bind-tune</div>
+<h1>NUMA 亲和与绑核方案报告</h1>
+<div class="sub">$host · $mode_label</div>
+<div class="concl"><div class="t">结论</div><ul>$concl</ul></div></div>
+<div class="badges"><span class="badge good">$exec_badge</span><span class="badge">$form_label</span><span class="badge">执行模式：$exec_mode_label</span></div></header>
+<section class="kpis">$kpis</section>
+<section class="card"><h2><span class="no">01</span>NUMA 拓扑与设备亲和</h2>
+$host_meta
+<div class="nodes">$node_cards</div>
+<p class="hint" style="margin:12px 0 0">业务核=可分配给 NPU 进程与线程的核；中断、隔离为系统预留。单元=落在该 node 上并在此绑核的进程单元。</p></section>
+<section class="card"><h2><span class="no">02</span>进程 → 目标核分配</h2>
+<p class="hint">未绑核=亲和覆盖全部核；跨 node=已绑核但不在 NPU 所在 node。</p>
+<table><thead><tr><th>unit</th><th>进程</th><th>NPU</th><th>当前绑定</th><th>目标绑定</th><th>状态</th></tr></thead><tbody>$unit_rows</tbody></table></section>
+<section class="card"><h2><span class="no">03</span>偏差处理</h2>
+<p class="hint">按偏差类型合并。纳入方案=绑核修正；转出=交 config-audit 处理；受限=权限不足无法观测；提示/观察=仅记录。</p>
+<table><thead><tr><th>偏差</th><th>涉及单元</th><th>严重度</th><th>处理</th></tr></thead><tbody>$dev_rows</tbody></table></section>
+<section class="card"><h2><span class="no">04</span>执行与验证</h2>
+<p class="hint">$exec_hint</p>
+<pre>$cmd_text</pre>
+<p class="hint" style="margin-top:10px">验证脚本：$verify_script · 效果指标：$verify_metrics</p></section>
+<section class="card"><h2><span class="no">05</span>更多明细</h2>
+<p class="hint">以下内容默认折叠，按需展开。</p>
+<details class="src"><summary>设备亲和矩阵与 node 间时延</summary>
+<p class="hint">对角线为设备本地 node；非对角线为相对时延（sysfs distance）；<code>?</code> 表示所属 node 不可观测，表下单独列出。<b>等距</b> 表示超节点形态下 NPU 与各 node 距离相同。列头为各 node 的 CPU 范围。</p>
+$affinity_matrix
+$unknown_card
+<h3 style="margin:18px 0 8px;font-size:14px">node 间相对时延</h3>
+<p class="hint">数值来自 /sys/devices/system/node/node*/distance：10~12 为同 socket 近端，大于 20 为跨 socket 远端。</p>
+$distance_table
+</details>
+<details class="src"><summary>CPU 核位分配图（按 node 着色）</summary>
+<div class="legend"><span><i style="background:#2563eb"></i>compute</span><span><i style="background:#7c3aed"></i>comm</span><span><i style="background:#0d9488"></i>io</span><span><i style="background:#4f46e5"></i>main</span><span><i style="background:#d97706"></i>system</span><span><i style="background:#64748b"></i>interference</span><span><i style="background:#e2e8f0"></i>idle</span></div>
+<div class="strips">$strips</div></details>
+<details class="src"><summary>线程绑定规则（执行时按 comm 枚举，不落 tid 快照）</summary>
+<table><thead><tr><th>unit</th><th>角色</th><th>apply</th><th>匹配 comm</th><th>cpuset</th></tr></thead><tbody>$bind_rows</tbody></table></details>
+<details class="src"><summary>逐单元偏差证据（$dev_count 条）与规划说明（$notes_count 条）</summary>
+<table><thead><tr><th>unit</th><th>偏差</th><th>严重度</th><th>处理</th><th>证据</th></tr></thead><tbody>$dev_detail_rows</tbody></table>
+<ul class="notes">$notes</ul></details></section>
+<div class="foot">数据来源：/proc、/sys、npu-smi · 本报告只输出方案，不执行绑核 · plan_id: $plan_id</div>
+</div></body></html>

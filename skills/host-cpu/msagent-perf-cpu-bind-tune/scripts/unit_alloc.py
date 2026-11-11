@@ -40,7 +40,7 @@ import topology
 # ---------------------------------------------------------------------------
 COMM_HEAVY_THREADS = 12    # comm 线程数 ≥ 该值 → 2 核，否则 1 核
 IO_HEAVY_THREADS = 8       # io 线程数 ≥ 该值 → 2 核，否则 1 核
-MAIN_HEAVY_THREADS = 20    # main 线程数 ≥ 该值且 unit 核数充足 → 2 核
+MAIN_HEAVY_THREADS = 12    # main 线程数 ≥ 该值且 unit 核数充足 → 2 核（A2 画像 15）
 MAIN_HEAVY_MIN_UNIT = 12   # main 给 2 核所需的 unit 最小核数
 # 事前/线程未观测时按框架已知行为预留角色核：
 # 推理引擎与训练框架必有通信面；分词/数据面仅推理与 RL 调度存在。
@@ -65,7 +65,8 @@ def _count_role_cores(roles_count, framework, n):
 
 
 def _shrink_role_cores(comm_cores, io_cores, main_cores, n):
-    """按优先级收缩角色核数，返回收缩后的 comm / io / main / compute。"""
+    """按优先级收缩角色核数，返回 (comm, io, main, compute, 是否容量不足)。"""
+    shortage = False
     # 核数不足时按优先级收缩：main -> io -> comm -> compute 至少 1
     while n > 0 and (comm_cores + io_cores + main_cores) >= n:
         if main_cores > 1:
@@ -84,6 +85,7 @@ def _shrink_role_cores(comm_cores, io_cores, main_cores, n):
 
     compute_cores = n - comm_cores - io_cores - main_cores
     if compute_cores < 1:
+        shortage = True
         compute_cores = 1
         if main_cores > 0:
             main_cores -= 1
@@ -91,7 +93,7 @@ def _shrink_role_cores(comm_cores, io_cores, main_cores, n):
             io_cores -= 1
         elif comm_cores > 0:
             comm_cores -= 1
-    return comm_cores, io_cores, main_cores, compute_cores
+    return comm_cores, io_cores, main_cores, compute_cores, shortage
 
 
 def _slice_role_cpus(cpus, comm_cores, io_cores, main_cores, compute_cores):
@@ -106,9 +108,9 @@ def _slice_role_cpus(cpus, comm_cores, io_cores, main_cores, compute_cores):
             continue
         slices[name] = cpus[idx:idx + count]
         idx += count
-    # 浮点误差兜底：剩余核并入 compute
-    if idx < n and slices.get("compute") is not None:
-        slices["compute"].extend(cpus[idx:])
+    # 防御性兜底：切分后若仍有剩余核（理论上不应出现），并入 compute
+    if idx < n:
+        slices.setdefault("compute", []).extend(cpus[idx:])
     return slices
 
 
@@ -165,8 +167,16 @@ def allocate(unit, cpus):
     framework = unit.get("framework") or "unknown"
 
     comm_cores, io_cores, main_cores = _count_role_cores(roles_count, framework, n)
-    comm_cores, io_cores, main_cores, compute_cores = _shrink_role_cores(
+    comm_cores, io_cores, main_cores, compute_cores, shortage = _shrink_role_cores(
         comm_cores, io_cores, main_cores, n)
+    if shortage:
+        # 容量不足不能静默抬到 1 核：显式记录偏差，交上层决定降级策略
+        unit.setdefault("deviations", []).append({
+            "kind": "compute_core_shortage",
+            "severity": "high",
+            "handling": "solve",
+            "evidence": "unit 可用核 %d 不足，compute 仅能分配 1 核" % n,
+        })
     slices = _slice_role_cpus(cpus, comm_cores, io_cores, main_cores, compute_cores)
     # 极端收缩下 main 为 0：主线程跟随 compute 首核（先回填，保证 roles 与 thread_binding 一致）
     if not slices.get("main") and cpus:

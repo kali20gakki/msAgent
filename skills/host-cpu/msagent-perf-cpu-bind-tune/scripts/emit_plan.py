@@ -23,11 +23,14 @@ import hashlib
 import json
 import logging
 import os
+import re
 import shlex
 import socket
 import sys
 import tempfile
 import time
+
+import topology
 
 _LOG = logging.getLogger(__name__)
 
@@ -70,8 +73,6 @@ def _build_unit_output(units, plan_path, form):
     all_before = []
     for unit in units:
         commands, rollback = _unit_commands(unit, plan_path, form)
-        if form == "pre_run":
-            commands, rollback = [], []
         all_before.append((unit.get("before") or {}).get("cgroup_cpuset"))
         unit_out.append({
             "unit_id": unit.get("unit_id"),
@@ -390,7 +391,8 @@ def _assemble_plan(ctx):
 
 def build_plan(topo, units, zones_alloc, feasibility, preflight_info, form, out_dir):
     ts = _ts()
-    host = socket.gethostname()
+    # hostname 可能含空格/特殊字符：清洗后再进 plan_id 与文件名
+    host = re.sub(r"[^A-Za-z0-9_.-]", "_", socket.gethostname())
     # pid 后缀避免同一秒内并发调用生成相同 plan_id
     plan_id = "hostcpu-plan-%s-%s-%d" % (host, ts, os.getpid())
     base = "hostcpu_plan_%s_%s" % (host, ts)
@@ -406,8 +408,7 @@ def build_plan(topo, units, zones_alloc, feasibility, preflight_info, form, out_
     # 求解策略与拓扑事实以 topo["meta"] 为唯一权威（与 model / feasibility 一致），
     # preflight_info 仅保留 legacy 别名兜底，避免无亲和机器被误标 topo_affinity。
     locality_mode = _meta_value(topo, preflight_info, "locality_mode") or "topo_affinity"
-    locality_mode = {"npu_local": "topo_affinity", "balanced_partition": "global_slice"}.get(
-        locality_mode, locality_mode)
+    locality_mode = topology.LOCALITY_ALIAS.get(locality_mode, locality_mode)
     fabric = _meta_value(topo, preflight_info, "fabric")
     affinity_granularity = _meta_value(topo, preflight_info, "affinity_granularity")
     die_groups = _meta_value(topo, preflight_info, "die_groups") or []

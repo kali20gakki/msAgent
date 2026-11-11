@@ -83,9 +83,23 @@ class TestGlobalSlice(unittest.TestCase):
         topo = testutils.a3_topo(nodes=8, cpus_per_node=40, npus=8)  # 无 die_groups
         all_cpus = [c for n in topo["nodes"] for c in n["cpus"]]
         units = [testutils.make_unit(i, i, all_cpus) for i in range(8)]
-        model.build(topo, units)
+        modeled = model.build(topo, units)
         self.assertEqual(sorted(u["target_node"] for u in units), list(range(8)))
         self.assertTrue(all(u["target_node_source"] == "global_slice" for u in units))
+        # 缺 die 信息时按 NPU 逐个分组，必须显式标注，不能静默当真实封装关系
+        self.assertIn("die_info_unavailable", [f["kind"] for f in modeled["findings"]])
+
+    def test_die_groups_present_has_no_missing_die_finding(self):
+        topo, units = self._build()
+        modeled = model.build(topo, units)
+        self.assertNotIn("die_info_unavailable", [f["kind"] for f in modeled["findings"]])
+
+    def test_legacy_locality_mode_alias(self):
+        """legacy 别名统一由 topology.LOCALITY_ALIAS 映射。"""
+        topo = testutils.a2_topo()
+        topo["meta"]["locality_mode"] = "npu_local"
+        modeled = model.build(topo, [testutils.make_unit(0, 0, list(range(192)))])
+        self.assertEqual(modeled["locality_mode"], "topo_affinity")
 
     def test_no_nodes_falls_back_to_none(self):
         topo = testutils.a3_topo(nodes=0, cpus_per_node=0, npus=2)

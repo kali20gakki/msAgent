@@ -22,7 +22,9 @@
 """
 
 
-LEGACY = {"npu_local": "topo_affinity", "balanced_partition": "global_slice"}
+import topology
+
+LEGACY = topology.LOCALITY_ALIAS
 
 
 def _l3_of_cpus(cpus, topo):
@@ -232,6 +234,15 @@ def build(topo, units):
     findings = _shared_node_findings(npu_by_node)
     if locality_mode == "global_slice":
         findings.extend(_global_slice_findings(topo))
+        if not ((topo.get("meta") or {}).get("die_groups") or []):
+            # die 信息缺失时按 npu 逐个分组，需显式标注，避免被误读为真实封装关系
+            findings.append({
+                "kind": "die_info_unavailable",
+                "severity": "medium",
+                "handling": "observe",
+                "evidence": "npu-smi info -m 未解析出 die 分组；global_slice 暂按 NPU 逐个分组，"
+                            "同封装 die 锁同 node 的约束未生效",
+            })
     findings.extend(_unknown_node_findings(units))
 
     return {
