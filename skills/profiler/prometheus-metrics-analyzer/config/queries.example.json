@@ -1,0 +1,14 @@
+[
+  {
+    "promql": "REPLACE_RUNNING_REQUESTS_GAUGE{job=\"REPLACE_TARGET_JOB\",instance=\"REPLACE_TARGET_INSTANCE\"}",
+    "unit": "requests"
+  },
+  {
+    "promql": "rate(REPLACE_GENERATION_TOKEN_COUNTER{job=\"REPLACE_TARGET_JOB\",instance=\"REPLACE_TARGET_INSTANCE\"}[2m])",
+    "unit": "tokens/second"
+  },
+  {
+    "promql": "histogram_quantile(0.95, sum by (le, instance, model_name) (rate(REPLACE_TTFT_BUCKET{job=\"REPLACE_TARGET_JOB\",instance=\"REPLACE_TARGET_INSTANCE\"}[2m])))",
+    "unit": "seconds"
+  }
+]

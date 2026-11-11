@@ -1,0 +1,9 @@
+{
+  "prometheus_url": "http://npu-server-a:9090",
+  "target": {"job": "sglang-ascend", "instance": "server-a:30000"},
+  "start": "2026-11-09T10:00:00+08:00",
+  "end": "2026-11-09T10:30:00+08:00",
+  "step": 15,
+  "engine": "sglang",
+  "symptom": "TTFT increased"
+}
