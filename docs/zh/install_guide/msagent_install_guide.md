@@ -6,7 +6,7 @@
 
 推荐使用[一键安装](#31-一键安装)：自动安装 `mindstudio-agent` 最新版本，不与现有环境冲突。
 
-同时支持[pip 安装](#32-pip-安装)与[源码安装](#33-源码安装)两种方式。
+同时支持[源码安装](#32-源码安装)方式。
 
 > 一键安装走 uv 隔离工具环境，**卸载只能用 `uv tool uninstall mindstudio-agent`，`pip uninstall` 无效**；各方式的升级、卸载命令见[§5.2](#52-按安装方式选择升级与卸载命令)。
 
@@ -60,34 +60,11 @@ msagent --version
 
 > 提示：如需强制指定某个源，可设置 `MSAGENT_INDEX=<index>`。
 
-### 3.2 pip 安装
-
-两种落点，卸载方式不同：
-
-- **方式 A：虚拟环境 + pip**
-
-  ```shell
-  python3 -m venv ~/.msagent-venv
-  ~/.msagent-venv/bin/pip install mindstudio-agent
-  ```
-
-  升级 / 卸载：`~/.msagent-venv/bin/pip install -U mindstudio-agent`、`~/.msagent-venv/bin/pip uninstall -y mindstudio-agent`
-
-- **方式 B：uv 工具安装（推荐替代 pip）**
-
-  ```shell
-  uv tool install -U --python 3.11 mindstudio-agent
-  ```
-
-  升级 / 卸载同[一键安装](#31-一键安装)，**不能用 pip 卸载**：`uv tool upgrade mindstudio-agent`、`uv tool uninstall mindstudio-agent`
-
-> 需 `Python >= 3.11`；直接 `pip install` 到系统环境易冲突或触发 PEP 668 限制，参见《[FAQ](../support/faq.md)》第 7 条。
-
-### 3.3 源码安装
+### 3.2 源码安装
 
 > **安装方式**：`pip install` 到当前 Python 环境（镜像容器或虚拟环境）；升级用重新构建的 wheel 执行 `pip install -U`，卸载用该环境的 `pip uninstall mindstudio-agent`，见[§5.2](#52-按安装方式选择升级与卸载命令)。
 
-#### 3.3.1 环境准备
+#### 3.2.1 环境准备
 
 源码编译统一使用 MindStudio 标准构建环境。
 
@@ -98,7 +75,7 @@ msagent --version
 
 镜像构建完成后，必须使用统一镜像制作指南第 7 章给出的 `ctr_in.py` 命令，在交互式终端中启动并进入容器。不得使用普通 `docker run` 创建容器，也不得使用 `docker exec <容器名> bash -c '<命令>'` 替代交互式环境；否则可能跳过 Python、GCC 和 CANN 环境初始化。
 
-#### 3.3.2 编译并安装
+#### 3.2.2 编译并安装
 
 1. 进入 `ctr_in.py` 打开的交互式容器 Shell 后，执行如下命令克隆本仓库：
 
@@ -128,7 +105,7 @@ msagent --version
 
    默认构建会安装 `uv`。如本地已安装 `uv`，可使用 `python3 build.py local` 跳过安装。
 
-#### 3.3.3 执行单元测试（可选）
+#### 3.2.3 执行单元测试（可选）
 
 此步骤非安装必需。如需验证代码基本功能，可在仓库根目录执行：
 

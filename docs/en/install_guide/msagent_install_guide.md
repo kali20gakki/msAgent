@@ -6,7 +6,7 @@ This document is intended for users who are new to MindStudio-Agent and helps yo
 
 You are advised to use [one-click installation](#31-one-click-installation). It automatically installs the latest version of `mindstudio-agent` without conflicting with the existing environment.
 
-The following methods are also supported: [pip installation](#32-pip-installation) and [source code installation](#33-source-code-installation).
+The following methods is also supported [source code installation](#32-source-code-installation).
 
 > One-click installation uses an isolated uv tool environment. **You can only uninstall it with `uv tool uninstall mindstudio-agent`, and `pip uninstall` does not work.** For the upgrade and uninstall commands of each method, see [§5.2](#52-selecting-the-upgrade-and-uninstall-command-by-installation-method).
 
@@ -31,13 +31,13 @@ The installer uses a domestic mirror by default for fast installation. If the mi
 **Linux/macOS/WSL:**
 
 ```shell
-curl -LsSf https://raw.atomgit.com/Ascend/msagent/raw/26.2.0/scripts/install.sh | bash
+curl -LsSf https://raw.gitcode.com/Ascend/msagent/raw/26.2.0/scripts/install.sh | bash
 ```
 
 **Windows (PowerShell 5.1 or later):**
 
 ```powershell
-irm https://raw.atomgit.com/Ascend/msagent/raw/26.2.0/scripts/install.ps1 | iex
+irm https://raw.gitcode.com/Ascend/msagent/raw/26.2.0/scripts/install.ps1 | iex
 ```
 
 Run the following command. If the msAgent version is displayed, the installation is successful.
@@ -60,51 +60,28 @@ msagent --version
 
 > Note: To force a specific source, set `MSAGENT_INDEX=<index>`.
 
-### 3.2 pip Installation
-
-The uninstall method differs depending on the target location:
-
-- **Method A: Virtual environment + pip**
-
-  ```shell
-  python3 -m venv ~/.msagent-venv
-  ~/.msagent-venv/bin/pip install mindstudio-agent
-  ```
-
-  Upgrade/uninstall: `~/.msagent-venv/bin/pip install -U mindstudio-agent`, `~/.msagent-venv/bin/pip uninstall -y mindstudio-agent`
-
-- **Method B: uv tool installation (recommended over pip)**
-
-  ```shell
-  uv tool install -U --python 3.11 mindstudio-agent
-  ```
-
-  Upgrade/uninstall is the same as for [one-click installation](#31-one-click-installation). **You cannot uninstall with pip**: `uv tool upgrade mindstudio-agent`, `uv tool uninstall mindstudio-agent`
-
-> `Python >= 3.11` is required. Directly running `pip install` into the system environment easily causes conflicts or triggers the PEP 668 restriction. For details, see item 7 in the [FAQ](../support/faq.md).
-
-### 3.3 Source Code Installation
+### 3.2 Source Code Installation
 
 > **Installation method**: `pip install` into the current Python environment (a mirror container or a virtual environment). For upgrade, run `pip install -U` with a rebuilt wheel. For uninstall, run `pip uninstall mindstudio-agent` in that environment. For details, see [§5.2](#52-selecting-the-upgrade-and-uninstall-command-by-installation-method).
 
-#### 3.3.1 Environment Setup
+#### 3.2.1 Environment Setup
 
 All source code compilation uses the MindStudio standard build environment.
 
-- For daily development or when using a released image, see the [MindStudio Tool Development Environment Installation Guide](https://atomgit.com/Ascend/msot/blob/26.2.0/docs/en/common/dev_env_setup.md).
-- When you need to reproduce the environment from the base operating system or perform source code build verification or unit test verification, you must refer to the [MindStudio Unified Build Image Creation Guide](https://atomgit.com/Ascend/msot/blob/26.2.0/docs/en/common/docker_image_build_guide.md) to build an environment image on site from the openEuler base image.
+- For daily development or when using a released image, see the [MindStudio Tool Development Environment Installation Guide](https://gitcode.com/Ascend/msot/blob/26.2.0/docs/en/common/dev_env_setup.md).
+- When you need to reproduce the environment from the base operating system or perform source code build verification or unit test verification, you must refer to the [MindStudio Unified Build Image Creation Guide](https://gitcode.com/Ascend/msot/blob/26.2.0/docs/en/common/docker_image_build_guide.md) to build an environment image on site from the openEuler base image.
 
 The source code compilation and unit test commands in the rest of this document are all run in the containers of the specified image or the environment image built on site. The CANN software package version, GCC version, and Python version follow the *Unified Build Image Creation Guide*. This repository does not maintain them separately.
 
 After the image build is complete, you must use the `ctr_in.py` command provided in Chapter 7 of the *Unified Build Image Creation Guide* to start and enter the container in an interactive terminal. Do not use a common `docker run` command to create a container, and do not use `docker exec <container_name> bash -c '<command>'` as a replacement for the interactive environment. Otherwise, the Python, GCC, and CANN environment initialization may be skipped.
 
-#### 3.3.2 Compiling and Installing
+#### 3.2.2 Compiling and Installing
 
 1. After entering the interactive container shell opened by `ctr_in.py`, run the following command to clone this repository:
 
    ```bash
    cd ~
-   git clone https://atomgit.com/Ascend/msagent.git -b 26.2.0
+   git clone https://gitcode.com/Ascend/msagent.git -b 26.2.0
    ```
 
 2. Stay in the same interactive container shell opened by `ctr_in.py`, and run the following command in the repository root directory to automatically download dependencies and build the project:
@@ -128,7 +105,7 @@ After the image build is complete, you must use the `ctr_in.py` command provided
 
    The default build installs `uv`. If `uv` is already installed locally, you can run `python3 build.py local` to skip the installation.
 
-#### 3.3.3 Running Unit Tests (Optional)
+#### 3.2.3 Running Unit Tests (Optional)
 
 This step is not required for installation. To verify the basic functions of the code, run the following command in the repository root directory:
 
@@ -172,7 +149,7 @@ The installer only writes the uv tool directory to the shell startup file and do
 
 Automatic migration of the `.msagent` directory of an old project is not provided at the current stage. When you upgrade or switch versions, retain the old directory. Do not delete the configuration directory as an upgrade step.
 
-When you upgrade the version, pay attention to version compatibility. For details, see the [Release Notes](https://atomgit.com/Ascend/release-management/blob/master/MindStudio/26.2.0/release_notes_en.md).
+When you upgrade the version, pay attention to version compatibility. For details, see the [Release Notes](https://gitcode.com/Ascend/release-management/blob/master/MindStudio/26.2.0/release_notes_en.md).
 
 ### 5.1 Checking the Current Installation Method
 
@@ -197,7 +174,7 @@ One-click installation does not leave `mindstudio-agent` in the pip environment.
 The upgrade command for one-click installation is as follows:
 
 ```shell
-curl -LsSf https://raw.atomgit.com/Ascend/msagent/raw/26.2.0/scripts/install.sh | bash
+curl -LsSf https://raw.gitcode.com/Ascend/msagent/raw/26.2.0/scripts/install.sh | bash
 ```
 
 > The uv tool method and the pip method are separate. If both are installed, only one takes effect in PATH (the installer prompts about the shadowing). Confirm with `command -v msagent` as described in section 5.1 before you uninstall.
