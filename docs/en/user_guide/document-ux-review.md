@@ -36,7 +36,7 @@ To confirm that `document-ux-review` is enabled with the default configuration, 
 **Example 1: Hands-On Example with `msmonitor`**
 
 ```text
-Please experience and review the onboarding experience of this repository's documentation: https://atomgit.com/Ascend/msmonitor.
+Please experience and review the onboarding experience of this repository's documentation: https://gitcode.com/Ascend/msmonitor.
 
 Local environment:
 - Ubuntu 20.04

@@ -105,10 +105,10 @@ You are advised to use one-click installation instead (an isolated environment t
 
 ```shell
 # Linux / macOS / WSL
-curl -LsSf https://raw.atomgit.com/Ascend/msagent/raw/26.2.0/scripts/install.sh | bash
+curl -LsSf https://raw.gitcode.com/Ascend/msagent/raw/26.2.0/scripts/install.sh | bash
 
 # Windows (PowerShell 5.1+)
-irm https://raw.atomgit.com/Ascend/msagent/raw/26.2.0/scripts/install.ps1 | iex
+irm https://raw.gitcode.com/Ascend/msagent/raw/26.2.0/scripts/install.ps1 | iex
 ```
 
 Common error messages:

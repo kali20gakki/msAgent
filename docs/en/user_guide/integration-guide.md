@@ -18,7 +18,7 @@ The skill implementations in msAgent follow the common conventions of Agent Skil
 This method applies to agents that support the `npx skills` workflow, such as Trae and OpenCode. You can install skills with a single command:
 
 ```bash
-git clone https://atomgit.com/Ascend/msagent.git -b 26.2.0
+git clone https://gitcode.com/Ascend/msagent.git -b 26.2.0
 cd msagent/skills
 
 # Install a single Skill
@@ -36,7 +36,7 @@ npx skills add . --all -a trae
 This method does not depend on `npx` and works with any agent. After cloning the repository, copy the target skill directory into the agent's skills scanning path:
 
 ```bash
-git clone https://atomgit.com/Ascend/msagent.git -b 26.2.0
+git clone https://gitcode.com/Ascend/msagent.git -b 26.2.0
 
 # opencode
 cp -r msagent/skills/profiler/ascend-profiler-db-explorer ~/.config/opencode/skills/
