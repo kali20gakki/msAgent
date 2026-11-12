@@ -82,7 +82,7 @@ Optional arguments:
       --timer                              Enable startup timing.
   -am, --approval-mode {semi-active,active,aggressive}
                                            Tool approval mode [default: active]
-      --execute-approval-mode {safe,convenience}
+      --execute-approval-mode {manual,auto}
                                            Preset shell execute approval mode for non-interactive runs.
       --trace-jsonl <FILE>                 Write JSONL trace events to this file.
 
@@ -325,7 +325,7 @@ def _add_runtime_options(parser: argparse.ArgumentParser, *, include_timer: bool
     )
     parser.add_argument(
         "--execute-approval-mode",
-        choices=["safe", "convenience"],
+        choices=["manual", "auto"],
         default=None,
         help="Preset shell execute approval mode for non-interactive runs",
     )

@@ -48,11 +48,11 @@ def _patch_prompt_setup(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_session_reads_initial_execute_approval_mode_from_context(monkeypatch: pytest.MonkeyPatch) -> None:
     _patch_prompt_setup(monkeypatch)
     context = _build_context()
-    context.execute_approval_mode = "convenience"
+    context.execute_approval_mode = "auto"
 
     session = Session(context)
 
-    assert session.execute_approval_mode == "convenience"
+    assert session.execute_approval_mode == "auto"
 
 
 def test_session_defaults_execute_approval_mode_to_none(monkeypatch: pytest.MonkeyPatch) -> None:

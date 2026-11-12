@@ -42,7 +42,7 @@
 |---|---|
 | `Ctrl+C` | 有输入时清空输入框；连续按两次退出会话。 |
 | `Ctrl+J` | 插入换行，便于多行输入。 |
-| `Shift+Tab` | 循环切换审批模式。 |
+| `Shift+Tab` | 循环切换交互档位，参见[权限审批使用指南](permission-approval-guide.md)。 |
 | `Ctrl+B` | 切换 bash mode。 |
 | `Ctrl+K` | 直接打开快捷键说明。 |
 | `Ctrl+O` | 打开最近一次可展开的工具输出。 |
@@ -75,6 +75,7 @@
 
 | 主题 | 说明 | 文档 |
 |---|---|---|
+| 权限审批 | Shell 审批模式、触发场景和项目授权管理 | [权限审批使用指南](permission-approval-guide.md) |
 | 配置与扩展 | 本地配置目录、模型 Provider、MCP 配置、Skills 扩展与加载顺序 | [配置与扩展](configuration-and-extension.md) |
 | 上下文压缩 | 长会话的上下文压缩与卸载机制（`/offload` 等）配置与行为 | [上下文压缩使用指南](context-compaction-guide.md) |
 | 重试与超时 | 模型调用的 Retry Middleware 重试、退避与超时配置 | [Retry Middleware 使用指南](retry-middleware-guide.md) |

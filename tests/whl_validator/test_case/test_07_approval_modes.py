@@ -19,8 +19,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
-import re
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -37,7 +35,6 @@ def _build_session(tmp_path: Path, mode: str) -> SimpleNamespace:
     return SimpleNamespace(
         context=SimpleNamespace(working_dir=tmp_path, state_dir=tmp_path),
         prompt=SimpleNamespace(mode_change_callback=None),
-        approval_session_rules=[],
         execute_approval_mode=mode,
     )
 
@@ -47,11 +44,6 @@ def _execute_payload(command: str) -> dict[str, object]:
         "action_requests": [{"name": "execute", "args": {"command": command}}],
         "review_configs": [{"action_name": "execute", "allowed_decisions": ["approve", "reject"]}],
     }
-
-
-def _rules(tmp_path: Path) -> list[dict[str, object]]:
-    path = tmp_path / "config.approval.json"
-    return list(json.loads(path.read_text(encoding="utf-8")).get("decision_rules") or []) if path.exists() else []
 
 
 async def _arun_with_prompt(
@@ -71,12 +63,12 @@ async def _arun_with_prompt(
     return result, interacted, prompted
 
 
-def test_safe_mode_approval_policy_and_project_persistence(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    session = _build_session(tmp_path, "safe")
+def test_manual_mode_approval_policy_and_project_persistence(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    session = _build_session(tmp_path, "manual")
     handler = InterruptHandler(session)
 
     whitelist_result, whitelist_interacted = asyncio.run(handler._get_hitl_decisions(_execute_payload("pwd && ls -la")))
-    ordinary_command = "chmod 777 /tmp/msagent-approval-demo && ls -l /tmp/msagent-approval-demo"
+    ordinary_command = "mkdir approval-demo"
     ordinary_result, ordinary_interacted, prompted = asyncio.run(
         _arun_with_prompt(handler, monkeypatch, ordinary_command)
     )
@@ -86,22 +78,13 @@ def test_safe_mode_approval_policy_and_project_persistence(tmp_path: Path, monke
     assert ordinary_result == {"decisions": [{"type": "approve"}]}
     assert ordinary_interacted is True
     assert prompted == [ordinary_command]
-    assert session.approval_session_rules == []
-    assert _rules(tmp_path) == [
-        {
-            "name": "execute",
-            "args": {"command": rf"^{re.escape(ordinary_command)}$"},
-            "decision": "always_approve",
-        }
-    ]
-
     config = ToolApprovalConfig.from_json_file(tmp_path / "config.approval.json")
     assert config.resolve_decision("execute", {"command": ordinary_command}) == "always_approve"
     assert config.resolve_decision("execute", {"command": ordinary_command + " --changed"}) == "ask"
 
 
-def test_convenience_mode_policy_and_session_persistence(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    session = _build_session(tmp_path, "convenience")
+def test_auto_mode_policy_and_single_dangerous_approval(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    session = _build_session(tmp_path, "auto")
     handler = InterruptHandler(session)
 
     whitelist_result, whitelist_interacted = asyncio.run(
@@ -111,7 +94,7 @@ def test_convenience_mode_policy_and_session_persistence(tmp_path: Path, monkeyp
     ordinary_result, ordinary_interacted = asyncio.run(handler._get_hitl_decisions(_execute_payload(ordinary_command)))
     blacklist_command = "rm -rf /tmp/msagent-approval-demo"
     blacklist_result, blacklist_interacted, prompted = asyncio.run(
-        _arun_with_prompt(handler, monkeypatch, blacklist_command)
+        _arun_with_prompt(handler, monkeypatch, blacklist_command, selected="approve")
     )
 
     assert whitelist_result == {"decisions": [{"type": "approve"}]}
@@ -121,24 +104,21 @@ def test_convenience_mode_policy_and_session_persistence(tmp_path: Path, monkeyp
     assert blacklist_result == {"decisions": [{"type": "approve"}]}
     assert blacklist_interacted is True
     assert prompted == [blacklist_command]
-    assert _rules(tmp_path) == []
-    assert len(session.approval_session_rules) == 1
-    assert session.approval_session_rules[0].decision == "always_approve"
-    assert session.approval_session_rules[0].matches_call("execute", {"command": blacklist_command})
+    assert not (tmp_path / "config.approval.json").exists()
 
 
-@pytest.mark.parametrize("mode", ["safe", "convenience"])
-def test_blacklist_always_approve_stays_session_only(
+@pytest.mark.parametrize("mode", ["manual", "auto"])
+def test_dangerous_command_prompts_again_after_approval(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mode: str
 ) -> None:
     session = _build_session(tmp_path, mode)
     handler = InterruptHandler(session)
     command = "echo cleanup && rm -rf /tmp/msagent-approval-demo"
 
-    result, interacted, _prompted = asyncio.run(_arun_with_prompt(handler, monkeypatch, command))
+    for _ in range(2):
+        result, interacted, prompted = asyncio.run(_arun_with_prompt(handler, monkeypatch, command, selected="approve"))
 
-    assert result == {"decisions": [{"type": "approve"}]}
-    assert interacted is True
-    assert _rules(tmp_path) == []
-    assert len(session.approval_session_rules) == 1
-    assert session.approval_session_rules[0].matches_call("execute", {"command": command})
+        assert result == {"decisions": [{"type": "approve"}]}
+        assert interacted is True
+        assert prompted == [command]
+    assert not (tmp_path / "config.approval.json").exists()

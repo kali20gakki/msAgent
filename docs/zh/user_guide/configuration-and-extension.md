@@ -60,25 +60,7 @@
 
 ## 4. 命令审批与权限管理
 
-`msagent` 首次执行 shell 命令时会要求选择审批模式；非交互或自动化场景可用启动参数预设：
-
-```bash
-msagent --execute-approval-mode safe "运行需要逐条确认的任务"
-msagent --execute-approval-mode convenience "运行可信自动化任务"
-```
-
-未传 `--execute-approval-mode` 时，交互式会话仍会在首次执行 shell 命令时提示用户选择模式。
-
-Safe Mode 下白名单默认批准，黑名单和普通命令逐条确认；Convenience Mode 下白名单和普通命令默认批准，黑名单逐条确认。白名单和黑名单仅用于启发式分类，不构成安全边界；解释器、脚本、别名、命令替换及其他包装形式可能间接执行敏感操作，用户仍需检查实际命令。`approve` / `reject` 仅本次生效；黑名单的 `always_approve` / `always_reject` 只保存到会话内，Safe Mode 普通命令的 always 规则会按项目持久化到 `~/.msagent/state/projects/<project-id>/config.approval.json`。
-
-`/permissions` 是权限管理的唯一入口：
-
-- `/permissions`：查看当前模式、会话级规则和项目级规则。
-- `/permissions mode safe`：切换到 Safe Mode。
-- `/permissions mode convenience`：切换到 Convenience Mode。
-- `/permissions clear-project`：清空当前项目的持久化审批规则。
-
-安全声明：Convenience Mode 追求效率，Safe Mode 让黑名单和普通命令在执行前确认；一旦选择项目级 `always_approve` / `always_reject`，仅命令文本与本次完全一致的调用会在当前用户、当前项目下跨会话自动批准或拒绝，直到通过 `/permissions clear-project` 清空，相关执行风险由用户自行承担。
+审批模式、触发场景和项目授权管理见[权限审批使用指南](permission-approval-guide.md)。
 
 ## 5. 配置读取方式
 
