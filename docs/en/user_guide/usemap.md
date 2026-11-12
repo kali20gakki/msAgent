@@ -35,6 +35,7 @@ When you start `msagent`, specify the `--agent` parameter to launch a sub-featur
 | [Operator](../agent_guide/operator.md)   | Operator tuning | msagent --agent Operator |
 | [Minos](../agent_guide/minos.md)         | Documentation assistance | msagent --agent Minos |
 | [SpecTrainer](../agent_guide/spectrainer.md) | Speculative decoding data resampling | msagent --agent SpecTrainer |
+| [HostCPU](../agent_guide/hostcpu.md) | Host-side performance tuning | msagent --agent HostCPU |
 
 ## 2. Input Area Shortcuts
 

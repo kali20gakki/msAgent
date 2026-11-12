@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Host CPU 性能归因 · Perf Triage</title>
+<style>
+  :root { --crit:#c0392b; --warn:#e67e22; --ok:#27ae60; --fact:#7f8c8d;
+          --bg:#f5f6f7; --card:#fff; --text:#2c3e50; --muted:#7f8c8d;
+          --advice:#2c6e8f; --disturb:#c0392b; --wait:#2c6e8f;
+          --eff:#bdc3c7; --residual:#95a5a6; }
+  * { box-sizing: border-box; }
+  body { font-family: "Segoe UI", "Microsoft YaHei", sans-serif; background: var(--bg);
+         color: var(--text); margin: 0; padding: 24px; }
+  .wrap { max-width: 1080px; margin: 0 auto; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .meta { color: var(--muted); font-size: 13px; margin-bottom: 16px; }
+  .box { background: var(--card); border-radius: 8px; padding: 16px 20px;
+         margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+  .conclusion { font-size: 16px; font-weight: 600; line-height: 1.6; }
+  .badge { display: inline-block; padding: 2px 10px; border-radius: 4px;
+           font-size: 12px; color: #fff; margin-right: 8px; vertical-align: 2px; }
+  .b-ok { background: var(--ok); } .b-warn { background: var(--warn); }
+  .b-crit { background: var(--crit); } .b-muted { background: var(--fact); }
+  /* 三段占比条 */
+  .bar { display: flex; height: 26px; border-radius: 6px; overflow: hidden;
+         background: var(--eff); margin: 10px 0 6px; }
+  .bar div { height: 100%; color: #fff; font-size: 12px; text-align: center;
+             line-height: 26px; white-space: nowrap; overflow: hidden; }
+  .seg-disturb { background: var(--disturb); }
+  .seg-wait { background: var(--wait); }
+  .seg-eff { background: var(--eff); color: var(--muted); }
+  .seg-residual { background: var(--residual); }
+  .legend { font-size: 12px; color: var(--muted); display: flex; gap: 18px; flex-wrap: wrap; }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px;
+              margin-right: 4px; }
+  /* 阶段卡片 */
+  .phases { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
+  .phase { border: 1px solid #e5e8eb; border-radius: 8px; padding: 12px 14px; background: #fbfcfe; }
+  .phase h3 { font-size: 14px; margin: 0 0 6px; display: flex; justify-content: space-between; }
+  .phase .st { font-size: 12px; font-weight: 700; }
+  .phase p { font-size: 13px; margin: 4px 0 8px; color: var(--text); line-height: 1.5; }
+  .phase a { display: inline-block; font-size: 12px; color: var(--advice);
+             text-decoration: none; border-bottom: 1px dashed var(--advice); margin-right: 10px; }
+  .phase a:hover { color: var(--text); border-bottom-color: var(--text); }
+  /* 表格 */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #eee; vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; }
+  .tag { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 11px;
+         background: #eef3f7; color: var(--advice); margin-right: 4px; }
+  .risk-high { color: var(--crit); font-weight: 700; }
+  .risk-medium { color: var(--warn); font-weight: 700; }
+  .risk-low { color: var(--ok); font-weight: 700; }
+  ul.deg { margin: 6px 0 0; padding-left: 20px; font-size: 13px; color: var(--muted); }
+  .empty { color: var(--muted); font-size: 13px; }
+  h2 { font-size: 15px; margin: 0 0 10px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Host CPU 性能归因报告</h1>
+  <div class="meta" id="meta"></div>
+
+  <div class="box">
+    <div class="conclusion" id="conclusion"></div>
+    <div class="bar" id="bar"></div>
+    <div class="legend" id="legend"></div>
+  </div>
+
+  <div class="box">
+    <h2>阶段产物</h2>
+    <div class="phases" id="phases"></div>
+  </div>
+
+  <div class="box">
+    <h2>优化动作（按 代价×收益 排序，配置类优先）</h2>
+    <div id="actions"></div>
+  </div>
+
+  <div class="box">
+    <h2>降级与口径说明</h2>
+    <ul class="deg" id="degradation"></ul>
+  </div>
+</div>
+
+<script>
+const P = __PAYLOAD__;
+
+function esc(v) {
+  return String(v === null || v === undefined ? "" : v)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+function pct(v) { return (v === null || v === undefined) ? "—" : Number(v).toFixed(1) + "%"; }
+
+document.getElementById("meta").textContent =
+  "run_id " + P.meta.run_id + " · 主机 " + P.meta.host + " · 生成于 " + P.meta.generated_at;
+
+const a = P.attribution || {};
+const converged = a.converged;
+const badge = converged ? '<span class="badge b-ok">已收敛</span>'
+              : (a.disturb_pct == null && a.wait_pct == null
+                 ? '<span class="badge b-muted">不可观测</span>'
+                 : '<span class="badge b-warn">未收敛</span>');
+document.getElementById("conclusion").innerHTML = badge + esc(P.conclusion);
+
+// 三段占比条：打扰 / 等待 / 效率(缺位) / 残余
+const disturb = a.disturb_pct || 0;
+const wait = a.wait_pct || 0;
+const observed = !(a.disturb_pct == null && a.wait_pct == null);
+const residual = a.residual_pct == null ? 0 : (a.residual_pct || 0);
+const bar = document.getElementById("bar");
+if (!observed) {
+  bar.innerHTML = '<div class="seg-eff" style="width:100%">无可观测运行时数据</div>';
+} else {
+  bar.innerHTML =
+    '<div class="seg-disturb" style="width:' + disturb + '%">' + pct(disturb) + '</div>' +
+    '<div class="seg-wait" style="width:' + wait + '%">' + pct(wait) + '</div>' +
+    '<div class="seg-residual" style="width:' + residual + '%">' + pct(residual) + '</div>';
+}
+const bd = a.wait_breakdown || {};
+const bdText = Object.keys(bd).map(k => k + " " + pct(bd[k])).join(" · ");
+document.getElementById("legend").innerHTML =
+  '<span><i style="background:var(--disturb)"></i>打扰 ' + pct(a.disturb_pct) + '</span>' +
+  '<span><i style="background:var(--wait)"></i>等待 ' + pct(a.wait_pct) + '</span>' +
+  '<span><i style="background:var(--eff)"></i>效率 ' +
+    (a.efficiency === "not_observable" ? "not_observable（第二期）" : pct(a.efficiency)) + '</span>' +
+  '<span><i style="background:var(--residual)"></i>残余 ' + pct(a.residual_pct) + '</span>' +
+  (bdText ? '<span>等待细分：' + esc(bdText) + '</span>' : "");
+
+// 阶段卡片
+const phases = document.getElementById("phases");
+phases.innerHTML = (P.phases || []).map(function (p) {
+  const links = (p.reports || []).length
+    ? p.reports.map(r => '<a href="' + esc(r.href) + '">' + esc(r.name) + '</a>').join("")
+    : '<span class="empty">无报告</span>';
+  return '<div class="phase"><h3><span>' + esc(p.name) + '</span>' +
+         '<span class="st">' + esc(p.status) + '</span></h3>' +
+         '<p>' + esc(p.detail) + '</p>' + links + '</div>';
+}).join("");
+
+// 动作表
+const acts = P.actions || [];
+if (!acts.length) {
+  document.getElementById("actions").innerHTML =
+    '<div class="empty">无可执行动作（数据不足或未发现可归因问题）</div>';
+} else {
+  let html = '<table><thead><tr><th>ID</th><th>类型</th><th>动作与预期</th>' +
+             '<th>来源</th><th>风险</th><th>转出</th></tr></thead><tbody>';
+  acts.forEach(function (x) {
+    html += '<tr><td>' + esc(x.action_id) + '</td><td>' + esc(x.type) + '</td>' +
+            '<td><b>' + esc(x.explain || "") + '</b><br>' + esc(x.expected_effect || "") +
+            (x.level ? ' <span class="tag">' + esc(x.level) + '</span>' : "") + '</td>' +
+            '<td>' + esc(x.source) + '</td>' +
+            '<td class="risk-' + esc(x.risk) + '">' + esc(x.risk) + '</td>' +
+            '<td>' + esc(x.handoff || "—") + '</td></tr>';
+  });
+  document.getElementById("actions").innerHTML = html + '</tbody></table>';
+}
+
+// 降级说明
+const deg = P.degradation || [];
+document.getElementById("degradation").innerHTML = deg.length
+  ? deg.map(d => "<li>" + esc(d) + "</li>").join("")
+  : "<li>无降级项</li>";
+</script>
+</body>
+</html>

@@ -179,7 +179,7 @@ sequenceDiagram
 
 #### 5.1 专业 Agent 设计
 
-默认模板内置 7 个主 Agent，全部通过 YAML 配置装配，核心差异体现在 Prompt、可见 Tools、可见 Skills、SubAgent 组合及默认性上。
+默认模板内置 8 个主 Agent，全部通过 YAML 配置装配，核心差异体现在 Prompt、可见 Tools、可见 Skills、SubAgent 组合及默认性上。
 
 | Agent | 领域定位 | 默认性 | 典型 Tool Pattern | 典型 Skill Pattern | SubAgent |
 | -- | -- | -- | -- | -- | -- |
@@ -190,6 +190,7 @@ sequenceDiagram
 | Operator | 算子性能优化 | 否 | `impl:deepagents:*` + 特定 MCP 模式 | AscendC 算子优化、算子 profiler | `explorer` + `general-purpose` |
 | Minos | 文档体验与代码审查 | 否 | `impl:deepagents:*` | `document-ux-review`、`gitcode-code-reviewer` | `explorer` |
 | SpecTrainer | 投机解码 on-policy 重采样（响应重生成） | 否 | `impl:deepagents:*` | `speculators:*`（预检 → 输入归一化 → 重生成预分词样本） | `explorer` |
+| HostCPU | 主机侧配置审计与绑核调优 | 否 | `impl:deepagents:*` | host-cpu 配置审计、绑核方案、症状归因 | `explorer` + `general-purpose` |
 
 这种设计意味着：
 
@@ -232,6 +233,8 @@ flowchart LR
     Q5 --> I["Operator"]
     Q6 --> M["Minos"]
     Q7 --> S["SpecTrainer"]
+    U --> Q8["Host 配置 / 绑核 / 利用率低"]
+    Q8 --> C["HostCPU"]
 
     H --> H1["Prompt: 性能分析方法论"]
     H --> H2["Tools: deepagents + msprof-mcp"]
@@ -267,17 +270,22 @@ flowchart LR
  	  S --> S2["Tools: deepagents"]
  	  S --> S3["Skills: 预检 / 归一化 / 响应重生成"]
  	  S --> S4["SubAgents: explorer"]
+
+    C --> C1["Prompt: 配置阈值 / NUMA 亲和 / 证据降级"]
+    C --> C2["Tools: deepagents"]
+    C --> C3["Skills: 配置审计 / 绑核方案 / 归因编排"]
+    C --> C4["SubAgents: explorer + general-purpose"]
 ```
 
-7 个默认 Agent 共用同一套运行时骨架，在以下维度上形成差异化配置：
+8 个默认 Agent 共用同一套运行时骨架，在以下维度上形成差异化配置：
 
-| 维度 | Profiler | Accuracy | Quantizer | Modeling | Operator | Minos | SpecTrainer |
-| -- | -- | -- | -- | -- | -- | -- | -- |
-| 主问题域 | Profiling / 性能瓶颈 | 精度异常 | 量化与适配 | msmodeling 仿真建模 | 算子优化 | 文档与代码审查 | 投机解码训练数据重采样 |
-| Prompt 关注点 | 调度、热点、通信、MFU | 一致性、NaN、溢出 | 模型结构、量化风险、适配成本 | 仿真参数、部署模式、输入约束、验证路径 | 算子热点、端到端性能 | 上手体验、文档可用性、PR 风险 | endpoint 就绪性与 return_token_ids、数据可解析性、条数/并发/采样参数、产物与报告路径 |
-| Tool 边界 | deepagents + `msprof-mcp` | deepagents | deepagents | deepagents | deepagents + 特定 MCP | deepagents | deepagents |
-| Skill 组合特点 | 强依赖 Profiling 数据分析类 Skill | 强依赖诊断型 Skill | 强依赖量化/适配型 Skill | 首版预留 msmodeling 专项 Skill 扩展位 | 强依赖算子调优型 Skill | 强依赖流程审查型 Skill | 强依赖 on-policy 重生成编排型 Skill |
-| 协作方式 | 主 Agent 决策，SubAgent 补充探索与综合分析 | 同左 | 同左 | 同左 | 同左 | 偏向 explorer 辅助信息收集 | 同左 |
+| 维度 | Profiler | Accuracy | Quantizer | Modeling | Operator | Minos | SpecTrainer | HostCPU |
+| -- | -- | -- | -- | -- | -- | -- | -- | -- |
+| 主问题域 | Profiling / 性能瓶颈 | 精度异常 | 量化与适配 | msmodeling 仿真建模 | 算子优化 | 文档与代码审查 | 投机解码训练数据重采样 | Host 配置 / 绑核 / 系统级干扰 |
+| Prompt 关注点 | 调度、热点、通信、MFU | 一致性、NaN、溢出 | 模型结构、量化风险、适配成本 | 仿真参数、部署模式、输入约束、验证路径 | 算子热点、端到端性能 | 上手体验、文档可用性、PR 风险 | endpoint 就绪性与 return_token_ids、数据可解析性、条数/并发/采样参数、产物与报告路径 | 配置阈值、NUMA 亲和、绑核可行性、证据降级 |
+| Tool 边界 | deepagents + `msprof-mcp` | deepagents | deepagents | deepagents | deepagents + 特定 MCP | deepagents | deepagents | deepagents |
+| Skill 组合特点 | 强依赖 Profiling 数据分析类 Skill | 强依赖诊断型 Skill | 强依赖量化/适配型 Skill | 首版预留 msmodeling 专项 Skill 扩展位 | 强依赖算子调优型 Skill | 强依赖流程审查型 Skill | 强依赖 on-policy 重生成编排型 Skill | 强依赖 host-cpu 配置审计 / 绑核 / 归因编排型 Skill |
+| 协作方式 | 主 Agent 决策，SubAgent 补充探索与综合分析 | 同左 | 同左 | 同左 | 同左 | 偏向 explorer 辅助信息收集 | 同左 | 主 Agent 决策，SubAgent 补充探索与综合分析 |
 
 默认 Agent 体系通过配置将不同问题域映射为不同的分析策略与能力边界。新增 Agent 时沿用相同扩展方式：通过 Prompt、Skill、Tool Pattern 和 SubAgent 组合定义能力，而不单独复制运行时实现。
 
@@ -301,6 +309,7 @@ resources/configs/default/
 │  ├─ Modeling.yml
 │  ├─ Operator.yml
 │  ├─ Minos.yml
+│  ├─ HostCPU.yml
 │  └─ SpecTrainer.yml
 ├─ subagents/
 │  ├─ explorer.yml

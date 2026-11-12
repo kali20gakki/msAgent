@@ -50,6 +50,13 @@ def _load_default_minos_config() -> dict:
     return yaml.safe_load(config_path.read_text(encoding="utf-8"))
 
 
+def _load_default_hostcpu_config() -> dict:
+    config_path = files("resources")
+    for part in ("configs", "default", "agents", "HostCPU.yml"):
+        config_path = config_path.joinpath(part)
+    return yaml.safe_load(config_path.read_text(encoding="utf-8"))
+
+
 def _create_registry(tmp_path: Path) -> tuple[ConfigRegistry, AppPaths]:
     app_paths = AppPaths.from_home(tmp_path / "global-home" / ".msagent")
     working_dir = tmp_path / "workspace"
@@ -211,6 +218,50 @@ def test_default_agent_skill_bindings_are_split_between_profiler_and_minos() -> 
     assert "minos:document-ux-review" not in profiler["skills"]["patterns"]
     assert "minos:gitcode-code-reviewer" not in profiler["skills"]["patterns"]
     assert minos["skills"]["patterns"] == ["minos:*", "basic:*", "default:*"]
+
+
+def test_default_hostcpu_agent_is_independent_and_not_default() -> None:
+    hostcpu = _load_default_hostcpu_config()
+    profiler = _load_default_profiler_config()
+
+    assert hostcpu["name"] == "HostCPU"
+    assert hostcpu["default"] is False
+    assert profiler["default"] is True
+    # Host CPU 能力由独立 Agent 承载，不挂在 Profiler 的 Skill 白名单下
+    assert "host-cpu:*" not in profiler["skills"]["patterns"]
+
+
+def test_default_hostcpu_agent_binds_host_cpu_skills() -> None:
+    hostcpu = _load_default_hostcpu_config()
+
+    assert hostcpu["skills"]["patterns"] == ["host-cpu:*", "basic:*", "default:*"]
+
+
+def test_default_hostcpu_agent_prompts_exist() -> None:
+    hostcpu = _load_default_hostcpu_config()
+    base = files("resources").joinpath("configs", "default")
+
+    for prompt in hostcpu["prompt"]:
+        assert base.joinpath(*prompt.split("/")).is_file(), prompt
+
+
+def test_default_hostcpu_agent_has_retry_policy() -> None:
+    hostcpu = _load_default_hostcpu_config()
+
+    assert hostcpu["retry"]["enabled"] is True
+    assert hostcpu["retry"]["model"]["max_retries"] == 5
+    assert hostcpu["retry"]["tool"]["on_failure"] == "continue"
+
+
+@pytest.mark.asyncio
+async def test_default_host_cpu_skills_are_loadable() -> None:
+    skills = await SkillFactory().load_skills(SkillFactory.get_default_skills_dir())
+
+    # 本期 host-cpu 仅交付配置审计与 perf-triage；其余技能随各自 PR 合入后自动进入该集合
+    assert {
+        "msagent-perf-cpu-config-audit",
+        "msagent-perf-cpu-perf-triage",
+    } <= set(skills["host-cpu"])
 
 
 @pytest.mark.asyncio

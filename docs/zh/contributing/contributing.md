@@ -24,6 +24,7 @@ MindStudio-Agent 是一个面向 Ascend NPU 场景的 Agent 工作台，核心�
 - [Operator](../agent_guide/operator.md)：算子调优
 - [Minos](../agent_guide/minos.md)：文档体验与代码审查
 - [SpecTrainer](../agent_guide/spectrainer.md)：投机解码数据重采样
+- [HostCPU](../agent_guide/hostcpu.md)：主机侧性能调优
 
 ## 开始之前
 
