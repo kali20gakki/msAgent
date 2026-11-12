@@ -8,9 +8,9 @@ MindStudio-Agent is an agent workbench for Ascend NPU scenarios. Its core consis
 
 | Contribution Type | Description | Recommended Reading |
 |---|---|---|
-| **Issue feedback** | Bugs, feature requests, documentation errors, or experience issues | [FAQ](../support/faq.md), [GitCode Issues](https://atomgit.com/Ascend/msagent/issues) |
+| **Issue feedback** | Bugs, feature requests, documentation errors, or experience issues | [FAQ](../support/faq.md), [GitCode Issues](https://gitcode.com/Ascend/msagent/issues) |
 | **Documentation improvements** | Installation instructions, usage guides, agent descriptions, architecture documentation | [Installation Guide](../install_guide/msagent_install_guide.md), [ReadTheDocs local verification](../development_guide/readthedocs-local-build.md) |
-| **Skills extension** | Adding or improving domain diagnostic SOPs, scripts, and trigger descriptions | [Configuration and Extension](../user_guide/configuration-and-extension.md), [skills/README.md](../../../skills/README.md) |
+| **Skills extension** | Adding or improving domain diagnostic SOPs, scripts, and trigger descriptions | [Configuration and Extension](../user_guide/configuration-and-extension.md), [skills/README.md](../../../skills/README_EN.md) |
 | **Agents/configuration** | Adjusting agent YAML, prompts, and Tool/skill filter rules | [Agent/Tool/Skill Filter Rules](../user_guide/agent-tool-skill-filter-rules.md) |
 | **Framework code** | Core capabilities such as the CLI, middleware, MCP integration, and configuration loading | [Architecture Overview](../development_guide/arch_overview.md) |
 | **Testing and building** | Unit tests, integration tests, and wheel build verification | [Building and Packaging](../development_guide/build-and-package.md) |
@@ -70,7 +70,7 @@ For details, see [Installation Guide](../install_guide/msagent_install_guide.md)
 ### Cloning and Running from Source
 
 ```bash
-git clone https://atomgit.com/Ascend/msagent.git
+git clone https://gitcode.com/Ascend/msagent.git
 cd msagent
 uv sync --dev
 uv run msagent --version
@@ -89,7 +89,7 @@ When running from source, you can replace `msagent` with `uv run msagent` in com
 
 ### 1. Creating an Issue or Claiming a Task
 
-- Submit bugs or feature suggestions through [GitCode Issues](https://atomgit.com/Ascend/msagent/issues).
+- Submit bugs or feature suggestions through [GitCode Issues](https://gitcode.com/Ascend/msagent/issues).
 - For larger changes, you are advised to open an Issue first to discuss the approach and avoid conflicting with the maintainers' direction.
 - For security issues, follow the [Security Statement](../legal/SECURITY.md) and avoid publicly disclosing exploitable details.
 
@@ -174,9 +174,9 @@ The recommended steps for adding a new skill are as follows:
 2. Put stable, repeatable steps into `scripts/` (if needed).
 3. Enable the skill in the `skills.patterns` of the corresponding agent.
 4. After starting `msagent`, verify its visibility through `/skills`.
-5. Update the skill list in [skills/README.md](../../../skills/README.md).
+5. Update the skill list in [skills/README.md](../../../skills/README_EN.md).
 
-For detailed conventions, see [Configuration and Extension · Adding Custom Skills](../user_guide/configuration-and-extension.md#9-adding-a-custom-skill) and [skills/README.md · Recommended Process for Adding New Skills](../../../skills/README.md).
+For detailed conventions, see [Configuration and Extension · Adding Custom Skills](../user_guide/configuration-and-extension.md#10-adding-a-custom-skill) and [skills/README.md · Recommended Process for Adding New Skills](../../../skills/README_EN.md).
 
 For skill matching and filter rules, see [Agent/Tool/Skill Filter Rules](../user_guide/agent-tool-skill-filter-rules.md).
 
@@ -213,7 +213,7 @@ For changes involving agent behavior, configuration loading, and Tool/skill filt
 ## License and Community
 
 - License: [Mulan PSL v2](http://license.coscl.org.cn/MulanPSL2)
-- Issue feedback: [GitCode Issues](https://atomgit.com/Ascend/msagent/issues)
+- Issue feedback: [GitCode Issues](https://gitcode.com/Ascend/msagent/issues)
 - Online documentation: [ReadTheDocs](https://mindstudio-docs-master.readthedocs.io)
 - Ascend community: [MindStudio software portal](https://www.hiascend.com/eng/developer/software/mindstudio)
 

@@ -4,7 +4,7 @@ This document describes the unified build entry point `build.py` of msAgent and 
 
 ## Recommended Approach
 
-Follow [msAgent Installation Guide — Source Code Installation](../install_guide/msagent_install_guide.md#33-source-code-installation) to set up the compilation and test environment.
+Follow [msAgent Installation Guide — Source Code Installation](../install_guide/msagent_install_guide.md#32-source-code-installation) to set up the compilation and test environment.
 
 > **Note:** The method for building the environment image and the bundled software versions are maintained by the *MindStudio Unified Image Building Guide*. This repository does not redefine them.
 

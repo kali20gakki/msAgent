@@ -57,7 +57,7 @@ If it does not appear, check the following first:
 - Whether the `skills.patterns` setting of the current agent allows the skill
 - Whether a skill with the same name in a higher-priority directory overrides it
 
-To load a custom skill, see [Adding a Custom Skill](../user_guide/configuration-and-extension.md#9-adding-a-custom-skill).
+To load a custom skill, see [Adding a Custom Skill](../user_guide/configuration-and-extension.md#10-adding-a-custom-skill).
 
 ## 4. Where Can You View the Runtime Logs?
 
@@ -105,10 +105,10 @@ You are advised to use one-click installation instead (an isolated environment t
 
 ```shell
 # Linux / macOS / WSL
-curl -LsSf https://raw.atomgit.com/Ascend/msagent/raw/master/scripts/install.sh | bash
+curl -LsSf https://raw.gitcode.com/Ascend/msagent/raw/master/scripts/install.sh | bash
 
 # Windows (PowerShell 5.1+)
-irm https://raw.atomgit.com/Ascend/msagent/raw/master/scripts/install.ps1 | iex
+irm https://raw.gitcode.com/Ascend/msagent/raw/master/scripts/install.ps1 | iex
 ```
 
 Common error messages:

@@ -11,7 +11,7 @@ msAgent 提供一体化的昇腾领域调试调优能力，涵盖性能分析、
 
 ## 2. Skill：即装即用的领域知识包
 
-msAgent 中的 Skills 实现遵循 Agent Skills 的通用约定，能在不同 agent 间复用、迁移。完整信息见 [Skill 列表](../../../skills/README.md)。
+msAgent 中的 Skills 实现遵循 Agent Skills 的通用约定，能在不同 agent 间复用、迁移。完整信息见 [Skill 列表](../../../skills/README_ZH.md)。
 
 ### 2.1 方式一：npx skills（推荐）
 

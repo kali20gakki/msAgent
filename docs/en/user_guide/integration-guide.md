@@ -11,7 +11,7 @@ Intended audience: developers who use agents such as Trae, Claude, Codex, and Op
 
 ## 2. Skill: Out-of-the-Box Domain Knowledge Packages
 
-The Skill implementations in msAgent follow the common conventions of Agent Skills and can be reused and migrated across different agents. For complete information, see [Skill list](../../../skills/README.md).
+The Skill implementations in msAgent follow the common conventions of Agent Skills and can be reused and migrated across different agents. For complete information, see [Skill list](../../../skills/README_EN.md).
 
 ### 2.1 Method 1: npx skills (Recommended)
 
@@ -20,7 +20,7 @@ This method applies to agents that support the `npx skills` workflow, such as Tr
 The `-a` parameter specifies the target agent. Before running the following commands, replace `<agent>` with the name of the target agent, for example, `trae`, `opencode`, `claude`, `cursor`, or `windsurf`. For the list of supported agents, see the output of `npx skills --help`.
 
 ```bash
-git clone https://atomgit.com/Ascend/msagent.git
+git clone https://gitcode.com/Ascend/msagent.git -b master
 cd msagent/skills
 
 # Install a single Skill
@@ -38,7 +38,7 @@ npx skills add . --all -a <agent>
 This method does not depend on `npx` and works with any agent. After cloning the repository, copy the target Skill directory into the agent's skills scanning path:
 
 ```bash
-git clone https://atomgit.com/Ascend/msagent.git
+git clone https://gitcode.com/Ascend/msagent.git -b master
 
 # opencode
 cp -r msagent/skills/ascend-profiler-db-explorer ~/.config/opencode/skills/
