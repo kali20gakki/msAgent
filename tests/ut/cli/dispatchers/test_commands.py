@@ -19,6 +19,7 @@ from types import SimpleNamespace
 from pathlib import Path
 
 from msagent.cli.dispatchers.commands import CommandDispatcher
+from msagent.configs import ToolApprovalConfig
 
 
 def _build_session(working_dir: Path) -> SimpleNamespace:
@@ -121,8 +122,9 @@ def test_command_dispatcher_registers_permissions_command(tmp_path: Path) -> Non
     assert dispatcher.commands["/permissions"] == dispatcher.cmd_permissions
 
 
-def test_command_dispatcher_permissions_mode_switches_session(tmp_path: Path, monkeypatch) -> None:
+def test_command_dispatcher_permissions_mode_persists_for_project(tmp_path: Path, monkeypatch) -> None:
     session = _build_session(tmp_path)
+    session.context.state_dir = tmp_path
     session.execute_approval_mode = None
     dispatcher = CommandDispatcher(session)
     monkeypatch.setattr("msagent.cli.handlers.permissions.console.print_success", lambda *_args, **_kwargs: None)
@@ -130,21 +132,25 @@ def test_command_dispatcher_permissions_mode_switches_session(tmp_path: Path, mo
 
     import asyncio
 
-    asyncio.run(dispatcher.dispatch("/permissions mode safe"))
+    asyncio.run(dispatcher.dispatch("/permissions mode manual"))
 
-    assert session.execute_approval_mode == "safe"
+    assert session.execute_approval_mode == "manual"
+    assert ToolApprovalConfig.from_json_file(tmp_path / "config.approval.json").execute_approval_mode == "manual"
 
 
 def test_command_dispatcher_permissions_clear_project_resets_rules(tmp_path: Path, monkeypatch) -> None:
     session = _build_session(tmp_path)
     session.context.state_dir = tmp_path
+    session.execute_approval_mode = "auto"
+    session.execute_approval_mode_source = "cli"
     dispatcher = CommandDispatcher(session)
-    monkeypatch.setattr("msagent.cli.handlers.permissions.console.print_success", lambda *_args, **_kwargs: None)
+    messages: list[str] = []
+    monkeypatch.setattr("msagent.cli.handlers.permissions.console.print_success", messages.append)
     monkeypatch.setattr("msagent.cli.handlers.permissions.console.print", lambda *_args, **_kwargs: None)
 
     approval_file = tmp_path / "config.approval.json"
     approval_file.write_text(
-        '{\n  "decision_rules": [\n    {"name": "execute", "args": {"command": "^echo$"}, "decision": "always_approve"}\n  ]\n}\n',
+        '{\n  "execute_approval_mode": "manual",\n  "decision_rules": [\n    {"name": "execute", "args": {"command": "^echo$"}, "decision": "always_approve"}\n  ],\n  "family_rules": [{"family": "python3 inline code", "decision": "always_approve"}],\n  "external_directories": [{"path": "/tmp/data"}]\n}\n',
         encoding="utf-8",
     )
 
@@ -152,4 +158,51 @@ def test_command_dispatcher_permissions_clear_project_resets_rules(tmp_path: Pat
 
     asyncio.run(dispatcher.dispatch("/permissions clear-project"))
 
-    assert '"decision_rules": []' in approval_file.read_text(encoding="utf-8")
+    config = ToolApprovalConfig.from_json_file(approval_file)
+    assert config.execute_approval_mode == "manual"
+    assert session.execute_approval_mode == "auto"
+    assert session.execute_approval_mode_source == "cli"
+    assert messages == ["Cleared project approval rules. The approval mode is retained."]
+    assert config.decision_rules == []
+    assert config.family_rules == []
+    assert config.external_directories == []
+
+
+def test_command_dispatcher_permissions_remove_rule(tmp_path: Path, monkeypatch) -> None:
+    session = _build_session(tmp_path)
+    session.context.state_dir = tmp_path
+    dispatcher = CommandDispatcher(session)
+    monkeypatch.setattr("msagent.cli.handlers.permissions.console.print_success", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("msagent.cli.handlers.permissions.console.print", lambda *_args, **_kwargs: None)
+    config_path = tmp_path / "config.approval.json"
+    config = ToolApprovalConfig.prepend_family_rule_to_json_file(
+        config_path,
+        family="python3 inline code",
+        decision="always_approve",
+    )
+
+    import asyncio
+
+    asyncio.run(dispatcher.dispatch(f"/permissions remove {config.family_rules[0].id}"))
+
+    assert ToolApprovalConfig.from_json_file(config_path).family_rules == []
+
+
+def test_command_dispatcher_permissions_explain_is_read_only(tmp_path: Path, monkeypatch) -> None:
+    session = _build_session(tmp_path)
+    session.context.state_dir = tmp_path
+    session.execute_approval_mode = "auto"
+    dispatcher = CommandDispatcher(session)
+    output: list[str] = []
+    monkeypatch.setattr(
+        "msagent.cli.handlers.permissions.console.print", lambda value="", **_kwargs: output.append(str(value))
+    )
+
+    import asyncio
+
+    asyncio.run(dispatcher.dispatch('/permissions explain python3 -c "print(1)"'))
+
+    rendered = "\n".join(output)
+    assert "Category: opaque" in rendered
+    assert "Family: python3 inline code" in rendered
+    assert not (tmp_path / "config.approval.json").exists()

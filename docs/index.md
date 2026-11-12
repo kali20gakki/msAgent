@@ -38,6 +38,7 @@ zh/user_guide/configuration-and-extension
 zh/user_guide/context-compaction-guide
 zh/user_guide/document-ux-review
 zh/user_guide/integration-guide
+zh/user_guide/permission-approval-guide
 zh/user_guide/retry-middleware-guide
 zh/user_guide/usemap
 ```

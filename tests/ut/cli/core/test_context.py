@@ -142,11 +142,11 @@ async def test_context_create_keeps_execute_approval_mode(monkeypatch) -> None:
         agent=None,
         model=None,
         approval_mode=ApprovalMode.SEMI_ACTIVE,
-        execute_approval_mode="safe",
+        execute_approval_mode="manual",
         working_dir=Path.cwd(),
     )
 
-    assert context.execute_approval_mode == "safe"
+    assert context.execute_approval_mode == "manual"
 
 
 def test_agent_context_defaults_to_cwd() -> None:

@@ -32,6 +32,10 @@ from validator_core.assertions import (
 from validator_core.llm_capture_server import LlmCaptureServer, ToolCallScript
 from validator_core.trace_parser import get_tool_calls
 
+from msagent.cli.handlers.interrupts import PROJECT_APPROVAL_FILE_NAME
+from msagent.configs import ToolApprovalConfig
+from msagent.core.paths import AppPaths
+
 
 FILESYSTEM_MARKER = "MSAGENT_FILESYSTEM_VALIDATION_OK"
 LOCALSHELL_MARKER = "MSAGENT_LOCALSHELL_VALIDATION_OK"
@@ -83,17 +87,20 @@ def test_filesystem_read_trace_is_successful(
     test_workspace,
 ) -> None:
     """read_file 应读取已知文件并返回唯一验证标记。"""
-    marker_path = (test_workspace / "read_marker.txt").resolve()
-    assert marker_path.exists(), f"测试标记文件不存在: {marker_path}"
+    arguments: dict[str, str] = {}
 
     mock_server = scripted_llm_server_factory(
         ToolCallScript(
             tool_name="read_file",
-            arguments={"file_path": str(marker_path)},
+            arguments=arguments,
             final_content=FILESYSTEM_MARKER,
         )
     )
     runtime = _create_mock_runtime(msagent_runtime_factory, mock_server, test_workspace)
+    # The mock reads arguments when the CLI calls it, after the workspace seed is copied.
+    marker_path = (runtime.workspace_dir / "read_marker.txt").resolve()
+    assert marker_path.exists(), f"测试标记文件不存在: {marker_path}"
+    arguments["file_path"] = str(marker_path)
     result = runtime.run("读取文件并回复内容。", agent_name="Accuracy")
 
     _, tool_result = assert_tool_invoked(
@@ -116,17 +123,20 @@ def test_read_file_reports_missing_file(
     test_workspace,
 ) -> None:
     """read_file 读取不存在的文件时，应返回明确错误且会话正常收口。"""
-    missing_path = (test_workspace / "missing-validation-file.txt").resolve()
-    assert not missing_path.exists(), f"缺失文件测试路径意外存在: {missing_path}"
+    arguments: dict[str, str] = {}
 
     mock_server = scripted_llm_server_factory(
         ToolCallScript(
             tool_name="read_file",
-            arguments={"file_path": str(missing_path)},
+            arguments=arguments,
             final_content="MOCK_READ_MISSING_COMPLETED",
         )
     )
     runtime = _create_mock_runtime(msagent_runtime_factory, mock_server, test_workspace)
+    # The mock reads arguments when the CLI calls it, after the workspace seed is copied.
+    missing_path = (runtime.workspace_dir / "missing-validation-file.txt").resolve()
+    assert not missing_path.exists(), f"缺失文件测试路径意外存在: {missing_path}"
+    arguments["file_path"] = str(missing_path)
     result = runtime.run("读取文件并回复结果。", agent_name="Accuracy")
 
     _, tool_result = assert_tool_invoked(
@@ -193,7 +203,6 @@ def test_localshell_execution_absolute_path(
     )
     script_path.chmod(script_path.stat().st_mode | 0o111)
     assert script_path.is_file(), f"外部脚本未创建: {script_path}"
-    assert not script_path.is_relative_to(test_workspace), f"外部脚本不应位于 workspace 内: {script_path}"
 
     mock_server = scripted_llm_server_factory(
         ToolCallScript(
@@ -203,6 +212,12 @@ def test_localshell_execution_absolute_path(
         )
     )
     runtime = _create_mock_runtime(msagent_runtime_factory, mock_server, test_workspace)
+    assert not script_path.is_relative_to(runtime.workspace_dir), f"外部脚本不应位于 workspace 内: {script_path}"
+    project = AppPaths.from_home(runtime.msagent_home).for_project(runtime.workspace_dir)
+    ToolApprovalConfig.prepend_external_directory_rule_to_json_file(
+        project.root / PROJECT_APPROVAL_FILE_NAME,
+        external_dir,
+    )
     result = runtime.run("执行脚本并回复输出。", agent_name="Accuracy")
 
     _, tool_result = assert_tool_invoked(

@@ -18,7 +18,7 @@ from msagent.cli.dispatchers import CommandDispatcher, MessageDispatcher
 from msagent.cli.handlers.bash import BashDispatcher
 from msagent.cli.theme import console, theme
 from msagent.cli.ui.prompt import InteractivePrompt
-from msagent.configs.approval import ExecuteApprovalMode, ToolDecisionRule
+from msagent.configs.approval import ExecuteApprovalMode
 from msagent.cli.ui.renderer import Renderer
 from msagent.core.logging import get_logger
 from msagent.utils.version import check_for_updates
@@ -63,11 +63,10 @@ class Session:
         self._sigint_handler: SignalHandler = None
         self.tool_outputs: list[ToolOutputEntry] = []
         self.latest_tool_output: ToolOutputEntry | None = None
-        self.approval_session_rules: list[ToolDecisionRule] = []
         self.execute_approval_mode: ExecuteApprovalMode | None = context.execute_approval_mode
-        self.run_recorder = (
-            CliRunRecorder(context.trace_jsonl) if getattr(context, "trace_jsonl", None) is not None else None
-        )
+        self.execute_approval_mode_source: str | None = "cli" if context.execute_approval_mode else None
+        trace_jsonl = getattr(context, "trace_jsonl", None)
+        self.run_recorder = CliRunRecorder(trace_jsonl) if trace_jsonl is not None else None
 
         self.audit_writer = AuditWriter(
             state_dir=context.state_dir,

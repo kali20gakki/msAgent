@@ -19,6 +19,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -32,7 +33,14 @@ from pydantic import BaseModel, ConfigDict, Field
 
 DecisionType = Literal["approve", "edit", "reject"]
 ToolDecision = Literal["ask", "always_approve", "always_reject"]
-ExecuteApprovalMode = Literal["convenience", "safe"]
+ExecuteApprovalMode = Literal["auto", "manual"]
+
+
+def _stable_rule_id(kind: str, payload: dict[str, Any]) -> str:
+    """Build a short deterministic ID so legacy rules are addressable after reload."""
+    encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    digest = hashlib.sha256(f"{kind}:{encoded}".encode("utf-8")).hexdigest()[:12]
+    return f"{kind}-{digest}"
 
 
 class ApprovalMode(str, Enum):
@@ -59,9 +67,17 @@ class InterruptOnRule(BaseModel):
 class ToolDecisionRule(BaseModel):
     """Rule for deciding whether a matching tool call should prompt or auto-resolve."""
 
+    id: str = ""
     name: str
     args: dict[str, Any] | None = None
     decision: ToolDecision = "ask"
+
+    def model_post_init(self, __context: Any) -> None:
+        if not self.id:
+            self.id = _stable_rule_id(
+                "exact",
+                {"name": self.name, "args": self.args, "decision": self.decision},
+            )
 
     def matches_call(self, tool_name: str, tool_args: dict[str, Any]) -> bool:
         """Check if this rule matches a specific tool call."""
@@ -93,14 +109,59 @@ class ToolDecisionRule(BaseModel):
         return True
 
 
+class CommandFamilyRule(BaseModel):
+    """Project rule for one opaque command family."""
+
+    id: str = ""
+    family: str
+    decision: ToolDecision = "ask"
+
+    def model_post_init(self, __context: Any) -> None:
+        if not self.id:
+            self.id = _stable_rule_id("family", {"family": self.family, "decision": self.decision})
+
+
+class ProjectScriptRule(BaseModel):
+    """Project rule for one directly launched script, irrespective of arguments."""
+
+    id: str = ""
+    interpreter: str
+    path: str
+    decision: ToolDecision = "ask"
+
+    def model_post_init(self, __context: Any) -> None:
+        if not self.id:
+            self.id = _stable_rule_id(
+                "script",
+                {"interpreter": self.interpreter, "path": self.path, "decision": self.decision},
+            )
+
+
+class ExternalDirectoryRule(BaseModel):
+    """Project grant for a canonical external directory and its descendants."""
+
+    id: str = ""
+    path: str
+
+    def model_post_init(self, __context: Any) -> None:
+        if not self.id:
+            self.id = _stable_rule_id("external", {"path": self.path})
+
+
 def _default_interrupt_on_rules() -> dict[str, InterruptOnRule]:
     """Default HITL rules for high-risk tools."""
-    return {
+    rules = {
         "execute": InterruptOnRule(
             allowed_decisions=["approve", "reject"],
             description="Review shell command execution before running.",
         ),
     }
+    for tool_name in ("ls", "read_file", "write_file", "edit_file", "glob", "grep"):
+        rules[tool_name] = InterruptOnRule(
+            allowed_decisions=["approve", "reject"],
+            description="Review access outside the project before continuing.",
+        )
+    return rules
 
 
 def _default_interrupt_on_field() -> dict[str, bool | InterruptOnRule]:
@@ -120,6 +181,10 @@ class ToolApprovalConfig(BaseModel):
 
     interrupt_on: dict[str, bool | InterruptOnRule] = Field(default_factory=_default_interrupt_on_field)
     decision_rules: list[ToolDecisionRule] = Field(default_factory=_default_decision_rules)
+    family_rules: list[CommandFamilyRule] = Field(default_factory=list)
+    script_rules: list[ProjectScriptRule] = Field(default_factory=list)
+    external_directories: list[ExternalDirectoryRule] = Field(default_factory=list)
+    execute_approval_mode: ExecuteApprovalMode | None = None
 
     def to_interrupt_on_payload(self) -> dict[str, bool | dict[str, Any]] | None:
         """Return interrupt_on payload compatible with deepagents create_deep_agent."""
@@ -144,6 +209,31 @@ class ToolApprovalConfig(BaseModel):
             if rule.matches_call(tool_name, tool_args):
                 return rule.decision
         return "ask"
+
+    def resolve_family_decision(self, family: str | None) -> ToolDecision:
+        """Resolve a persisted opaque-command family decision."""
+        if not family:
+            return "ask"
+        for rule in self.family_rules:
+            if rule.family == family:
+                return rule.decision
+        return "ask"
+
+    def resolve_script_decision(self, *, interpreter: str, path: str) -> ToolDecision:
+        """Resolve a direct-script rule, intentionally ignoring invocation arguments."""
+        for rule in self.script_rules:
+            if rule.interpreter == interpreter and rule.path == path:
+                return rule.decision
+        return "ask"
+
+    def allows_external_path(self, path: Path) -> bool:
+        """Return whether a path is covered by a persisted directory grant."""
+        candidate = path.expanduser().resolve(strict=False)
+        for rule in self.external_directories:
+            allowed = Path(rule.path).expanduser().resolve(strict=False)
+            if candidate == allowed or allowed in candidate.parents:
+                return True
+        return False
 
     def prepend_decision_rule(
         self,
@@ -173,6 +263,28 @@ class ToolApprovalConfig(BaseModel):
                 decision=decision,
             ),
         )
+
+    def prepend_family_rule(self, *, family: str, decision: ToolDecision) -> None:
+        """Add a high-priority exact family rule."""
+        self.family_rules = [rule for rule in self.family_rules if rule.family != family]
+        self.family_rules.insert(0, CommandFamilyRule(family=family, decision=decision))
+
+    def prepend_script_rule(self, *, interpreter: str, path: Path, decision: ToolDecision) -> None:
+        """Add a high-priority rule for one canonical script and interpreter."""
+        normalized_path = str(path.expanduser().resolve(strict=False))
+        self.script_rules = [
+            rule for rule in self.script_rules if not (rule.interpreter == interpreter and rule.path == normalized_path)
+        ]
+        self.script_rules.insert(
+            0,
+            ProjectScriptRule(interpreter=interpreter, path=normalized_path, decision=decision),
+        )
+
+    def prepend_external_directory_rule(self, directory: Path) -> None:
+        """Add a canonical recursive external-directory grant."""
+        normalized = str(directory.expanduser().resolve(strict=False))
+        self.external_directories = [rule for rule in self.external_directories if rule.path != normalized]
+        self.external_directories.insert(0, ExternalDirectoryRule(path=normalized))
 
     @classmethod
     def from_json_file(cls, file_path: Path) -> "ToolApprovalConfig":
@@ -215,6 +327,89 @@ class ToolApprovalConfig(BaseModel):
             config._save_to_json_file_unlocked(file_path)
             return config
 
+    @classmethod
+    def update_mode_in_json_file(
+        cls,
+        file_path: Path,
+        mode: ExecuteApprovalMode,
+    ) -> "ToolApprovalConfig":
+        """Reload and save the project shell mode as one operation."""
+        with _approval_file_lock(file_path):
+            config = cls.from_json_file(file_path)
+            config.execute_approval_mode = mode
+            config._save_to_json_file_unlocked(file_path)
+            return config
+
+    @classmethod
+    def prepend_family_rule_to_json_file(
+        cls,
+        file_path: Path,
+        *,
+        family: str,
+        decision: ToolDecision,
+    ) -> "ToolApprovalConfig":
+        """Reload, prepend, and save an opaque-command family rule."""
+        with _approval_file_lock(file_path):
+            config = cls.from_json_file(file_path)
+            config.prepend_family_rule(family=family, decision=decision)
+            config._save_to_json_file_unlocked(file_path)
+            return config
+
+    @classmethod
+    def prepend_script_rule_to_json_file(
+        cls,
+        file_path: Path,
+        *,
+        interpreter: str,
+        path: Path,
+        decision: ToolDecision,
+    ) -> "ToolApprovalConfig":
+        """Reload, prepend, and save a direct-script rule."""
+        with _approval_file_lock(file_path):
+            config = cls.from_json_file(file_path)
+            config.prepend_script_rule(interpreter=interpreter, path=path, decision=decision)
+            config._save_to_json_file_unlocked(file_path)
+            return config
+
+    @classmethod
+    def prepend_external_directory_rule_to_json_file(
+        cls,
+        file_path: Path,
+        directory: Path,
+    ) -> "ToolApprovalConfig":
+        """Reload, prepend, and save a recursive external-directory grant."""
+        with _approval_file_lock(file_path):
+            config = cls.from_json_file(file_path)
+            config.prepend_external_directory_rule(directory)
+            config._save_to_json_file_unlocked(file_path)
+            return config
+
+    @classmethod
+    def remove_rule_from_json_file(cls, file_path: Path, rule_id: str) -> bool:
+        """Remove one project rule by stable ID, preserving mode and other rules."""
+        with _approval_file_lock(file_path):
+            config = cls.from_json_file(file_path)
+            original_count = (
+                len(config.decision_rules)
+                + len(config.family_rules)
+                + len(config.script_rules)
+                + len(config.external_directories)
+            )
+            config.decision_rules = [rule for rule in config.decision_rules if rule.id != rule_id]
+            config.family_rules = [rule for rule in config.family_rules if rule.id != rule_id]
+            config.script_rules = [rule for rule in config.script_rules if rule.id != rule_id]
+            config.external_directories = [rule for rule in config.external_directories if rule.id != rule_id]
+            updated_count = (
+                len(config.decision_rules)
+                + len(config.family_rules)
+                + len(config.script_rules)
+                + len(config.external_directories)
+            )
+            if updated_count == original_count:
+                return False
+            config._save_to_json_file_unlocked(file_path)
+            return True
+
     def _save_to_json_file_unlocked(self, file_path: Path) -> None:
         """Atomically replace an approval file; caller coordinates concurrent writers."""
         file_path.parent.mkdir(parents=True, exist_ok=True)
@@ -255,12 +450,12 @@ def _approval_file_lock(file_path: Path) -> Iterator[None]:
         if os.name == "nt":
             import msvcrt
 
-            msvcrt.locking(lock_file.fileno(), msvcrt.LK_LOCK, 1)
+            msvcrt.locking(lock_file.fileno(), msvcrt.LK_LOCK, 1)  # type: ignore[attr-defined]
             try:
                 yield
             finally:
                 lock_file.seek(0)
-                msvcrt.locking(lock_file.fileno(), msvcrt.LK_UNLCK, 1)
+                msvcrt.locking(lock_file.fileno(), msvcrt.LK_UNLCK, 1)  # type: ignore[attr-defined]
         else:
             import fcntl
 
