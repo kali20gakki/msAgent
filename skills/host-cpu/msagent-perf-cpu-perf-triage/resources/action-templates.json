@@ -1,0 +1,112 @@
+{
+  "version": 1,
+  "note": "动作映射模板（唯一来源）。action_build.py 只查表不内嵌；文案调整改本文件即可，无需改代码。规则说明见 references/quant-rules.md。",
+  "cost_rank": {"low": 3, "medium": 2, "high": 1, "": 0},
+  "benefit_rank": {"high": 3, "medium": 2, "low": 1, "": 0},
+  "hint_templates": {
+    "TASKSET_T3": {
+      "type": "TASKSET",
+      "scope": "process",
+      "timing": "running",
+      "handoff": "bind_tune_handoff",
+      "cost": "low",
+      "benefit": "high",
+      "expected_effect": "越界线程回到目标核集，消除跨核迁移与邻居干扰",
+      "verify": {
+        "commands": [],
+        "metrics": ["drift_tids", "preempt_count"],
+        "window": "复采同窗，drift_tids 归零"
+      }
+    },
+    "BIND_TUNE": {
+      "type": "LAUNCH_WRAPPER",
+      "scope": "persistent",
+      "timing": "next_start",
+      "handoff": "bind_tune_handoff",
+      "cost": "medium",
+      "benefit": "high",
+      "expected_effect": "按拓扑重排核集，降低 wakeup 排队延迟",
+      "verify": {
+        "commands": [],
+        "metrics": ["sched_delay_p99"],
+        "window": "复采同窗对比 P99"
+      }
+    },
+    "IRQ_AFFINITY": {
+      "type": "IRQ_AFFINITY",
+      "scope": "system_runtime",
+      "timing": "running",
+      "handoff": "config_audit_handoff",
+      "cost": "low",
+      "benefit": "medium",
+      "expected_effect": "中断移出业务核，减少业务线程被打断",
+      "verify": {
+        "commands": [],
+        "metrics": ["irq_biz_ratio"],
+        "window": "复采同窗，IRQ 落业务核比例下降"
+      }
+    }
+  },
+  "wait_actions": {
+    "网络": {
+      "type": "IRQ_AFFINITY",
+      "scope": "system_runtime",
+      "timing": "running",
+      "handoff": "config_audit_handoff",
+      "cost": "low",
+      "benefit": "medium",
+      "expected_effect": "NIC 中断与服务线程同 node 化，缩短网络等待",
+      "hint": "核对 NIC 队列中断亲和与业务线程所在 NUMA node"
+    },
+    "IO 等待": {
+      "type": "IRQ_AFFINITY",
+      "scope": "system_runtime",
+      "timing": "running",
+      "handoff": "config_audit_handoff",
+      "cost": "low",
+      "benefit": "medium",
+      "expected_effect": "存储中断与 IO 线程同 node，降低远端访问等待",
+      "hint": "核对存储 HBA/NVMe 中断亲和；必要时上移存储层排查"
+    },
+    "锁/同步": {
+      "type": "CODE_SUGGESTION",
+      "scope": "process",
+      "timing": "next_start",
+      "handoff": "bind_tune_handoff",
+      "cost": "medium",
+      "benefit": "medium",
+      "expected_effect": "锁竞争线程同核/同 node 归并，降低唤醒往返",
+      "hint": "结合并行度与绑核策略收敛锁竞争；如需确认锁来源转 Profiler"
+    },
+    "上游数据": {
+      "type": "CODE_SUGGESTION",
+      "scope": "process",
+      "timing": "next_start",
+      "handoff": "",
+      "cost": "high",
+      "benefit": "low",
+      "expected_effect": "上游供给不足，Host 侧无可直接消除动作",
+      "hint": "转出：上游数据/通信域排查（Profiler、通信域分析）"
+    },
+    "定时器": {
+      "type": "CODE_SUGGESTION",
+      "scope": "system_runtime",
+      "timing": "running",
+      "handoff": "",
+      "cost": "medium",
+      "benefit": "low",
+      "expected_effect": "定时器粒度或 tick 配置影响唤醒频次",
+      "hint": "核对 tickless / 定时器合并配置；高频唤醒源可在运行时数据接入后复查时间线"
+    },
+    "长阻塞": {
+      "type": "CODE_SUGGESTION",
+      "scope": "process",
+      "timing": "next_start",
+      "handoff": "",
+      "cost": "high",
+      "benefit": "low",
+      "expected_effect": "长阻塞超出 Host 侧归因范围",
+      "hint": "转出：设备/通信域/应用阻塞点排查"
+    }
+  }
+}

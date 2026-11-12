@@ -179,7 +179,7 @@ sequenceDiagram
 
 #### 5.1 Specialized Agent Design
 
-The default template includes 7 main agents, all assembled through YAML configuration. The core differences lie in prompt, visible tools, visible skills, subagent combinations, and default status.
+The default template includes 8 main agents, all assembled through YAML configuration. The core differences lie in prompt, visible tools, visible skills, subagent combinations, and default status.
 
 | Agent | Domain Positioning | Default Status | Typical Tool Pattern | Typical Skill Pattern | Subagent |
 | -- | -- | -- | -- | -- | -- |
@@ -190,6 +190,7 @@ The default template includes 7 main agents, all assembled through YAML configur
 | Operator | Operator performance optimization | No | `impl:deepagents:*` + specific MCP patterns | AscendC operator optimization, operator profiler | explorer + general-purpose |
 | Minos | Documentation experience and code review | No | `impl:deepagents:*` | `document-ux-review`, `gitcode-code-reviewer` | explorer |
 | SpecTrainer | Speculative decoding on-policy resampling (response regeneration) | No | `impl:deepagents:*` | `speculators:*` (precheck → input normalization → regenerate pre-tokenized samples) | explorer |
+| HostCPU | Host-side configuration audit and CPU binding tuning | No | `impl:deepagents:*` | host-cpu configuration audit, binding plan, symptom attribution | explorer + general-purpose |
 
 This design implies:
 
@@ -232,6 +233,8 @@ flowchart LR
     Q5 --> I["Operator"]
     Q6 --> M["Minos"]
     Q7 --> S["SpecTrainer"]
+    U --> Q8["Host configuration / CPU binding / low utilization"]
+    Q8 --> C["HostCPU"]
 
     H --> H1["Prompt: Performance analysis methodology"]
     H --> H2["Tools: deepagents + msprof-mcp"]
@@ -267,17 +270,22 @@ flowchart LR
     S --> S2["Tools: deepagents"]
     S --> S3["Skills: precheck / normalization / response regeneration"]
     S --> S4["Subagents: explorer"]
+
+    C --> C1["Prompt: Configuration thresholds / NUMA affinity / evidence degradation"]
+    C --> C2["Tools: deepagents"]
+    C --> C3["Skills: configuration audit / binding plan / attribution orchestration"]
+    C --> C4["Subagents: explorer + general-purpose"]
 ```
 
-The 7 default agents share the same runtime skeleton and differ through configuration along the following dimensions:
+The 8 default agents share the same runtime skeleton and differ through configuration along the following dimensions:
 
-| Dimension | Profiler | Accuracy | Quantizer | Modeling | Operator | Minos | SpecTrainer |
-| -- | -- | -- | -- | -- | -- | -- | -- |
-| Primary problem domain | Profiling/performance bottlenecks | Accuracy anomalies | Quantization and adaptation | `msmodeling` simulation modeling | Operator optimization | Documentation and code review | Speculative decoding training data resampling |
-| Prompt focus | Scheduling, hot spots, communication, MFU | Consistency, NaN, overflow | Model structure, quantization risks, adaptation costs | Simulation parameters, deployment modes, input constraints, validation paths | Operator hot spots, end-to-end performance | Getting-started experience, documentation usability, PR risks | Endpoint readiness and `return_token_ids`, data parseability, record count/concurrency/sampling parameters, artifact and report paths |
-| Tool boundaries | deepagents + `msprof-mcp` | deepagents | deepagents | deepagents | `deepagents` + specific MCP | deepagents | deepagents |
-| Skill combination characteristics | Strongly relies on Profiling data analysis skills. | Strongly relies on diagnostic skills. | Strongly relies on quantization/adaptation skills. | First version reserves dedicated `msmodeling` skill extension slots. | Strongly relies on operator tuning skills. | Strongly relies on process review skills. | Strongly relies on on-policy regeneration orchestration skills. |
-| Collaboration approach | Main agent makes decisions, subagents supplement with exploration and comprehensive analysis. | Same as left | Same as left | Same as left | Same as left | Leans toward explorer for auxiliary information collection. | Same as left |
+| Dimension | Profiler | Accuracy | Quantizer | Modeling | Operator | Minos | SpecTrainer | HostCPU |
+| -- | -- | -- | -- | -- | -- | -- | -- | -- |
+| Primary problem domain | Profiling/performance bottlenecks | Accuracy anomalies | Quantization and adaptation | `msmodeling` simulation modeling | Operator optimization | Documentation and code review | Speculative decoding training data resampling | Host configuration / CPU binding / system-level interference |
+| Prompt focus | Scheduling, hot spots, communication, MFU | Consistency, NaN, overflow | Model structure, quantization risks, adaptation costs | Simulation parameters, deployment modes, input constraints, validation paths | Operator hot spots, end-to-end performance | Getting-started experience, documentation usability, PR risks | Endpoint readiness and `return_token_ids`, data parseability, record count/concurrency/sampling parameters, artifact and report paths | Configuration thresholds, NUMA affinity, binding feasibility, evidence degradation |
+| Tool boundaries | deepagents + `msprof-mcp` | deepagents | deepagents | deepagents | `deepagents` + specific MCP | deepagents | deepagents | deepagents |
+| Skill combination characteristics | Strongly relies on Profiling data analysis skills. | Strongly relies on diagnostic skills. | Strongly relies on quantization/adaptation skills. | First version reserves dedicated `msmodeling` skill extension slots. | Strongly relies on operator tuning skills. | Strongly relies on process review skills. | Strongly relies on on-policy regeneration orchestration skills. | Strongly relies on host-cpu configuration audit / binding / attribution orchestration skills. |
+| Collaboration approach | Main agent makes decisions, subagents supplement with exploration and comprehensive analysis. | Same as left | Same as left | Same as left | Same as left | Leans toward explorer for auxiliary information collection. | Same as left | Main agent makes decisions, subagents supplement with exploration and comprehensive analysis. |
 
 The default agent architecture maps different problem domains to different analysis strategies and capability boundaries through configuration. When adding agents, follow the same extension approach: define capabilities through prompt, skill, tool pattern, and subagent combinations, without duplicating the runtime implementation.
 
@@ -301,6 +309,7 @@ resources/configs/default/
 │  ├─ Modeling.yml
 │  ├─ Operator.yml
 │  ├─ Minos.yml
+│  ├─ HostCPU.yml
 │  └─ SpecTrainer.yml
 ├─ subagents/
 │  ├─ explorer.yml

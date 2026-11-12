@@ -102,6 +102,7 @@ zh/legal/SECURITY
 | **Minos** | 文档体验与代码审查 | 聚焦 README 走查、安装流程验证、Quick Start 体验、新手 onboarding、文档可用性评估，以及 GitCode PR 审查与评审意见整理。详见 [Minos 说明](zh/agent_guide/minos.md)。 |
 | **Operator** | 算子调优 | 聚焦 Ascend NPU 算子性能调优，包括算子性能深度分析、端到端算子性能优化，辅助提升调优效率并降低开发难度。详见 [Operator 说明](zh/agent_guide/operator.md)。 |
 | **SpecTrainer** | 投机解码重采样 | 聚焦投机解码训练数据的 on-policy 重采样（响应重生成），把多轮对话数据用 verifier 模型逐轮重生成，产出可直接进训练的预分词样本。详见 [SpecTrainer 说明](zh/agent_guide/spectrainer.md)。 |
+| **HostCPU** | 主机侧性能调优 | 聚焦 Host 侧（CPU / NUMA / 中断 / 绑核）配置审计、绑核方案求解与症状归因，覆盖新机器开箱、绑核未生效、利用率低、训练变慢等场景。详见 [HostCPU 说明](zh/agent_guide/hostcpu.md)。 |
 
 ## 推荐阅读路径
 

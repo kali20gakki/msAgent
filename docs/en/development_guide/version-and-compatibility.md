@@ -28,8 +28,8 @@ Compatibility notes:
 ## Current Capabilities Overview
 
 - Supports the default interactive session and launching a specified agent.
-- Provides the following seven built-in agents: `Profiler`, `Accuracy`, `Quantizer`, `Modeling`, `Operator`, `Minos`, and `SpecTrainer`.
-- Supports scenarios such as Ascend performance tuning, profiling analysis, accuracy analysis, model quantization, msModeling simulation modeling, operator tuning, documentation walkthrough, speculative decoding training data resampling, and tool consultation.
+- Provides the following eight built-in agents: `Profiler`, `Accuracy`, `Quantizer`, `Modeling`, `Operator`, `Minos`, `SpecTrainer`, and `HostCPU`.
+- Supports scenarios such as Ascend performance tuning, profiling analysis, accuracy analysis, model quantization, msModeling simulation modeling, operator tuning, documentation walkthrough, speculative decoding training data resampling, host-side configuration audit and CPU binding tuning, and tool consultation.
 - Supports MCP extensions, with `msprof-mcp` enabled by default.
 - Supports skills extensions. The built-in skills in the source repository are loaded directly from the `skills/` directory at the repository root.
 

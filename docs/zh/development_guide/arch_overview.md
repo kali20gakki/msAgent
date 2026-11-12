@@ -2,7 +2,7 @@
 
 ## 1.1 简介
 
-本文档描述 MindStudio-Agent 的整体架构设计。MindStudio-Agent 是一个面向 Ascend NPU 开发、调试和调优场景的 AI Agent 工作台，当前通过统一框架承载 Profiler、Accuracy、Quantizer、Modeling、Operator、Minos、SpecTrainer 等多个专业化 Agent，并提供统一的 CLI 交互入口。
+本文档描述 MindStudio-Agent 的整体架构设计。MindStudio-Agent 是一个面向 Ascend NPU 开发、调试和调优场景的 AI Agent 工作台，当前通过统一框架承载 Profiler、Accuracy、Quantizer、Modeling、Operator、Minos、SpecTrainer、HostCPU 等多个专业化 Agent，并提供统一的 CLI 交互入口。
 
 ## 1.2 动机
 

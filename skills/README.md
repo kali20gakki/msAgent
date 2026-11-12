@@ -141,7 +141,6 @@ description: 技能的详细描述，说明它做什么，以及什么时候使�
 | --- | --- | --- |
 | `msagent-perf-cpu-config-audit` | 主机配置审计：NUMA / 绑核 / 大页 / 频率 / 中断 / cgroup / 环境变量 / NPU 适配八域单点快照，输出分级判定、待改清单（命令 + 回滚 + 验证）与 HTML 报告 | `帮我审计一下这台机器的 Host 侧配置有没有问题` |
 | `msagent-perf-cpu-bind-tune` | 绑核与 NUMA 亲和方案求解：按 rank/worker 划分核集，输出 taskset/cpuset/OMP 方案、回滚与验证脚本 | `帮我出这个 8 卡任务的绑核方案` |
-| `msagent-perf-cpu-tracing` | 运行期 ftrace 采集与分析：落核、调度延迟、抢占、中断与等待归因 | `绑核之后线程到底有没有落上去` |
 | `msagent-perf-cpu-perf-triage` | 症状类诉求的编排入口：串配置审计 / 采集 / 绑核方案，输出归因与动作清单 | `训练比上周慢了，帮我定位是 Host 侧的问题吗` |
 
 > 与旧技能 `mindstudio-cpu-binding` 的关系：旧技能面向绑核诊断与建议（报告式），

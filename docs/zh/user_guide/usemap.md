@@ -35,6 +35,7 @@
 | [Operator](../agent_guide/operator.md)   | 算子调优           | `msagent --agent Operator`  |
 | [Minos](../agent_guide/minos.md)         | 文档辅助           | `msagent --agent Minos`     |
 | [SpecTrainer](../agent_guide/spectrainer.md) | 投机解码数据重采样 | `msagent --agent SpecTrainer` |
+| [HostCPU](../agent_guide/hostcpu.md) | 主机侧性能调优 | `msagent --agent HostCPU` |
 
 ## 2. 输入区快捷键
 

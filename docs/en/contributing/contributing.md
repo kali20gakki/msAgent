@@ -24,6 +24,7 @@ The current built-in agents and their domain positioning are as follows. Before 
 - [Operator](../agent_guide/operator.md): operator tuning
 - [Minos](../agent_guide/minos.md): documentation experience and code review
 - [SpecTrainer](../agent_guide/spectrainer.md): speculative decoding data resampling
+- [HostCPU](../agent_guide/hostcpu.md): host-side performance tuning
 
 ## Before You Start
 

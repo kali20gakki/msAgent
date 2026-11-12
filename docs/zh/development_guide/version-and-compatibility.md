@@ -28,8 +28,8 @@
 ## 当前能力概览
 
 - 支持默认交互式会话，也支持指定 Agent 启动
-- 内置 `Profiler`、`Accuracy`、`Quantizer`、`Modeling`、`Operator`、`Minos` 与 `SpecTrainer` 七个 Agent
-- 支持 Ascend 性能调优、Profiling 分析、精度分析、模型量化、msmodeling 仿真建模、算子调优、文档走查、投机解码训练数据重采样、工具咨询等场景
+- 内置 `Profiler`、`Accuracy`、`Quantizer`、`Modeling`、`Operator`、`Minos`、`SpecTrainer` 与 `HostCPU` 八个 Agent
+- 支持 Ascend 性能调优、Profiling 分析、精度分析、模型量化、msmodeling 仿真建模、算子调优、文档走查、投机解码训练数据重采样、Host 侧配置审计与绑核调优、工具咨询等场景
 - 支持 MCP 扩展，默认启用 `msprof-mcp`
 - 支持 Skills 扩展，源码仓库中的内置 Skills 直接由仓库根目录 `skills/` 提供
 

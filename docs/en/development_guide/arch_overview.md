@@ -2,7 +2,7 @@
 
 ## 1.1 Introduction
 
-This document describes the overall architecture design of MindStudio-Agent (msAgent). MindStudio-Agent is an AI agent workbench for Ascend NPU development, debugging, and tuning scenarios. It currently hosts multiple specialized agents through a unified framework, including `Profiler`, `Accuracy`, `Quantizer`, `Modeling`, `Operator`, `Minos`, and `SpecTrainer`, and provides a unified CLI interaction entry point.
+This document describes the overall architecture design of MindStudio-Agent (msAgent). MindStudio-Agent is an AI agent workbench for Ascend NPU development, debugging, and tuning scenarios. It currently hosts multiple specialized agents through a unified framework, including `Profiler`, `Accuracy`, `Quantizer`, `Modeling`, `Operator`, `Minos`, `SpecTrainer`, and `HostCPU`, and provides a unified CLI interaction entry point.
 
 ## 1.2 Motivation
 

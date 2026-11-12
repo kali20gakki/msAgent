@@ -53,6 +53,7 @@ ROOT_ONLY_FLAGS = {"--help", "-h", "--version", "-V"}
 AGENT_HELP = (
     "Agent name. Available agents:\n"
     "Profiler  Performance profiling and optimization.\n"
+    "HostCPU   Host CPU configuration audit and binding tuning.\n"
     "Accuracy  Accuracy analysis and debugging.\n"
     "Quantizer Model quantization and adaptation.\n"
     "Modeling  LLM/VLM simulation modeling.\n"
@@ -77,7 +78,7 @@ Optional arguments:
       --no-stream                          Render the final reply without token streaming.
   -v, --verbose                            Enable verbose logging to console and ~/.msagent/logs.
   -w, --working-dir <DIR>                  Working directory for the session [default: current directory]
-  -a, --agent <NAME>                       Agent name. Available: Profiler, Accuracy, Quantizer, Modeling, Operator, Minos.
+  -a, --agent <NAME>                       Agent name. Available: Profiler, HostCPU, Accuracy, Quantizer, Modeling, Operator, Minos.
   -m, --model <NAME>                       LLM model alias.
       --timer                              Enable startup timing.
   -am, --approval-mode {semi-active,active,aggressive}
