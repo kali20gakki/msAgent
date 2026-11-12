@@ -10,7 +10,7 @@ MindStudio-Agent 是一个面向 Ascend NPU 场景的 Agent 工作台，核心�
 |---|---|---|
 | **问题反馈** | Bug、功能需求、文档错误或体验问题 | [FAQ](../support/faq.md)、[GitCode Issues](https://gitcode.com/Ascend/msagent/issues) |
 | **文档改进** | 安装说明、使用指南、Agent 说明、架构文档 | [安装指南](../install_guide/msagent_install_guide.md)、[ReadTheDocs 本地验证](../development_guide/readthedocs-local-build.md) |
-| **Skills 扩展** | 新增或完善领域诊断 SOP、脚本与触发说明 | [配置与扩展](../user_guide/configuration-and-extension.md)、[skills/README.md](../../../skills/README.md) |
+| **Skills 扩展** | 新增或完善领域诊断 SOP、脚本与触发说明 | [配置与扩展](../user_guide/configuration-and-extension.md)、[skills/README.md](../../../skills/README_ZH.md) |
 | **Agent / 配置** | 调整 Agent YAML、Prompt、Tool/Skill 过滤规则 | [Agent / Tool / Skill 过滤规则](../user_guide/agent-tool-skill-filter-rules.md) |
 | **框架代码** | CLI、中间件、MCP 集成、配置加载等核心能力 | [架构概览](../development_guide/arch_overview.md) |
 | **测试与构建** | 单元测试、集成测试、wheel 构建验证 | [编译与打包](../development_guide/build-and-package.md) |
@@ -174,9 +174,9 @@ Skills 是项目最重要的扩展面之一。仓库根目录 `skills/` 为内�
 2. 将稳定、可重复的步骤放入 `scripts/`（如有需要）
 3. 在对应 Agent 的 `skills.patterns` 中放开该 Skill
 4. 启动 `msagent` 后通过 `/skills` 验证可见性
-5. 更新 [skills/README.md](../../../skills/README.md) 中的技能列表
+5. 更新 [skills/README.md](../../../skills/README_ZH.md) 中的技能列表
 
-详细约定见 [配置与扩展 · 添加自定义 Skill](../user_guide/configuration-and-extension.md#10-添加自定义-skill) 与 [skills/README.md · 新增 Skill 建议流程](../../../skills/README.md)。
+详细约定见 [配置与扩展 · 添加自定义 Skill](../user_guide/configuration-and-extension.md#10-添加自定义-skill) 与 [skills/README.md · 新增 Skill 建议流程](../../../skills/README_ZH.md)。
 
 Skill 匹配与过滤规则见 [Agent / Tool / Skill 过滤规则](../user_guide/agent-tool-skill-filter-rules.md)。
 

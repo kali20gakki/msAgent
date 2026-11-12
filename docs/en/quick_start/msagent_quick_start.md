@@ -8,10 +8,10 @@ Install msAgent. The one-click installation method is used here.
 
 ```shell
 # Applicable operating systems: Linux, macOS, and WSL
-curl -LsSf https://raw.atomgit.com/Ascend/msagent/raw/master/scripts/install.sh | bash
+curl -LsSf https://raw.gitcode.com/Ascend/msagent/raw/master/scripts/install.sh | bash
 
 # Applicable operating systems: Windows (PowerShell 5.1 or later)
-irm https://raw.atomgit.com/Ascend/msagent/raw/master/scripts/install.ps1 | iex
+irm https://raw.gitcode.com/Ascend/msagent/raw/master/scripts/install.ps1 | iex
 ```
 
 For more installation methods, see [msAgent Installation Guide](../install_guide/msagent_install_guide.md).

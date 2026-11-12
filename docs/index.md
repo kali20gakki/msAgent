@@ -47,6 +47,7 @@ zh/user_guide/usemap
 :maxdepth: 2
 :caption: 典型案例
 
+zh/best_practices/README
 zh/best_practices/ascend-profiler-collect-adaption-practice
 zh/best_practices/nan-overflow-detection-practice
 zh/best_practices/op-fusion-replace-practice

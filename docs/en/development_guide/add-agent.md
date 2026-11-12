@@ -83,7 +83,7 @@ retry:
 | default | Yes | Whether this is the default agent. **The entire system must have exactly one `default: true`**. |
 | subagents | No | Names of referenced subagents, which can come from built-in configurations or `~/.msagent/config/subagents/`. |
 | tools.patterns | Yes | Tool filtering rules in the `category:module:name` format. The `*` wildcard is supported, and the `!` prefix excludes a tool. |
-| skills.patterns | Yes | Skill filtering rules in the `category:name` format. For the complete list, see [Skills](../../../skills/README.md). |
+| skills.patterns | Yes | Skill filtering rules in the `category:name` format. For the complete list, see [Skills](../../../skills/README_EN.md). |
 
 ### 3.2 `tools.patterns`
 

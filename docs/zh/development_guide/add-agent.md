@@ -83,7 +83,7 @@ retry:
 | `default` | 是 | 是否为默认 Agent，**整个系统中必须恰好有一个 `default: true`** |
 | `subagents` | 否 | 引用的子 Agent 名称列表，可来自内置配置或 `~/.msagent/config/subagents/` |
 | `tools.patterns` | 是 | 工具过滤规则，格式 `类别:模块:名称`，支持 `*` 通配符，`!` 前缀表示排除 |
-| `skills.patterns` | 是 | Skill 过滤规则，格式 `类别:名称`，完整列表见 [Skills](../../../skills/README.md) |
+| `skills.patterns` | 是 | Skill 过滤规则，格式 `类别:名称`，完整列表见 [Skills](../../../skills/README_ZH.md) |
 
 ### 3.2 tools.patterns 说明
 
