@@ -19,6 +19,7 @@ English | [简体中文](./README.md)
 
 <span style="font-size:14px;">
 
+🔹 [Official MindStudio Agent Course](https://www.hiascend.com/developer/courses/detail/2121085804264136705)<br>
 🔹 **[Aug 26, 2026]**: Added a one-click installation method (`curl | bash`/`irm | iex`) that uses uv for isolated installation, avoiding dependency conflicts with the existing environment. You are advised to use it. For details, see the [Installation Guide](docs/en/install_guide/msagent_install_guide.md).<br>
 🔹 **[Jun 4, 2026]**: `Hermes` has been renamed to `Profiler`, `Zephyr` to `Quantizer`, and `Icarus` to `Operator`.<br>
 🔹 **[May 21, 2026]**: v26.0.0 released, adding the `Icarus` agent to cover operator performance tuning scenarios.<br>
