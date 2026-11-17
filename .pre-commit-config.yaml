@@ -1,5 +1,5 @@
 minimum_pre_commit_version: 4.0.0
-exclude: ^(?:LICENSES/|skills/)|\.(html|csv|svg)$
+exclude: ^LICENSES/|^(?!skills/).*\.(html|csv|svg)$
 
 default_language_version:
   python: python3.11
@@ -8,22 +8,55 @@ default_stages: [pre-commit]
 ci:
   autofix_prs: false
   autoupdate_schedule: monthly
+  skip: [skill-reviewer, skill-scanner-local]
 
 repos:
+  # 本地提交仅检查暂存区变更涉及的 Skill；不接入线上门禁。
+  - repo: https://gitcode.com/HiAgent/Skill-reviewer.git
+    rev: v0.2.2
+    hooks:
+      - id: skill-reviewer
+        entry: python pre-commit/skill_changed.py reviewer
+        stages: [pre-commit, manual]
+        files: ^skills/
+        verbose: true
+
+  # 参考 openlibing/agent-skills：本地静态扫描，不启用 LLM/API 分析。
+  # 仅扫描变更涉及的 Skill 的完整目录；仅输出 CRITICAL 发现。
+  - repo: local
+    hooks:
+      - id: skill-scanner-local
+        name: Skill Scanner (changed skills, Critical only)
+        entry: python pre-commit/skill_changed.py scanner
+        language: python
+        additional_dependencies: ["cisco-ai-skill-scanner==2.2.2"]
+        files: ^skills/
+        types: [file]
+        pass_filenames: true
+        require_serial: true
+        verbose: true
+        stages: [pre-commit, manual]
+
   # pre-commit 基础检查
   - repo: https://gitcode.com/pre-commit/pre-commit-hooks
     rev: v4.6.0
     hooks:
       - id: trailing-whitespace
+        exclude: ^skills/
       - id: end-of-file-fixer
+        exclude: ^skills/
       - id: check-yaml
+        exclude: ^skills/
         args: ["--allow-multiple-documents"]
       - id: check-added-large-files
         args: ["--maxkb=5000"]
-        exclude: ^docs/zh/figures/
+        exclude: ^skills/|^docs/zh/figures/
       - id: check-merge-conflict
+        exclude: ^skills/
       - id: detect-private-key
+        exclude: ^skills/
       - id: check-json
+        exclude: ^skills/
 
   # -------------------------- Python 核心检查 --------------------------
   # Ruff：指定读取 pre-commit/pyproject.toml
@@ -31,9 +64,11 @@ repos:
     rev: v0.14.14
     hooks:
       - id: ruff-check
+        exclude: ^skills/
         args: ["--config", "pre-commit/pyproject.toml", "--output-format", "github", "--fix"]
         types: [python]
       - id: ruff-format
+        exclude: ^skills/
         args: ["--config", "pre-commit/pyproject.toml"]
         types: [python]
 
@@ -42,6 +77,7 @@ repos:
     rev: v2.4.1
     hooks:
       - id: codespell
+        exclude: ^skills/
         args: [
             "-L",
             "CANN,cann,NNAL,nnal,ASCEND,ascend,EnQue,CopyIn,ArchType,AND,ND,tbe,copyin,alog,dout,ser,modul,egals,usig,egal,flate,stap,ot,windo,eles,fo,subtile,nd,Nd",
@@ -54,6 +90,7 @@ repos:
     rev: v4.0.5
     hooks:
       - id: pylint
+        exclude: ^skills/
         name: pylint (Python code quality check)
         types: [python]
         additional_dependencies: ["packaging>=24.0,<26.0"]
@@ -65,6 +102,7 @@ repos:
     rev: 1.9.4
     hooks:
       - id: bandit
+        exclude: ^skills/
         name: bandit (Python 安全漏洞检查)
         types: [python]
         additional_dependencies: ["bandit[toml]"]
@@ -78,6 +116,7 @@ repos:
     rev: v1.32.0
     hooks:
       - id: typos
+        exclude: ^skills/
         args: ["--force-exclude", "--config", "pre-commit/typos.toml"]
 
   #--------------- C++ 核心检查 ---------------------------------------------
@@ -90,7 +129,7 @@ repos:
           - "--style={BasedOnStyle: Google, IndentWidth: 4, ColumnLimit: 120, BreakBeforeBraces: Allman}"
           - "--verbose"
           - "-i"
-        exclude: ^build/|tests/third_party/
+        exclude: ^skills/|^build/|tests/third_party/
 
   # -------------------------- Gitleaks 本地离线二进制扫描 --------------------------
   - repo: local

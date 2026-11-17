@@ -141,6 +141,42 @@ pre-commit run --all-files
 
 The configuration files are in `.pre-commit-config.yaml` and the `pre-commit/` directory. For Python code style and static check rules, see `pre-commit/pyproject.toml`.
 
+[Skill-reviewer](https://gitcode.com/HiAgent/Skill-reviewer) v0.2.2 runs local
+static structure checks and nine-dimension scoring without an API key.
+On local `git commit`, Reviewer and Scanner check only Skills owning staged
+file additions, modifications, or rename targets. Changes to manifests, scripts,
+references, or assets trigger both checks for the owning Skill, once per Skill.
+Reviewer checks each affected manifest; a `REJECT` verdict blocks the commit.
+Scanner checks each affected Skill's entire directory using static rules and behavioral
+analysis. Only CRITICAL findings are displayed and fail the check; lower severity
+findings are hidden. Scanner execution errors remain visible.
+Unchanged Skills are not scanned. Full-repository scans and cross-skill overlap checks are not run.
+
+Both hooks also support the `manual` stage with the same staged-changes filter.
+Even `--all-files` does not include unchanged Skills. Run before committing with:
+
+```bash
+pre-commit run skill-reviewer --hook-stage manual --all-files
+pre-commit run skill-scanner-local --hook-stage manual --all-files
+```
+
+These checks are not online gates and are explicitly skipped in pre-commit.ci.
+Other general-purpose hooks continue to exclude `skills/`; Gitleaks covers Skill
+file changes. Initial installation requires network access to download the tools
+and Python dependencies; subsequent analysis is local without LLM or remote APIs.
+Candidate Skill scripts are not executed. Scanner uses
+`cisco-ai-skill-scanner==2.2.2` and scoped suppressions from
+`pre-commit/skill-scanner-policy.yaml`; no rules are globally disabled.
+
+Scan results and assessment reports remain local and are not tracked or uploaded.
+
+Reviewer now loads
+`pre-commit/skill-reviewer-policy.yaml` for 36 reviewed false positives; score gates
+and YAML/metadata errors remain active. Scanner suppresses 8 CRITICAL false positives.
+Three anti-outlier `.eval()` findings remain because they share a rule and file with
+a `compile` finding, which cannot be selectively exempted by this policy schema.
+Existing suppressions have no expiration; review them again when the relevant code changes.
+
 ### 5. Submitting a Pull Request
 
 In the PR, you are advised to describe the following:
