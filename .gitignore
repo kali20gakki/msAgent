@@ -75,3 +75,9 @@ tests/benchmark/data/kv_cache_type_page_seqlen_4096_bs_1_profile_count_0/
 .DS_Store
 
 AGENT.md
+
+# Local Skill scan reports and assessments
+/docs/zh/development_guide/skill-reviewer-audit.md
+/docs/zh/development_guide/skill-reviewer-false-positives.md
+/docs/zh/development_guide/skill-scanner-audit.md
+/docs/zh/development_guide/skill-scanner-false-positives.md

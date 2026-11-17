@@ -1,0 +1,149 @@
+# 已确认的误报长期屏蔽：不设置 expires；相关代码变化时重新复核。
+# 2026-11-03 扫描、2026-11-06 复核的误报；不屏蔽 YAML/metadata 错误和分数门禁。
+disabled_rules: []
+suppressions:
+- rule_id: S-CON-05
+  skills:
+  - aisbench-dataset-compression-herding
+  reason: SKILL.md:77：压缩代码目录不存在或不完整时，明确提示不支持并回退全集测试，已有具体 fallback。
+- rule_id: S-CON-05
+  skills:
+  - ascend-profiler-data-validation
+  reason: SKILL.md:48–59,80–88：未 Stop 必须停止、未解析先询问并解析、缺失交付件警告。该 Skill 本身就是错误分流门禁。
+- rule_id: S-CON-05
+  skills:
+  - ascend-schedule-analysis
+  reason: SKILL.md:18,37：dispatch view 不可用时回退直接 DB 查询；缺字段/产物时结论标为 degraded。
+- rule_id: S-CON-05
+  skills:
+  - msagent-profiler-breakdown
+  reason: SKILL.md:46–47,70–71：识别失败时询问并以低置信默认告警；锚点为空时跳过 step 拆解并告警，已有降级处理。
+- rule_id: S-CON-05
+  skills:
+  - op-mfu-calculator
+  reason: SKILL.md:163,170–174：缺少 sparse_mode、序列长度、耗时和硬件峰值时明确索取，已有缺输入处理；另建议补零耗时/零峰值的保护说明。
+- rule_id: S-CON-05
+  skills:
+  - precision-debugger
+  reason: SKILL.md:8,31：不具备调试条件时仅给建议；不允许调试时直接报告；正文已有降级分支。仍建议明确调试失败的停止条件。
+- rule_id: S-CON-05
+  skills:
+  - rl-consistency-analysis
+  reason: SKILL.md:33,75：输出报告缺失时必须重跑/补生成后才可声明完成，已有缺失产物处理；可另补进程失败诊断，但“没有处理”过强。
+- rule_id: S-CON-05
+  skills:
+  - spike-root-cause-analysis
+  reason: SKILL.md:125,133–134,155,181–182：对照组不正常先确认；无正常样本时禁止自动补选并询问；未对齐层不能断言一致；未知标杆标记待验证，已有异常分流。
+- rule_id: S-CON-06
+  skills:
+  - ascend-profiler-data-validation
+  reason: SKILL.md:73–81：有带代码围栏的 valid/invalid/unparsed 输出模板和前置调用分支；模板不标语言并不等于无示例。
+- rule_id: S-CON-06
+  skills:
+  - msmodelslim-adapter-verification
+  reason: SKILL.md:28–50,80; references/verification_guide.md：四步流程、自动化脚本及 verification_guide 提供运行指导，示例资源在 references
+    中。
+- rule_id: S-CON-06
+  skills:
+  - msmodelslim-layer-wise-quantization
+  reason: SKILL.md:49; references/layerwise_adapter_example.py：正文明确链接逐层适配示例代码，不能仅因示例不在 SKILL.md 的代码围栏内判为缺失。
+- rule_id: S-CON-06
+  skills:
+  - op-mfu-calculator
+  reason: SKILL.md:22,181,187：有单位转换例子和 0.42→42% 数值示范；纯公式计算 Skill 不需要凑代码块。
+- rule_id: S-CON-06
+  skills:
+  - precision-debugger
+  reason: SKILL.md:3,10–11：description 和典型场景明确乱码、复读、精度测评不达标；没有完整端到端示范属于改进项，不能说没有使用场景。
+- rule_id: S-CON-06
+  skills:
+  - quantization-accuracy-tuning-orchestrator
+  reason: SKILL.md:86–95：任务开始前给出了多组自然语言请求示例；编排 Skill 的使用示例不必是 shell 代码。
+- rule_id: S-CON-06
+  skills:
+  - verl-omni-msprobe-dump
+  reason: SKILL.md:46; references/implementation.md：正文直接链接 wrapper 示例、共用采集参数和诊断启动脚本，示例以渐进披露方式存在。
+- rule_id: S-CON-03
+  skills:
+  - ascend-profiler-db-explorer
+  reason: description 第 3 行已限定 Profiler/msprof DB，并列出自然语言查询问题；正文“使用场景”给出用户请求。固定触发短语匹配过窄。
+- rule_id: S-CON-08
+  skills:
+  - ascend-profiler-db-explorer
+  reason: description 第 3 行已限定 Profiler/msprof DB，并列出自然语言查询问题；正文“使用场景”给出用户请求。固定触发短语匹配过窄。 与 S-CON-03 属于同一描述识别局限。
+- rule_id: S-CON-03
+  skills:
+  - memory-analysis
+  reason: description 第 3 行明确 OOM、泄漏、占比、Step 对比及已有 CSV/DB 数据两类入口，已回答何时使用。
+- rule_id: S-CON-03
+  skills:
+  - msmodelslim-anti-outlier-adapt
+  reason: description 第 3 行以“在基础模型适配完成后”限定前置状态和执行阶段，已存在触发条件。
+- rule_id: S-CON-08
+  skills:
+  - msmodelslim-anti-outlier-adapt
+  reason: description 第 3 行以“在基础模型适配完成后”限定前置状态和执行阶段，已存在触发条件。 与 S-CON-03 属于同一描述识别局限。
+- rule_id: S-CON-03
+  skills:
+  - msmodelslim-layer-wise-quantization
+  reason: description 第 3 行明确“仅在用户明确要求逐层量化或基础适配因 CPU 内存不足…时使用”，正则漏识别。
+- rule_id: S-CON-03
+  skills:
+  - msmodelslim-model-adapt
+  reason: description 第 3–7 行列明基础 Transformers 适配及 Decoder-only LLM/VLM 适用范围和不适用范围；可补用户请求句，但不能认定无触发范围。
+- rule_id: S-CON-03
+  skills:
+  - quant-tuning-evaluate
+  reason: description 第 3 行已按 LLM/VLM 与 model_family=dit 指定测评入口，调用条件由模型家族及测评任务决定。
+- rule_id: S-CON-08
+  skills:
+  - quant-tuning-evaluate
+  reason: description 第 3 行已按 LLM/VLM 与 model_family=dit 指定测评入口，调用条件由模型家族及测评任务决定。 与 S-CON-03 属于同一描述识别局限。
+- rule_id: S-CON-03
+  skills:
+  - quant-tuning-history-append-dit
+  reason: description 第 3 行明确记录已由 quant-tuning-score-dit 填充的 round 和幂等键，已描述链路阶段。
+- rule_id: S-CON-08
+  skills:
+  - quant-tuning-history-append-dit
+  reason: description 第 3 行明确记录已由 quant-tuning-score-dit 填充的 round 和幂等键，已描述链路阶段。 与 S-CON-03 属于同一描述识别局限。
+- rule_id: S-CON-03
+  skills:
+  - quant-tuning-infer-dit
+  reason: description 第 3 行明确“在 W8A8 动态量化后”及仅验证可加载、与正式测评的边界。
+- rule_id: S-CON-08
+  skills:
+  - quant-tuning-infer-dit
+  reason: description 第 3 行明确“在 W8A8 动态量化后”及仅验证可加载、与正式测评的边界。 与 S-CON-03 属于同一描述识别局限。
+- rule_id: S-CON-03
+  skills:
+  - quant-tuning-score-dit
+  reason: description 第 3 行含“Run after … produces … and the user supplies …”，已有明确前置触发条件。
+- rule_id: S-CON-08
+  skills:
+  - quant-tuning-score-dit
+  reason: description 第 3 行含“Run after … produces … and the user supplies …”，已有明确前置触发条件。 与 S-CON-03 属于同一描述识别局限。
+- rule_id: S-CON-03
+  skills:
+  - quantization-expert-experience-tuning-rules
+  reason: description 第 4–7 行限定专家意见、算法选择和“怎么调、哪些层回退”问题，且声明不执行量化或 YAML 修改。
+- rule_id: S-CON-08
+  skills:
+  - quantization-expert-experience-tuning-rules
+  reason: description 第 4–7 行限定专家意见、算法选择和“怎么调、哪些层回退”问题，且声明不执行量化或 YAML 修改。 与 S-CON-03 属于同一描述识别局限。
+- rule_id: S-CON-03
+  skills:
+  - verl-omni-msprobe-dump
+  reason: description 第 4–5 行已写明用于 diffusion/omni rollout/actor 采集、dump 缺失或配对失败，触发条件明确。
+- rule_id: S-STR-12
+  skills:
+  - github-raw-fetch
+  reason: 第 3 行 github.com/<owner>/<repo>/blob/<ref>/... 是 URL 模板占位符，不是 XML 指令或提示注入。没有执行该字段的路径。
+- rule_id: S-CON-02
+  skills:
+  - msmodeling-device-config
+  reason: 第 3 行已说明按自然语言硬件规格新增/更新 DeviceProfile 设备画像；词表没有覆盖设备画像领域，不能据此判无触发关键词。
+- rule_id: S-CON-08
+  skills:
+  - msmodeling-device-config
+  reason: 第 3 行已有“在需要…时使用”+新增/更新动作+DeviceProfile 对象；三段式词表未覆盖该领域。

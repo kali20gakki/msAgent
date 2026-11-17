@@ -141,6 +141,33 @@ pre-commit run --all-files
 
 配置文件位于 `.pre-commit-config.yaml` 与 `pre-commit/` 目录。Python 代码风格与静态检查规则见 `pre-commit/pyproject.toml`。
 
+Skill 审查使用 [Skill-reviewer](https://gitcode.com/HiAgent/Skill-reviewer) v0.2.2，
+执行本地静态结构检查和九维评分，无需 API Key。
+Reviewer 和 Scanner 在本地 `git commit` 时，只检查暂存区新增、修改或重命名的文件所属的 Skill。
+修改 `SKILL.md`、脚本、参考文档或资源文件，都会触发所属 Skill 的检查；同一 Skill 只检查一次。
+Reviewer 审查这些 Skill 的 `SKILL.md`，结论为 `REJECT` 时阻止本次提交。
+Scanner 逐个扫描这些 Skill 的完整目录，启用静态规则和行为分析，仅展示 CRITICAL 发现；
+其他级别不展示、不触发失败，CRITICAL 发现使检查返回非零并阻止提交。扫描执行错误仍会显示。
+未改动的 Skill 不扫描，也不执行全库扫描或跨 Skill 重叠检查。
+
+两个 hook 同时支持 `manual` 阶段，但仍只选择暂存区变更涉及的 Skill；即使传入
+`--all-files` 也不会扫描未改动的 Skill。可以在提交前手动运行：
+
+```bash
+pre-commit run skill-reviewer --hook-stage manual --all-files
+pre-commit run skill-scanner-local --hook-stage manual --all-files
+```
+
+这两项检查不接入线上门禁，并在 pre-commit.ci 中配置为跳过。
+其他通用 hook 继续排除 `skills/`，Gitleaks 保持覆盖 Skill 文件变更。
+首次运行需要联网下载工具及其 Python 依赖；后续分析在本地完成，不启用 LLM 或远程 API，
+不执行候选 Skill 脚本。Scanner 使用 `cisco-ai-skill-scanner==2.2.2`；
+屏蔽策略位于 `pre-commit/skill-scanner-policy.yaml`，未全局禁用规则。
+
+扫描结果和复核文档仅保留在本地，不纳入版本管理或上传仓库。
+
+当前 Reviewer 通过 `pre-commit/skill-reviewer-policy.yaml` 局部屏蔽 36 条已复核误报；分数门禁及 YAML/metadata 问题仍然有效。Scanner 屏蔽 8 条 CRITICAL 误报；anti-outlier 的 3 条 `.eval()` 与同文件 `compile` 共用规则，无法精确区分，因此暂不屏蔽。已有屏蔽规则长期有效；相关代码变化时须重新复核。
+
 ### 5. 提交 Pull Request
 
 PR 中建议说明：

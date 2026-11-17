@@ -1,0 +1,42 @@
+# 已确认的误报长期屏蔽：不设置 expires；相关代码变化时重新复核。
+# 仅局部屏蔽已确认的 CRITICAL 误报；保留路径越界、compile/exec 和 ECharts 条件风险。
+# anti-outlier 同文件内 .eval() 和 compile 共用规则，无法区分，因此不屏蔽这 3 条 .eval()。
+# 同文件同规则未来新增发现也会匹配，修改这些文件时须重新复核。
+disabled_rules: []
+suppressions:
+- rule_id: YARA_sql_injection_generic
+  skills:
+  - ascend-cluster-fast-slow-rank-detector
+  paths:
+  - scripts/compare_api_stats.py
+  reason: 固定 SQL CAST/COALESCE 或 ? 参数绑定，不存在此匹配声称的 SQL 注入。
+- rule_id: YARA_sql_injection_generic
+  skills:
+  - ascend-cluster-fast-slow-rank-detector
+  paths:
+  - scripts/compare_op_stats.py
+  reason: 固定 SQL CAST/COALESCE 或 ? 参数绑定，不存在此匹配声称的 SQL 注入。
+- rule_id: YARA_sql_injection_generic
+  skills:
+  - ascend-communication-analysis
+  paths:
+  - scripts/collect_wait_evidence.py
+  reason: 固定 SQL CAST/COALESCE 或 ? 参数绑定，不存在此匹配声称的 SQL 注入。
+- rule_id: YARA_sql_injection_generic
+  skills:
+  - ascend-communication-analysis
+  paths:
+  - scripts/summarize.py
+  reason: 固定 SQL CAST/COALESCE 或 ? 参数绑定，不存在此匹配声称的 SQL 注入。
+- rule_id: COMMAND_INJECTION_EVAL
+  skills:
+  - msmodelslim-layer-wise-quantization
+  paths:
+  - references/layerwise_adapter_example.py
+  reason: PyTorch Module.eval() 切换推理模式，不是内建 eval 字符串求值。
+- rule_id: COMMAND_INJECTION_EVAL
+  skills:
+  - msmodelslim-adapter-verification
+  paths:
+  - scripts/step1_generate_test_model.py
+  reason: PyTorch Module.eval() 切换推理模式，不是内建 eval 字符串求值。
