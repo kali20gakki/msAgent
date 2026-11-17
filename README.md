@@ -4,7 +4,7 @@
 <p><b><span style="font-size:20px;">面向 Ascend NPU 场景的一站式调试调优</span></b></p>
 
 [![快速入门](https://badgen.net/badge/快速入门/QuickStart/blue)](docs/zh/quick_start/msagent_quick_start.md)
-[![AI Skill](https://badgen.net/badge/AI%20Skill/Skill/blue)](skills/README.md)
+[![AI Skill](https://badgen.net/badge/AI%20Skill/Skill/blue)](skills/README_ZH.md)
 [![AI问答(DeepWiki)](https://badgen.net/badge/AI问答/DeepWiki/blue)](https://deepwiki.com/mindstudio-docs/master/5-msagent-ai-assisted-development-agent)
 [![AI问答(ZRead)](https://badgen.net/badge/AI问答/ZRead/blue)](https://zread.ai/mindstudio-docs/master)
 [![精确搜索](https://badgen.net/badge/精确搜索/ReadTheDocs/blue)](https://mindstudio-docs-master.readthedocs.io)
@@ -19,6 +19,7 @@
 
 <span style="font-size:14px;">
 
+🔹 [MindStudio Agent官方课程](https://www.hiascend.com/developer/courses/detail/2121085804264136705)<br>
 🔹 **[2026.08.26]**：新增一键安装方式（`curl | bash` / `irm | iex`），基于 uv 隔离安装，避免与现有环境依赖冲突，推荐使用（详见《[安装指南](docs/zh/install_guide/msagent_install_guide.md)》）。<br>
 🔹 **[2026.06.04]**：`Hermes` 更名为 `Profiler`，`Zephyr` 更名为 `Quantizer`，`Icarus` 更名为 `Operator`。<br>
 🔹 **[2026.05.21]**：`v26.0.0已发布，新增Icarus Agent，覆盖算子性能调优场景`。<br>
@@ -48,7 +49,7 @@ MindStudio-Agent（简称 `msAgent`）是面向昇腾 Ascend NPU 开发、调试
 | [**Minos**](docs/zh/agent_guide/minos.md) | **【文档体验与代码审查】**  聚焦 README 走查、安装流程验证、Quick Start 体验、新手 onboarding、文档可用性评估，以及 GitCode PR 审查与评审意见整理。 |
 | [**SpecTrainer**](docs/zh/agent_guide/spectrainer.md) | **【投机解码重采样】**  聚焦投机解码训练数据的 on-policy 重采样（响应重生成），把多轮对话的 assistant 回答用 verifier 模型逐轮重新生成可直接进训练的预分词样本。 |
 
-> **SpecTrainer** 的 Skill 脚本基于开源 [speculators](https://github.com/vllm-project/speculators) 仓 **v0.6.0** 做流程编排；技能说明见 [skills/README.md](skills/README.md)。
+> **SpecTrainer** 的 Skill 脚本基于开源 [speculators](https://github.com/vllm-project/speculators) 仓 **v0.6.0** 做流程编排；技能说明见 [skills/README_ZH.md](skills/README_ZH.md)。
 
 ## 🚀 快速入门
 
@@ -56,7 +57,7 @@ MindStudio-Agent（简称 `msAgent`）是面向昇腾 Ascend NPU 开发、调试
 
 ## 🧩 AI Skill
 
-除领域 Agent 外，`msagent` 还内置了一批可复用的 Skills，覆盖 Profiling 数据分析、算子性能调优、精度溢出检测、文档体验审查、代码审查等场景。完整技能清单、触发方式与依赖说明，请参见 《[Skills](skills/README.md)》。
+除领域 Agent 外，`msagent` 还内置了一批可复用的 Skills，覆盖 Profiling 数据分析、算子性能调优、精度溢出检测、文档体验审查、代码审查等场景。完整技能清单、触发方式与依赖说明，请参见 《[Skills](skills/README_ZH.md)》。
 
 如需将 Skills 或 msprof-mcp 接入 Trae、Claude、Codex 等外部 Agent，可参考 《[接入指南](docs/zh/user_guide/integration-guide.md)》。
 
