@@ -18,7 +18,7 @@
 .NOTES
   Optional env:
     MSAGENT_VERSION           exact version to install (default: latest from PyPI)
-    MSAGENT_PYTHON            Python request for the isolated tool env (default: >=3.11, reuses local Python)
+    MSAGENT_PYTHON            Python request for the isolated tool env (default: >=3.11,<3.15, reuses local Python)
     MSAGENT_INDEX             PyPI index override (default: official PyPI, domestic mirrors as fallback)
     MSAGENT_NO_MODIFY_PATH    set to a non-empty value to skip PATH modification
     MSAGENT_PLAIN_UI          set to a non-empty value for ASCII-only output (no colours/glyphs)
@@ -1148,10 +1148,10 @@ function Prepare-AscendDocMcp {
 # Install mindstudio-agent as an isolated uv tool (always latest, no version pin)
 # ---------------------------------------------------------------------------
 Write-Phase 'Installing mindstudio-agent'
-# Prefer any existing local Python >= 3.11 so a managed CPython is only
+# Prefer any existing local Python >= 3.11 and < 3.15 so a managed CPython is only
 # downloaded when needed (downloads may fail on restricted networks).
 # Set MSAGENT_PYTHON to pin an exact version, e.g. "3.11".
-$pythonVersion = if ($env:MSAGENT_PYTHON) { $env:MSAGENT_PYTHON } else { '>=3.11' }
+$pythonVersion = if ($env:MSAGENT_PYTHON) { $env:MSAGENT_PYTHON } else { '>=3.11,<3.15' }
 
 # Never silently downgrade: a machine may carry a newer local/dev build while the
 # index still serves an older release. Keep the newer one unless asked to force.
