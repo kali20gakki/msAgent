@@ -19,6 +19,7 @@
 | `deterministic-calculation-analysis` | 单卡/多卡/集群场景，开启确定性计算或者切换软件版本，模型重复运行两次结果不一致问题分析 |
 | `rl-prefill-consistency-dump` | 训推一致性(prefill)采集侧：输入/参数对齐后接入 msprobe，采集两侧可比 prefill dump |
 | `rl-consistency-dump-analysis` | 训推一致性(prefill)分析侧：语义边界映射、首差异定位、打桩迭代枚举所有独立差异点 |
+| `uwc-verify` | veRL（Megatron-core 训练 + vLLM 推理）训推权重转换一致性验证：注入采集钩子，自动完成 Bridge 往返、传输、data_ptr 覆盖、前向一致性、dummy vs safetensors 五项检查并生成报告 |
 
 ## Todo / Subagent
 

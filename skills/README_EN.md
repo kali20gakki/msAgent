@@ -68,6 +68,7 @@ Follow these principles:
 | `train-infer-op-diff-scanner` | RL train-infer operator difference scanning (fused operators vs single operators) | `Scan the operator differences between training and inference in this RL script` |
 | `rl-consistency-analysis` | Perform root cause analysis of training and inference consistency | `Analyze the root cause of this training and inference inconsistency` |
 | `precision-debugger` | Analyze and locate inference precision issues such as garbled output and repeated output | `I encountered an inference precision issue` |
+| `uwc-verify` | Automated veRL training-inference weight conversion consistency (UWC) verification: injects collection hooks, runs the five checks (Bridge round trip, transport, data_ptr coverage, forward consistency, dummy vs safetensors) and generates Markdown/HTML/JSON reports | `Verify whether the weight conversion from training to inference is consistent in this veRL task` |
 
 ### 2.3 Quantization Skills
 

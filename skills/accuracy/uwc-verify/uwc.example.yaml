@@ -1,0 +1,96 @@
+# uwc-verify 示例配置：复制为 uwc.yaml 后按实际集群修改。
+# 未列出的键使用 scripts/uwc_verify.py 中的默认值。
+
+verl:
+  # 必填：veRL 仓库根目录（该目录下应有 verl/ 包）。prepare 会修改其中 6 个核心文件；
+  # patch.optional_targets 默认 true 时另加 agent_loop.py，共 7 个。
+  path: /path/to/verl
+  # 命令的工作目录，默认等于 path。
+  cwd: /path/to/verl
+  python: python3
+  set_pythonpath: true
+
+model:
+  # 必填：原始 HF 权重目录（含 config.json / *.safetensors）。
+  hf_path: /path/to/Qwen2.5-0.5B-Instruct
+  # 默认自动取 hf_path/config.json；合并 qkv / gate_up 时需要。
+  config_json: null
+
+dump_dir: /tmp/uwc_dump
+
+# 要执行的检查项。1/2/3 各跑一条命令，4 跑 HF+mcore 前向，5 跑 dummy+safetensors 两次。
+stages: [1, 2, 3, 4, 5]
+
+# 每个阶段执行的训练/推理命令。skill 会注入 UWC_* 环境变量并运行；
+# 当下面的 stop_when 文件出现（或超时）后自动停止整个进程组。
+# 请按你的启动脚本替换；示例使用 verl 0.9.x 自带的 GRPO 入口。
+commands:
+  stage1: >-
+    bash examples/grpo_trainer/run_qwen2-7b_math_megatron_fsdp.sh
+  stage2: >-
+    bash examples/grpo_trainer/run_qwen2-7b_math_megatron_fsdp.sh
+  stage3_ptr: >-
+    bash examples/grpo_trainer/run_qwen2-7b_math_megatron_fsdp.sh
+  # 关键：两次运行必须只差 load_format，其余参数完全一致。
+  stage3_dummy: >-
+    bash examples/grpo_trainer/run_qwen2-7b_math_megatron_fsdp.sh
+    actor_rollout_ref.rollout.load_format=dummy
+  stage3_safetensors: >-
+    bash examples/grpo_trainer/run_qwen2-7b_math_megatron_fsdp.sh
+    actor_rollout_ref.rollout.load_format=safetensors
+
+# 阶段完成判据（相对 dump_dir 的 glob）。
+stop_when:
+  stage1: ["stage1_bridge/P2_hf_exported_step*_rank*.pt"]
+  stage2: ["stage2_transfer/P5_receiver_step*_rank*.pt"]
+  stage3_ptr: ["stage3_vllm/ptr_before_after_step*_rank*.json"]
+  stage3_dummy: ["stage3_vllm/dummy_rl_first_step_output.json"]
+  stage3_safetensors: ["stage3_vllm/safetensors_rl_first_step_output.json"]
+
+timeouts:
+  stage1: 600
+  stage2: 1200
+  stage3_ptr: 1200
+  stage3_dummy: 1800
+  stage3_safetensors: 1800
+  forward: 900
+  default: 900
+
+# 追加到子进程的环境变量（如 HCCL / CANN / vLLM 配置）。
+env:
+  # VERL_FORCE_USE_SHM: "1"   # 需要验证共享内存路径时打开
+  # ASCEND_RT_VISIBLE_DEVICES: "0,1,2,3,4,5,6,7"
+
+compare:
+  stage1_atol: 1.0e-3
+  stage1_rtol: 0.0
+  stage1_exact: false
+  stage2_exact: true
+  # 融合投影的切分布局：contiguous 或 interleaved
+  qkv_layout: contiguous
+  gate_up_layout: contiguous
+  avg_cos: 0.99
+  min_cos: 0.95
+  diff_threshold: 0.5
+  # tokenizer / 模型加载是否允许执行仓库自定义代码；不受信任的权重目录设为 false
+  trust_remote_code: true
+
+forward:
+  # 阶段 4 的固定输入；HF 与 mcore 必须使用完全相同的 input_ids。
+  input_ids: [1, 2, 3, 4, 5]
+  device: null          # 例如 npu:0 / cuda:0
+  dtype: fp32
+  use_builtin: true     # false 时改用 commands.forward_hf / forward_mcore
+
+# 可选：完全自定义阶段 4 的命令（会替代内置 forward_verify）。
+# commands:
+#   forward_hf: ...
+#   forward_mcore: ...
+
+report:
+  title: UWC 训推权重一致性验证报告
+  out_dir: null         # 默认写入 dump_dir
+
+patch:
+  use_shm: true         # 改写 self.use_shm，使其支持 VERL_FORCE_USE_SHM
+  optional_targets: true # 同时尝试 patch agent_loop（存在时）
