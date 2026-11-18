@@ -71,6 +71,7 @@ description: 技能的详细描述，说明它做什么，以及什么时候使�
 | `msprobe-dump-enable` | 在 PyTorch 动态图训练/推理代码中使能 msProbe PrecisionDebugger 精度数据采集（环境检查、配置逐项确认、打点与验证、开关说明） | `帮我给训练代码使能 dump` |
 | `rl-prefill-consistency-dump` | 训推一致性(prefill)采集侧：单独使用采集训推两侧可比的 prefill dump（输入/参数对齐后接入 msprobe）；配合 `rl-consistency-dump-analysis` 使用时，按其打桩指令做 msprobe `load` 覆盖边界再采，隔离差异 | `根据（训练脚本）拉起训练，然后帮我采集训练和推理两侧可比的 prefill dump` |
 | `rl-consistency-dump-analysis` | 训推一致性(prefill)分析侧：单独使用分析已采集的训推两侧 dump，语义边界映射、定位首差异、产出分析报告；配合 `rl-prefill-consistency-dump` 使用时，输出打桩指令驱动再采集数据，迭代枚举所有独立差异点 | `帮我分析这份训推 prefill dump数据，定位训推不一致的根因` | 
+| `uwc-verify` | veRL 训推权重转换一致性（UWC）自动验证：注入采集钩子，自动完成 Bridge 往返、传输、data_ptr 覆盖、前向一致性、dummy vs safetensors 五项检查，并生成 Markdown/HTML/JSON 报告 | `帮我验证这个 veRL 任务的训练到推理权重转换是否一致` |
 
 > **`rl-prefill-consistency-dump`与 `rl-consistency-dump-analysis`配合使用，可通过打桩寻找全部的差异点**
 >
