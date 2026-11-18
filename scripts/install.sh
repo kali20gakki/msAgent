@@ -35,7 +35,7 @@
 # existing Python environment (system Python, torch, mindstudio_monitor, ...).
 #
 # Environment variables:
-#   MSAGENT_PYTHON            Python request for the isolated tool env (default: >=3.11, reuses local Python)
+#   MSAGENT_PYTHON            Python request for the isolated tool env (default: >=3.11,<3.15, reuses local Python)
 #   MSAGENT_VERSION           Exact version to install, e.g. "26.1.0" (default: latest)
 #   MSAGENT_INDEX             PyPI index URL override (default: official PyPI, domestic mirrors as fallback)
 #   MSAGENT_NO_MODIFY_PATH    set to 1 to skip all PATH modification
@@ -509,7 +509,7 @@ latest_version_from_index() {
     | version_sort_desc | head -n 1
 }
 
-MSAGENT_PYTHON="${MSAGENT_PYTHON:->=3.11}"
+MSAGENT_PYTHON="${MSAGENT_PYTHON:->=3.11,<3.15}"
 INSTALL_SPEC="mindstudio-agent"
 LATEST_VERSION=""
 if [ -n "${MSAGENT_VERSION:-}" ]; then
