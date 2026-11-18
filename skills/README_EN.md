@@ -91,6 +91,7 @@ Follow these principles:
 | Skill | Purpose | Example Prompt |
 | --- | --- | --- |
 | `msot-msopprof-operator-profiler` | Perform msprof op operator analysis | `Output the bottleneck and optimization suggestions of this operator` |
+| `msopprof-range-replay-adapter` | Automatically generate MSTX configuration, compiler options, and timeline merge configuration for operator range replay | `Modify this operator to support range replay and automatically generate the custom-input configuration for merging multi-device timelines` |
 | `ops-performance-tuning` | Perform compilation, profiling, and performance tuning for AscendC/CATLASS/Triton/TileLang/PyPTO/SHMEM operators | `Perform performance analysis on this operator and provide a before-and-after comparison report` |
 | `mssanitizer-basic-usage` | Detect, analyze, and fix Ascend operator memory, race condition, initialization, and synchronization anomalies. Supports various Ascend official operator libraries and custom operators | `Detect whether this operator has anomalies` |
 | `msdebug-basic-usage` | Ascend operator debugging and coredump analysis | `Debug this operator and analyze the coredump` |
