@@ -89,7 +89,6 @@ description: 技能的详细描述，说明它做什么，以及什么时候使�
 > ```
 >
 
-
 ### 2.3 量化 Skills
 
 | Skill | 作用 | 示例 prompt |

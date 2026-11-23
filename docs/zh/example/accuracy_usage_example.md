@@ -57,7 +57,7 @@ Agent：更新结果。
 
 从数值验证看，Layer 1、23有较大问题。
 
-使用msprobe的分级可视化工具进行人工查看后发现
+使用msProbe的分级可视化工具进行人工查看后发现
 <img src="../figures/accuracy_usage_example_3.png" width="1577" title="" crop="0,0,1,1" id="ueffb9a2d-2" class="ne-image">
 <img src="../figures/accuracy_usage_example_4.png" width="1577" title="" crop="0,0,1,1" id="ueffb9a2d-3" class="ne-image">
 
@@ -108,7 +108,7 @@ Qwen2DecoderLayer 的典型结构：
 
 ---
 
-**训练侧的Layer是单输入单输出（直接输出hidden_states），而推理侧的为多输入多输出。具体的，推理侧的input0是位置编码，input1和input2是上一层的residual和mlp.output，输出则是residual和mlp.output。** 这就解释了：
+**训练侧的Layer是单输入单输出（直接输出hidden_states），而推理侧的为多输入多输出。具体地，推理侧的input0是位置编码，input1和input2是上一层的residual和mlp.output，输出则是residual和mlp.output。** 这就解释了：
 
 1. 训推子模块能对上，因为都是mlp.output；
 

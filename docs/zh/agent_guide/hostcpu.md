@@ -25,7 +25,7 @@
 
 | Skill | 用途 |
 | --- | --- |
-| `msagent-perf-cpu-config-audit` | 主机配置体检：八域单点快照、分级判定、待改清单与 HTML 报告 |
+| `msagent-perf-cpu-config-audit` | 主机配置审计：八域单点快照、分级判定、待改清单与 HTML 报告 |
 | `msagent-perf-cpu-bind-tune` | 绑核与 NUMA 亲和方案求解：核集划分、plan、回滚与验证脚本 |
 | `msagent-perf-cpu-perf-triage` | 症状不明时的编排入口：配置复核 → 归因量化 → 动作排序与汇总页 |
 

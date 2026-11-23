@@ -55,9 +55,9 @@ Ascend 生态下利用 LLM 分析 Profiling 数据存在几个典型难点：
 
 #### 4.2 非目标
 
-- 不在本设计文档中展开 Perfetto TraceProcessor Shell 的内部实现细节。
+- 不在本设计文档中展开 Perfetto Trace Processor Shell 的内部实现细节。
 - 不把 `msprof-mcp` 设计成 GUI 产品，当前主入口仍是 MCP stdio 服务。
-- 不在服务内直接承载性能分析算法本体，而是通过 `msprof-analyze` 命令和 Perfetto SQL 协同完成。
+- 不在服务内直接承载性能分析算法本体，而是通过 `msprof-analyze` 命令和 PerfettoSQL 协同完成。
 - 不支持写入性 SQL 操作，所有数据库交互严格只读。
 
 ## 方案设计

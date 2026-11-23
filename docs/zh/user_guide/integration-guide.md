@@ -119,7 +119,7 @@ msprof-mcp
 
 ### 4.2 配置 MCP Server
 
-在 Trae IDE 中进入 `设置 → MCP` 中，点击 `添加 → 手动配置`，填入以下信息：
+在 Trae IDE 中进入 `设置 → MCP`，单击 `添加 → 手动配置`，填入以下信息：
 
 ```json
 {
