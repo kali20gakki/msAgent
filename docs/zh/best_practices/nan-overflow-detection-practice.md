@@ -33,12 +33,12 @@
 
 #### 2.2.4 核对输入无NaN
 
-![输入无NaN](../figures/best_practices/nan_dump_1.jpg)
+![dump数据回显截图，展示npu_grouped_matmul算子输入侧数值，可见输入均为有效数值、无NaN](../figures/best_practices/nan_dump_1.jpg)
 
 #### 2.2.5 核对输出为NaN
 
-![输出为NaN](../figures/best_practices/nan_dump_2.jpg)
+![dump数据回显截图，展示npu_grouped_matmul算子输出侧数值，可见输出出现NaN](../figures/best_practices/nan_dump_2.jpg)
 
 #### 2.2.6 得到分析报告
 
-![分析报告](../figures/best_practices/nan_report.jpg)
+![agent生成的分析报告截图，汇总问题源卡rank 168、rank 325与根因算子npu_grouped_matmul](../figures/best_practices/nan_report.jpg)

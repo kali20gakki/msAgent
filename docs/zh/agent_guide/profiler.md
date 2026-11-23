@@ -16,7 +16,7 @@
 - Profiling 数据检查与数据质量确认 <sup>Beta</sup>
 - MFU 计算、公式说明与结果解释 <sup>Beta</sup>
 - 基于 **DB格式** 交付件做RL、推理等阶段耗时拆解 <sup>Beta</sup>
-- Ascend 官方文档 / 社区资料 / 接口与工具语义 / 示例与开源代码的事实核验（委派 `ascend-knowledge` 子代理取证，返回带来源与版本/分支的证据） <sup>Beta</sup>
+- Ascend官方文档 / 社区资料 / 接口与工具语义 / 示例与开源代码的事实核验（委派 `ascend-knowledge` 子代理取证，返回带来源与版本/分支的证据） <sup>Beta</sup>
 
 ## 3. 推荐使用方式
 

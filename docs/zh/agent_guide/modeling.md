@@ -46,9 +46,9 @@
 - 尽量直接提供 `msmodeling` 仓库路径、模型名称、目标设备、设备数和任务目标
 - 如果你要初始化环境，请说明是否要使用默认 `myenv`、是否允许安装 `uv` / `requirements.txt`、是否需要设置 `PYTHONPATH` 或 `HF_ENDPOINT`
 - 如果你要的是单点仿真，请说明：模型、device profile、设备数、输入/输出长度、Prefill/Decode 模式
-- 如果你要的是吞吐规划，请说明：模型、硬件、设备数、输入输出长度、SLO、部署模式（聚合 / 分离 / P:D 比例）
+- 如果你要的是吞吐规划，请说明：模型、硬件、设备数、输入/输出长度、SLO、部署模式（聚合 / 分离 / P:D 比例）
 - 如果你要部署服务化自动寻优工具，请说明是否使用默认的阿里云 PyPI 镜像，以及你的运行环境是否为昇腾的推理产品
-- 如果你要获取服务化自动寻优参数推荐，请尽量提供：推理框架（mindie/vllm）、硬件信息（单卡显存、world_size、每节点卡数、节点数）、模型 config.json 路径或模型名、业务负载 token 长度、优化目标（throughput/ttft/tpot/balanced）
+- 如果你要获取服务化自动寻优参数推荐，请尽量提供：推理框架（MindIE/vLLM）、硬件信息（单卡显存、world_size、每节点卡数、节点数）、模型 config.json 路径或模型名、业务负载 token 长度、优化目标（throughput/ttft/tpot/balanced）
 
 ## 6. 当前边界说明
 

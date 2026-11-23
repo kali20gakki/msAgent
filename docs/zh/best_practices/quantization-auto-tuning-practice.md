@@ -6,7 +6,7 @@
 
 ### 1.1 输入需求并确认调优信息
 
-1. 在 msagent 中选定 `Quantizer` Agent，使用自然语言描述模型路径、保存路径、量化方案、设备和精度要求。例如：“帮我把 `/path/to/Qwen3.6-27B` 进行 W8A8 量化，量化结果保存到 `/path/to/output`，使用 NPU 6、7 卡，在 MMMU-PRO 数据集上的精度损失控制在 1% 以内。”
+1. 在 msagent 中选定 `Quantizer` Agent，使用自然语言描述模型路径、保存路径、量化方案、设备和精度目标。例如：“帮我把 `/path/to/Qwen3.6-27B` 进行 W8A8 量化，量化结果保存到 `/path/to/output`，使用 NPU 6、7 卡，在 MMMU-PRO 数据集上的精度损失控制在 1% 以内。”
 
    ![选择 Quantizer 并输入量化调优需求](../figures/best_practices/quantizer-auto-tuning-input.png)
 

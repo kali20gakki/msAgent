@@ -1,6 +1,8 @@
 # torch_npu.profiler 接口适配最佳实践
 
-## 1. 推理场景 `sglang` 框架适配 `torch_npu.profiler` 接口
+本文档介绍torch_npu.profiler接口适配最佳实践，以推理场景sglang框架和强化学习场景slime-ascend框架为例，说明如何通过msagent的ascend-profiler-collect-adaption Skill端到端完成torch_npu.profiler接口适配并验证采集结果，适用于需要为AI框架接入torch_npu.profiler采集能力的开发者。
+
+## 1. 推理场景 sglang 框架适配 torch_npu.profiler 接口
 
 以推理场景的 `sglang` 框架为例，展示如何通过 msagent 的 `ascend-profiler-collect-adaption` Skill，端到端完成 `torch_npu.profiler` 接口适配。
 
@@ -18,7 +20,7 @@
 
 ---
 
-## 2. 强化学习场景 `slime-ascend` 框架适配 `torch_npu.profiler` 接口
+## 2. 强化学习场景 slime-ascend 框架适配 torch_npu.profiler 接口
 
 以强化学习场景的 `slime-ascend` 框架为例，展示如何通过 msagent 的 `ascend-profiler-collect-adaption` Skill，端到端完成 `torch_npu.profiler` 接口适配。
 
@@ -32,4 +34,4 @@
 
 ### 2.2 效果演示
 
-![训练场景slime-ascend框架接口适配流程](../figures/best_practices/slime_ascend_torch_npu_profiler.gif)
+![强化学习场景slime-ascend框架接口适配流程](../figures/best_practices/slime_ascend_torch_npu_profiler.gif)
