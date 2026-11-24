@@ -21,24 +21,24 @@
 
 #### 2.2.1 描述目标和数据
 
-![描述目标和数据](../figures/best_practices/nan_prompt.jpg)
+![描述目标和数据](../figures/best_practices/nan_prompt.png)
 
 #### 2.2.2 讨论确定分析步骤
 
-![讨论确定分析步骤](../figures/best_practices/nan_plan.jpg)
+![讨论确定分析步骤](../figures/best_practices/nan_plan.png)
 
 #### 2.2.3 得到agent分析结论
 
-![得到agent分析结论](../figures/best_practices/nan_result.jpg)
+![得到agent分析结论](../figures/best_practices/nan_result.png)
 
 #### 2.2.4 核对输入无NaN
 
-![dump数据回显截图，展示npu_grouped_matmul算子输入侧数值，可见输入均为有效数值、无NaN](../figures/best_practices/nan_dump_1.jpg)
+![dump数据回显截图，展示npu_grouped_matmul算子输入侧数值，可见输入均为有效数值、无NaN](../figures/best_practices/nan_dump_1.png)
 
 #### 2.2.5 核对输出为NaN
 
-![dump数据回显截图，展示npu_grouped_matmul算子输出侧数值，可见输出出现NaN](../figures/best_practices/nan_dump_2.jpg)
+![dump数据回显截图，展示npu_grouped_matmul算子输出侧数值，可见输出出现NaN](../figures/best_practices/nan_dump_2.png)
 
 #### 2.2.6 得到分析报告
 
-![agent生成的分析报告截图，汇总问题源卡rank 168、rank 325与根因算子npu_grouped_matmul](../figures/best_practices/nan_report.jpg)
+![agent生成的分析报告截图，汇总问题源卡rank 168、rank 325与根因算子npu_grouped_matmul](../figures/best_practices/nan_report.png)

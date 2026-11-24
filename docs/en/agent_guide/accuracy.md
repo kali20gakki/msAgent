@@ -37,7 +37,7 @@
 
 | Scenario             | Example Prompt | Sample Output |
 |----------------|---|--|
-| Enable dump collection | `Integrate msProbe precision data collection into the training code` | <img src="../figures/dump_enable_report.jpg" alt="Enable dump collection sample output" width="800"> |
+| Enable dump collection | `Integrate msProbe precision data collection into the training code` | <img src="../figures/dump_enable_report.png" alt="Enable dump collection sample output" width="800"> |
 | Loss/gnorm NaN overflow analysis | `Based on the input training dump data, analyze the NaN overflow and identify the source device and the root-cause operator.` | <img src="../figures/nan_overflow_detection_report.png" alt="loss/gnorm NaN overflow analysis report" width="800"> |
 | Analysis of inconsistent results when the model runs twice after enabling deterministic computing or switching software versions | `Based on the input md5 dump data, compare the data, find the difference points, and provide possible causes.` | <img src="../figures/deterministic_report.png" alt="Deterministic computing issue analysis report" width="800"> |
 | Loss/gnorm inconsistency analysis | `Analyze the dump data and find the root cause of the loss inconsistency.` | <img src="../figures/loss_gnorm_diff_analyzer.png" alt="loss mismatch issue analysis report" width="800"> |

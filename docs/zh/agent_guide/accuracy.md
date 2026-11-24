@@ -37,12 +37,12 @@
 
 | 场景             | 示例提示词 | 效果展示 |
 |----------------|---|--|
-| 使能 dump 采集 | `给训练代码接入 msProbe 精度数据采集功能` | <img src="../figures/dump_enable_report.jpg" alt="使能 dump 采集效果展示" width="800"> |
-| loss/gnorm NaN溢出分析 | `请基于输入的训练dump数据，分析其中的NaN溢出，找出源卡和根因算子` | <img src="../figures/nan_overflow_detection_report.jpg" alt="loss/gnorm NaN溢出分析报告" width="800"> |
+| 使能 dump 采集 | `给训练代码接入 msProbe 精度数据采集功能` | <img src="../figures/dump_enable_report.png" alt="使能 dump 采集效果展示" width="800"> |
+| loss/gnorm NaN溢出分析 | `请基于输入的训练dump数据，分析其中的NaN溢出，找出源卡和根因算子` | <img src="../figures/nan_overflow_detection_report.png" alt="loss/gnorm NaN溢出分析报告" width="800"> |
 | 开启确定性计算、切换软件版本，模型运行两次结果不一致分析 | `请基于输入的md5 dump数据，进行数据比对，寻找比对差异点，给出可能原因。` | <img src="../figures/deterministic_report.png" alt="确定性计算问题分析报告" width="800"> |
 | loss、gnorm不一致分析 | `分析dump数据，找出loss不一致的根因` | <img src="../figures/loss_gnorm_diff_analyzer.png" alt="loss对不齐问题分析报告" width="800"> |
 | RL训推算子差异扫描 | `请基于提供的运行环境与训练脚本，进行训推算子差异扫描` | <img src="../figures/train_infer_op_diff_scanner_report.png" alt="RL训推算子差异扫描分析报告" width="800"> |
-| RL训推不一致分析      | `请基于输入的训练和推理dump数据，分析训推的差异来源，给出可能原因。` | <img src="../figures/accuracy_rl_rca_report.jpg" alt="RL训推不一致根因分析报告" width="800"> |
+| RL训推不一致分析      | `请基于输入的训练和推理dump数据，分析训推的差异来源，给出可能原因。` | <img src="../figures/accuracy_rl_rca_report.png" alt="RL训推不一致根因分析报告" width="800"> |
 | veRL 训推权重转换一致性验证 | `用 uwc-verify 验证这个 veRL 任务的训推权重一致性，所需的仓库路径、模型目录、各阶段启动命令与第 5 项 load_format 切换方式都从启动脚本中读取；全自动执行采集与比对并生成报告，结束后还原源码` | <img src="../figures/uwc_verify_report.png" alt="训推权重五阶段一致性验证报告" width="800"> |
 | 梯度尖刺（Gradient Spike）根因分析 | `请基于提供的梯度监控数据，分析其中的梯度尖刺，定位根因坐标和前反向分叉点。` | <img src="../figures/spike_root_case_report.png" alt="梯度尖刺分析报告" width="800"> |
 | 乱码、复读等推理精度问题的分析定位 | `我遇到了一个推理精度问题` | <img src="../figures/precision_debugger_report.png" alt="推理精度问题分析报告" width="800"> |
