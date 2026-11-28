@@ -315,6 +315,9 @@ def _configured_npm_registry() -> str | None:
     try:
         completed = subprocess.run(
             [npm, "config", "get", "registry"],
+            # Never inherit the caller's stdin: under stdio transports (e.g. ACP)
+            # it is the protocol pipe, and npm can block on it.
+            stdin=subprocess.DEVNULL,
             capture_output=True,
             check=False,
             text=True,

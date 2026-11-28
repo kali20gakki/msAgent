@@ -194,6 +194,7 @@ async def test_execute_bash_command_uses_isolated_process_group(
 
     await bash_module.execute_bash_command(["bash", "-c", "true"], timeout=1)
 
+    assert captured_kwargs["stdin"] is asyncio.subprocess.DEVNULL
     if sys.platform == "win32":
         assert "creationflags" in captured_kwargs
     else:

@@ -29,6 +29,7 @@ from datetime import datetime
 from pathlib import Path
 
 _CACHE_TTL_SECONDS = 30.0
+_GIT_TIMEOUT_SECONDS = 1.5
 _MAX_SCRIPT_COMMANDS = 8
 _MAX_TOP_LEVEL_ENTRIES = 24
 _MAX_CONTEXT_CHARS = 4000
@@ -233,16 +234,28 @@ def _load_npm_script_commands(package_json_path: Path) -> list[str]:
 
 def _run_git(working_dir: Path, *args: str) -> str | None:
     try:
-        completed = subprocess.run(
+        with subprocess.Popen(
             ["git", "-C", str(working_dir), *args],
-            check=False,
-            capture_output=True,
+            # Never let git inherit the caller's stdin: under stdio transports
+            # (e.g. ACP) stdin is the protocol pipe, and git blocks on it.
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             text=True,
-            timeout=1.5,
-        )
+        ) as process:
+            try:
+                stdout, _ = process.communicate(timeout=_GIT_TIMEOUT_SECONDS)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                try:
+                    # subprocess.run() re-reads output without a timeout after kill(),
+                    # which can block forever on Windows on a still-open pipe.
+                    process.communicate(timeout=0.5)
+                except Exception:
+                    pass
+                return None
+            if process.returncode != 0:
+                return None
+            return stdout.strip()
     except Exception:
         return None
-
-    if completed.returncode != 0:
-        return None
-    return completed.stdout.strip()

@@ -17,10 +17,64 @@
 
 from __future__ import annotations
 
+import subprocess
+from pathlib import Path
+
 from msagent.agents.local_context import (
+    _run_git,
     build_local_environment_context,
     ensure_local_context_prompt,
 )
+
+
+class _FakeProcess:
+    def __init__(self, *, timeout_error: bool) -> None:
+        self.returncode = 0
+        self.killed = False
+        self._timeout_error = timeout_error
+        self.communicate_calls: list[float | None] = []
+
+    def communicate(self, timeout: float | None = None) -> tuple[str, str]:
+        self.communicate_calls.append(timeout)
+        if self._timeout_error:
+            raise subprocess.TimeoutExpired("git", timeout if timeout is not None else 0)
+        return "true\n", ""
+
+    def __enter__(self) -> "_FakeProcess":
+        return self
+
+    def __exit__(self, *_args: object) -> bool:
+        return False
+
+    def kill(self) -> None:
+        self.killed = True
+        self.returncode = -9
+
+
+def test_run_git_does_not_inherit_stdin(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+    process = _FakeProcess(timeout_error=False)
+
+    def fake_popen(*args: object, **kwargs: object) -> _FakeProcess:
+        captured.update(kwargs)
+        return process
+
+    monkeypatch.setattr("msagent.agents.local_context.subprocess.Popen", fake_popen)
+
+    assert _run_git(Path("."), "rev-parse", "--is-inside-work-tree") == "true"
+    assert captured["stdin"] is subprocess.DEVNULL
+
+
+def test_run_git_timeout_is_bounded_and_returns_none(monkeypatch) -> None:
+    process = _FakeProcess(timeout_error=True)
+    monkeypatch.setattr(
+        "msagent.agents.local_context.subprocess.Popen",
+        lambda *args, **kwargs: process,
+    )
+
+    assert _run_git(Path("."), "status", "--short") is None
+    assert process.killed is True
+    assert all(timeout is not None for timeout in process.communicate_calls)
 
 
 def test_ensure_local_context_prompt_appends_placeholder_once() -> None:
