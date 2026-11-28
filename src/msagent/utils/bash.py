@@ -82,6 +82,7 @@ async def _terminate_process_tree(process: asyncio.subprocess.Process) -> None:
                 str(process.pid),
                 "/T",
                 "/F",
+                stdin=asyncio.subprocess.DEVNULL,
                 stdout=asyncio.subprocess.DEVNULL,
                 stderr=asyncio.subprocess.DEVNULL,
             )
@@ -112,6 +113,10 @@ async def execute_bash_command(
     try:
         process = await asyncio.create_subprocess_exec(
             *command,
+            # Never inherit the caller's stdin: under stdio transports (e.g. ACP)
+            # it is the protocol pipe, and children can block on it or steal
+            # protocol bytes.
+            stdin=asyncio.subprocess.DEVNULL,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=cwd,

@@ -36,6 +36,8 @@ from msagent.middlewares.approval import InterruptPayload
 if TYPE_CHECKING:
     from langgraph.types import Interrupt
 
+    from msagent.cli.acp.approval import ApprovalBackend
+
 logger = get_logger(__name__)
 
 SWITCH_TO_AUTO = "Switch to Auto Mode"
@@ -115,9 +117,10 @@ class CommandRiskLevel(TypedDict):
 class InterruptHandler:
     """Handles LangGraph interrupts and collects user input for resume."""
 
-    def __init__(self, session) -> None:
+    def __init__(self, session, backend: ApprovalBackend | None = None) -> None:
         """Initialize with reference to CLI session."""
         self.session = session
+        self.backend = backend
 
     async def handle(self, interrupt_data: list[Interrupt]) -> Any:
         """
@@ -391,6 +394,16 @@ class InterruptHandler:
                 "Note: this allows the named script with any arguments for this project; "
                 "later changes to that script will also run."
             )
+        if self.backend is not None:
+            question = "\n".join([f"{tool_name} Requires Approval", details, *metadata, *notes])
+            selected = await self.backend.ask(
+                question=question,
+                options=options,
+                option_labels=self._approval_option_labels(command_profile),
+                tool_name=tool_name,
+                tool_args=tool_args,
+            )
+            return None if selected is None else ApprovalChoice(value=selected)
         menu = ApprovalMenu(
             context=self.session.context,
             title=f"{tool_name} Requires Approval",
@@ -968,6 +981,14 @@ class InterruptHandler:
         option_labels: dict[str, str] | None = None,
     ) -> ApprovalChoice | None:
         """Render the shared approval TUI for every interactive approval path."""
+        if self.backend is not None:
+            question = "\n".join(part for part in [title, details, *(metadata or []), *(notes or [])] if part)
+            selected = await self.backend.ask(
+                question=question,
+                options=options,
+                option_labels=option_labels,
+            )
+            return None if selected is None else ApprovalChoice(value=selected)
         menu = ApprovalMenu(
             context=self.session.context,
             title=title,

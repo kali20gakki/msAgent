@@ -47,7 +47,7 @@ DEFAULT_API_ENV_MAP = {
 }
 
 DEFAULT_SESSION_COMMAND = "__session__"
-PUBLIC_COMMANDS = {"config"}
+PUBLIC_COMMANDS = {"config", "acp"}
 ROOT_ONLY_FLAGS = {"--help", "-h", "--version", "-V"}
 
 AGENT_HELP = (
@@ -70,6 +70,9 @@ ROOT_HELP_TEXT = """Description:
 Usage:
   msagent [message] [options]
   msagent config [options]
+
+Subcommands:
+  config                                   Configure msAgent.
 
 Optional arguments:
   -h, --help                               Show help message and exit.
@@ -260,6 +263,9 @@ def create_legacy_parser() -> argparse.ArgumentParser:
         help="Project working directory",
     )
 
+    acp_parser = subparsers.add_parser("acp", help=argparse.SUPPRESS)
+    _add_runtime_options(acp_parser, include_timer=False)
+
     return parser
 
 
@@ -348,6 +354,8 @@ async def dispatch_legacy_command(args: argparse.Namespace) -> int:
         return await _handle_chat(args)
     if command == "config":
         return await _handle_config(args)
+    if command == "acp":
+        return await _handle_acp(args)
 
     console.print_error(f"Unknown command: {command}")
     console.print("")
@@ -369,6 +377,20 @@ async def _handle_chat(args: argparse.Namespace) -> int:
         trace_jsonl=args.trace_jsonl,
     )
     return await handle_chat_command(chat_args)
+
+
+async def _handle_acp(args: argparse.Namespace) -> int:
+    from msagent.cli.acp.server import handle_acp_command
+
+    acp_args = argparse.Namespace(
+        working_dir=args.working_dir,
+        agent=args.agent,
+        model=args.model,
+        approval_mode=args.approval_mode,
+        execute_approval_mode=args.execute_approval_mode,
+        trace_jsonl=args.trace_jsonl,
+    )
+    return await handle_acp_command(acp_args)
 
 
 async def _handle_config(args: argparse.Namespace) -> int:

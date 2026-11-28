@@ -65,6 +65,8 @@ if TYPE_CHECKING:
 
     from langgraph.types import Interrupt
 
+    from msagent.cli.core.context import Context
+
 logger = get_logger(__name__)
 
 _TOOL_RUNNING_DOT = "●"
@@ -176,6 +178,43 @@ class ToolActivityIndicator:
             label.stylize(_TOOL_SWEEP_CORE_STYLE, core_start, core_end)
 
 
+async def build_agent_context(context: Context) -> AgentContext:
+    """Build runtime context injected into prompt templates and middleware."""
+    now = datetime.now(timezone.utc).astimezone()
+    user_memory = await initializer.load_user_memory(context.working_dir)
+    return AgentContext(
+        approval_mode=context.approval_mode,
+        working_dir=context.working_dir,
+        platform=PLATFORM,
+        os_version=OS_VERSION,
+        current_date_time_zoned=now.strftime("%Y-%m-%d %H:%M:%S %Z"),
+        local_environment_context=build_local_environment_context(
+            context.working_dir,
+            now=now,
+        ),
+        mcp_servers=(", ".join(initializer.cached_mcp_server_names) if initializer.cached_mcp_server_names else "None"),
+        user_memory=user_memory,
+        tool_catalog=cast(list[BaseTool], initializer.cached_tools_in_catalog),
+        skill_catalog=initializer.cached_agent_skills,
+        tool_output_max_tokens=context.tool_output_max_tokens,
+    )
+
+
+async def resolve_prior_agent_prompt(graph: Any, graph_config: RunnableConfig) -> str | None:
+    """Read the latest assistant message from checkpointed graph state."""
+    if graph is None:
+        return None
+    try:
+        snapshot = await graph.aget_state(graph_config)
+    except Exception:
+        logger.debug("Failed to read graph state for user.turn prompt", exc_info=True)
+        return None
+
+    state_values = snapshot.values if snapshot is not None else {}
+    messages = list(state_values.get("messages", []) or [])
+    return extract_last_agent_prompt(messages)
+
+
 class MessageDispatcher:
     """Dispatch user message processing and AI response streaming."""
 
@@ -183,7 +222,7 @@ class MessageDispatcher:
     _SUBAGENT_ORIGIN_LABEL = "Subagent"
 
     # Tool names that should be hidden from activity display (shown via other means)
-    _HIDDEN_ACTIVITY_TOOLS: set[str] = {"write_todos"}
+    HIDDEN_ACTIVITY_TOOLS: set[str] = {"write_todos"}
 
     def __init__(self, session) -> None:
         """Initialize with reference to CLI session."""
@@ -248,42 +287,11 @@ class MessageDispatcher:
 
     async def _resolve_prior_agent_prompt(self, graph_config: RunnableConfig) -> str | None:
         """Read the latest assistant message from checkpointed graph state."""
-        graph = self.session.graph
-        if graph is None:
-            return None
-        try:
-            snapshot = await graph.aget_state(graph_config)
-        except Exception:
-            logger.debug("Failed to read graph state for user.turn prompt", exc_info=True)
-            return None
-
-        state_values = snapshot.values if snapshot is not None else {}
-        messages = list(state_values.get("messages", []) or [])
-        return extract_last_agent_prompt(messages)
+        return await resolve_prior_agent_prompt(self.session.graph, graph_config)
 
     async def _build_agent_context(self) -> AgentContext:
         """Build runtime context injected into prompt templates and middleware."""
-        ctx = self.session.context
-        now = datetime.now(timezone.utc).astimezone()
-        user_memory = await initializer.load_user_memory(ctx.working_dir)
-        return AgentContext(
-            approval_mode=ctx.approval_mode,
-            working_dir=ctx.working_dir,
-            platform=PLATFORM,
-            os_version=OS_VERSION,
-            current_date_time_zoned=now.strftime("%Y-%m-%d %H:%M:%S %Z"),
-            local_environment_context=build_local_environment_context(
-                ctx.working_dir,
-                now=now,
-            ),
-            mcp_servers=(
-                ", ".join(initializer.cached_mcp_server_names) if initializer.cached_mcp_server_names else "None"
-            ),
-            user_memory=user_memory,
-            tool_catalog=cast(list[BaseTool], initializer.cached_tools_in_catalog),
-            skill_catalog=initializer.cached_agent_skills,
-            tool_output_max_tokens=ctx.tool_output_max_tokens,
-        )
+        return await build_agent_context(self.session.context)
 
     async def _stream_response(
         self,
@@ -325,7 +333,7 @@ class MessageDispatcher:
                             stream_mode=["messages", "updates"],
                             subgraphs=True,
                         ):
-                            interrupts = self._extract_interrupts(chunk)
+                            interrupts = self.extract_interrupts(chunk)
                             if interrupts:
                                 # Clear all active streaming states on interrupt
                                 for state in streaming_states.values():
@@ -418,7 +426,7 @@ class MessageDispatcher:
             result: Any = None
             for _ in range(max_iterations):
                 result = await self.session.graph.ainvoke(current_input, config, context=context)
-                interrupts = self._extract_interrupts(result)
+                interrupts = self.extract_interrupts(result)
                 if not interrupts:
                     break
 
@@ -645,7 +653,7 @@ class MessageDispatcher:
         console.print_warning(cls._format_retry_notice_text(notice))
 
     @staticmethod
-    def _extract_interrupts(chunk) -> list[Interrupt] | None:
+    def extract_interrupts(chunk) -> list[Interrupt] | None:
         """Extract interrupt data from chunk."""
         if isinstance(chunk, tuple) and len(chunk) == 3:
             _namespace, _mode, data = chunk
@@ -656,7 +664,7 @@ class MessageDispatcher:
         return None
 
     @staticmethod
-    def _unwrap_overwrite(value: Any) -> Any:
+    def unwrap_overwrite(value: Any) -> Any:
         """Unwrap LangGraph Overwrite wrapper values when present."""
         if isinstance(value, Overwrite):
             return value.value
@@ -779,10 +787,10 @@ class MessageDispatcher:
     @classmethod
     def _extract_tool_call_names(cls, message: AIMessage | AIMessageChunk) -> list[str]:
         """Collect tool names from streamed or final AI messages."""
-        return [preview.name for preview in cls._extract_tool_call_previews(message)]
+        return [preview.name for preview in cls.extract_tool_call_previews(message)]
 
     @classmethod
-    def _extract_tool_call_previews(cls, message: AIMessage | AIMessageChunk) -> list[ToolActivityCall]:
+    def extract_tool_call_previews(cls, message: AIMessage | AIMessageChunk) -> list[ToolActivityCall]:
         """Collect live previews for streamed or final tool calls."""
         tool_calls = getattr(message, "tool_calls", None) or []
         tool_call_chunks = getattr(message, "tool_call_chunks", None) or []
@@ -1084,7 +1092,7 @@ class MessageDispatcher:
             origin_label = cls._resolve_origin_label(namespace)
             for tool_call in tool_calls:
                 # Skip hidden tools (e.g., write_todos shown via panel)
-                if tool_call.name in cls._HIDDEN_ACTIVITY_TOOLS:
+                if tool_call.name in cls.HIDDEN_ACTIVITY_TOOLS:
                     continue
                 renderables.append(
                     ToolActivityIndicator(
@@ -1245,7 +1253,7 @@ class MessageDispatcher:
 
             streaming_state["chunks"].append(message_chunk)
 
-            tool_previews = self._extract_tool_call_previews(message_chunk)
+            tool_previews = self.extract_tool_call_previews(message_chunk)
             if tool_previews:
                 self._set_tool_activity(
                     live,
@@ -1256,7 +1264,7 @@ class MessageDispatcher:
                 )
                 return
 
-            content = self._extract_chunk_content(message_chunk)
+            content = self.extract_chunk_content(message_chunk)
             if content:
                 lines = content.split("\n")
                 if len(lines) == 1:
@@ -1312,7 +1320,7 @@ class MessageDispatcher:
 
     def _extract_last_update_message(self, node_data: dict[str, Any]) -> AnyMessage | None:
         """Return the newest message from an update payload when present."""
-        messages_value = self._unwrap_overwrite(node_data.get("messages"))
+        messages_value = self.unwrap_overwrite(node_data.get("messages"))
         if isinstance(messages_value, tuple):
             messages_value = list(messages_value)
         if not isinstance(messages_value, list) or not messages_value:
@@ -1334,7 +1342,7 @@ class MessageDispatcher:
     ) -> None:
         """Update transient live activity state based on a final update message."""
         if isinstance(message, AIMessage):
-            tool_previews = self._extract_tool_call_previews(message)
+            tool_previews = self.extract_tool_call_previews(message)
             if tool_previews:
                 self._set_tool_activity(
                     live,
@@ -1399,7 +1407,7 @@ class MessageDispatcher:
             )
 
     @staticmethod
-    def _extract_chunk_content(chunk: AIMessageChunk) -> str:
+    def extract_chunk_content(chunk: AIMessageChunk) -> str:
         """Extract text content from AI message chunk."""
         if isinstance(chunk.content, str):
             return chunk.content
@@ -1446,7 +1454,7 @@ class MessageDispatcher:
 
             # Skip hidden tools (e.g., write_todos shown via panel)
             tool_name = tool_call.get("name", "")
-            if tool_name in self._HIDDEN_ACTIVITY_TOOLS:
+            if tool_name in self.HIDDEN_ACTIVITY_TOOLS:
                 continue
 
             self._pending_tool_headers[str(call_id)] = DeferredToolHeader(
@@ -1495,7 +1503,7 @@ class MessageDispatcher:
 
         # Skip hidden tools (e.g., write_todos shown via panel)
         tool_name = tool_call.get("name", "")
-        if tool_name in self._HIDDEN_ACTIVITY_TOOLS:
+        if tool_name in self.HIDDEN_ACTIVITY_TOOLS:
             return pending
 
         duration = self._extract_tool_execution_duration(message)
@@ -1615,10 +1623,10 @@ class MessageDispatcher:
             "current_output_tokens",
         }
 
-        updates = {field: self._unwrap_overwrite(node_data.get(field)) for field in token_fields if field in node_data}
+        updates = {field: self.unwrap_overwrite(node_data.get(field)) for field in token_fields if field in node_data}
 
         if len(updates) < len(token_fields):
-            messages = self._unwrap_overwrite(node_data.get("messages")) or []
+            messages = self.unwrap_overwrite(node_data.get("messages")) or []
             if isinstance(messages, tuple):
                 messages = list(messages)
             if not isinstance(messages, list):

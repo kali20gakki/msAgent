@@ -519,7 +519,7 @@ class Renderer:
         console.print("")
 
     @staticmethod
-    def _extract_thinking_from_metadata(message: AIMessage) -> str | None:
+    def extract_thinking_from_metadata(message: AIMessage) -> str | None:
         """Extract thinking from message metadata (e.g., Bedrock stores it here)."""
         if not hasattr(message, "additional_kwargs"):
             return None
@@ -531,7 +531,7 @@ class Renderer:
         return None
 
     @staticmethod
-    def _extract_thinking_and_text_from_blocks(
+    def extract_thinking_and_text_from_blocks(
         blocks: list[str | dict],
     ) -> tuple[list[str], list[str]]:
         """Extract text and thinking blocks separately.
@@ -740,13 +740,13 @@ class Renderer:
         thinking_parts = []
 
         # 1. Check metadata first (Bedrock, etc.)
-        metadata_thinking = Renderer._extract_thinking_from_metadata(message)
+        metadata_thinking = Renderer.extract_thinking_from_metadata(message)
         if metadata_thinking:
             thinking_parts.append(metadata_thinking)
 
         # 2. Extract from content blocks
         if isinstance(content, list):
-            text_parts, block_thinking = Renderer._extract_thinking_and_text_from_blocks(content)
+            text_parts, block_thinking = Renderer.extract_thinking_and_text_from_blocks(content)
             thinking_parts.extend(block_thinking)
             content = "".join(text_parts)
 

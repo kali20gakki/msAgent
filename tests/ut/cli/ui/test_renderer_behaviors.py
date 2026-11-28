@@ -35,7 +35,7 @@ class _CaptureConsole:
         self.console.print(*args, **kwargs)
 
 
-def test_extract_thinking_and_text_from_blocks_separates_provider_blocks_when_formats_are_mixed() -> None:
+def testextract_thinking_and_text_from_blocks_separates_provider_blocks_when_formats_are_mixed() -> None:
     blocks = [
         "plain text",
         {"type": "text", "text": "structured text"},
@@ -48,7 +48,7 @@ def test_extract_thinking_and_text_from_blocks_separates_provider_blocks_when_fo
         {"type": "image", "url": "ignored"},
     ]
 
-    texts, thinking = Renderer._extract_thinking_and_text_from_blocks(blocks)
+    texts, thinking = Renderer.extract_thinking_and_text_from_blocks(blocks)
 
     assert texts == ["plain text\n", "structured text\n"]
     assert thinking == [
@@ -78,16 +78,16 @@ def test_extract_thinking_tags_returns_expected_parts_when_tag_position_or_compl
     )
 
 
-def test_extract_thinking_from_metadata_returns_text_when_thinking_payload_is_mapping() -> None:
+def testextract_thinking_from_metadata_returns_text_when_thinking_payload_is_mapping() -> None:
     message = AIMessage(content="answer", additional_kwargs={"thinking": {"text": "metadata thought"}})
 
-    assert Renderer._extract_thinking_from_metadata(message) == "metadata thought"
+    assert Renderer.extract_thinking_from_metadata(message) == "metadata thought"
 
 
-def test_extract_thinking_from_metadata_returns_none_when_thinking_payload_is_not_mapping() -> None:
+def testextract_thinking_from_metadata_returns_none_when_thinking_payload_is_not_mapping() -> None:
     message = AIMessage(content="answer", additional_kwargs={"thinking": "metadata thought"})
 
-    assert Renderer._extract_thinking_from_metadata(message) is None
+    assert Renderer.extract_thinking_from_metadata(message) is None
 
 
 def test_render_assistant_message_shows_thinking_text_and_tools_when_content_contains_both(

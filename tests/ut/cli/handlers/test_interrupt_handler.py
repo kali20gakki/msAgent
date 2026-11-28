@@ -761,6 +761,70 @@ async def test_manual_mode_approval_menu_includes_switch_and_project_note(
     assert "exactly the same command text" in str(captured["notes"])
 
 
+class _RecordingBackend:
+    def __init__(self, selected: str | None = "approve") -> None:
+        self.selected = selected
+        self.calls: list[dict[str, object]] = []
+
+    async def ask(self, **kwargs: object) -> str | None:
+        self.calls.append(kwargs)
+        return self.selected
+
+
+@pytest.mark.asyncio
+async def test_hitl_decision_prefers_acp_backend(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    session = _build_session(tmp_path)
+    session.execute_approval_mode = "manual"
+    backend = _RecordingBackend("approve")
+    handler = InterruptHandler(session, backend=backend)
+    tool_args = {"command": "python script.py"}
+    profile = handler._classify_command(tool_name="execute", tool_args=tool_args)
+
+    async def _unexpected_menu(_menu: object) -> object:
+        raise AssertionError("ApprovalMenu must not render when a backend is configured")
+
+    monkeypatch.setattr(interrupts_module.ApprovalMenu, "run_async", _unexpected_menu)
+    result = await handler._prompt_hitl_decision(
+        tool_name="execute",
+        tool_args=tool_args,
+        description="Run script",
+        options=handler._approval_options(allowed=["approve", "reject"], command_profile=profile),
+        command_profile=profile,
+    )
+
+    assert result == interrupts_module.ApprovalChoice("approve")
+    call = backend.calls[0]
+    assert call["tool_name"] == "execute"
+    assert call["tool_args"] == tool_args
+    assert SWITCH_TO_AUTO in call["options"]
+    assert call["option_labels"]["always_approve"].startswith("Always allow")
+
+
+@pytest.mark.asyncio
+async def test_approval_menu_prefers_acp_backend(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    backend = _RecordingBackend("always_approve")
+    handler = InterruptHandler(_build_session(tmp_path), backend=backend)
+
+    async def _unexpected_menu(_menu: object) -> object:
+        raise AssertionError("ApprovalMenu must not render when a backend is configured")
+
+    monkeypatch.setattr(interrupts_module.ApprovalMenu, "run_async", _unexpected_menu)
+    result = await handler._prompt_approval_menu(
+        title="External Directory Requires Approval",
+        details="Tool access is outside the current project.",
+        metadata=["Directory: /tmp/external"],
+        notes=["Note: always allow grants this directory and its descendants for this project."],
+        options=["approve", "always_approve", "reject"],
+        option_labels={"always_approve": "Always allow this directory for this project"},
+    )
+
+    assert result == interrupts_module.ApprovalChoice("always_approve")
+    call = backend.calls[0]
+    assert "Directory: /tmp/external" in call["question"]
+    assert "grants this directory and its descendants" in call["question"]
+    assert call["option_labels"] == {"always_approve": "Always allow this directory for this project"}
+
+
 @pytest.mark.asyncio
 async def test_hitl_includes_rejection_feedback(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     session = _build_session(tmp_path)

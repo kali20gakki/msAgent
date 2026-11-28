@@ -149,6 +149,42 @@ async def test_context_create_keeps_execute_approval_mode(monkeypatch) -> None:
     assert context.execute_approval_mode == "manual"
 
 
+@pytest.mark.asyncio
+async def test_context_create_should_reuse_injected_thread_id(monkeypatch) -> None:
+    llm_config = SimpleNamespace(
+        alias="default",
+        model="deepseek-chat",
+        provider=LLMProvider.OPENAI,
+        context_window=128000,
+    )
+    agent_config = SimpleNamespace(
+        name="Profiler",
+        description="Profiler",
+        llm=llm_config,
+        tools=None,
+        recursion_limit=80,
+    )
+
+    async def fake_load_agent_config(_agent, _working_dir):
+        return agent_config
+
+    async def fake_get_current_model(_agent, _working_dir):
+        return None
+
+    monkeypatch.setattr(initializer, "load_agent_config", fake_load_agent_config)
+    monkeypatch.setattr(initializer, "get_current_model", fake_get_current_model)
+
+    context = await Context.create(
+        agent=None,
+        model=None,
+        approval_mode=ApprovalMode.SEMI_ACTIVE,
+        working_dir=Path.cwd(),
+        thread_id="thread-keep",
+    )
+
+    assert context.thread_id == "thread-keep"
+
+
 def test_agent_context_defaults_to_cwd() -> None:
     context = AgentContext()
 

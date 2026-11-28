@@ -85,12 +85,13 @@ class Context(BaseModel):
         execute_approval_mode: ExecuteApprovalMode | None = None,
         stream_output: bool = True,
         trace_jsonl: Path | None = None,
+        thread_id: str | None = None,
     ) -> "Context":
         """Create context and populate from agent config."""
         with timer("Load agent config"):
             agent_config = await initializer.load_agent_config(agent, working_dir)
 
-        thread_id = str(uuid.uuid4())
+        resolved_thread_id = thread_id or str(uuid.uuid4())
         resolved_agent = agent_config.name
         workspace_model = None
         if model is None:
@@ -114,14 +115,14 @@ class Context(BaseModel):
             resolved_model,
             resolved_model_display,
         )
-        logger.info(f"Thread ID: {thread_id}")
+        logger.info(f"Thread ID: {resolved_thread_id}")
 
         return cls(
             agent=resolved_agent,
             agent_description=agent_config.description or None,
             model=resolved_model,
             model_display=resolved_model_display,
-            thread_id=thread_id,
+            thread_id=resolved_thread_id,
             working_dir=working_dir,
             state_dir=initializer.get_project_paths(working_dir).root,
             approval_mode=approval_mode or ApprovalMode.ACTIVE,

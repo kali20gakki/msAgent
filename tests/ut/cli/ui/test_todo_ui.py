@@ -236,17 +236,17 @@ class TestRendererSkipToolCall:
 
 
 class TestMessageDispatcherHiddenTools:
-    """Test MessageDispatcher._HIDDEN_ACTIVITY_TOOLS."""
+    """Test MessageDispatcher.HIDDEN_ACTIVITY_TOOLS."""
 
     def test_write_todos_in_hidden_set(self):
         """Test that write_todos is in hidden tools set."""
-        assert "write_todos" in MessageDispatcher._HIDDEN_ACTIVITY_TOOLS
+        assert "write_todos" in MessageDispatcher.HIDDEN_ACTIVITY_TOOLS
 
     def test_remember_tool_headers_skips_hidden(self):
         """Test that _remember_tool_headers skips hidden tools."""
         dispatcher = MessageDispatcher.__new__(MessageDispatcher)
         dispatcher._pending_tool_headers = {}
-        dispatcher._HIDDEN_ACTIVITY_TOOLS = {"write_todos"}
+        dispatcher.HIDDEN_ACTIVITY_TOOLS = {"write_todos"}
 
         ai_msg = AIMessage(
             content="",
@@ -266,7 +266,7 @@ class TestMessageDispatcherHiddenTools:
         from unittest.mock import MagicMock
 
         dispatcher = MessageDispatcher.__new__(MessageDispatcher)
-        dispatcher._HIDDEN_ACTIVITY_TOOLS = {"write_todos"}
+        dispatcher.HIDDEN_ACTIVITY_TOOLS = {"write_todos"}
         dispatcher.session = MagicMock()
         dispatcher.session.renderer = MagicMock()
 

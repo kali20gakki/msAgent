@@ -361,7 +361,7 @@ def test_extract_tool_call_names_handles_chunks_and_raw_payloads(
     )
 
     assert dispatcher._extract_tool_call_names(chunk) == ["run_command", "read_file"]
-    previews = dispatcher._extract_tool_call_previews(chunk)
+    previews = dispatcher.extract_tool_call_previews(chunk)
     assert len(previews) == 2
     assert (
         message_module.ToolActivityCall(
@@ -437,7 +437,7 @@ def test_render_retry_notice_uses_warning_output_without_live(
     assert printed == ["Model reconnecting... 1/3"]
 
 
-def test_extract_tool_call_previews_merges_same_tool_with_conflicting_source_ids(
+def testextract_tool_call_previews_merges_same_tool_with_conflicting_source_ids(
     tmp_path: Path,
 ) -> None:
     session = _build_session(tmp_path)
@@ -473,7 +473,7 @@ def test_extract_tool_call_previews_merges_same_tool_with_conflicting_source_ids
         },
     )
 
-    previews = dispatcher._extract_tool_call_previews(chunk)
+    previews = dispatcher.extract_tool_call_previews(chunk)
 
     assert len(previews) == 1
     assert previews[0].name == "msprof-mcp__msprof_analyze_advisor"
@@ -484,7 +484,7 @@ def test_extract_tool_call_previews_merges_same_tool_with_conflicting_source_ids
     assert previews[0].call_id in {"raw-call-1", "chunk-call-1"}
 
 
-def test_extract_tool_call_previews_merges_progressively_longer_string_args(
+def testextract_tool_call_previews_merges_progressively_longer_string_args(
     tmp_path: Path,
 ) -> None:
     session = _build_session(tmp_path)
@@ -509,7 +509,7 @@ def test_extract_tool_call_previews_merges_progressively_longer_string_args(
         ],
     )
 
-    previews = dispatcher._extract_tool_call_previews(message)
+    previews = dispatcher.extract_tool_call_previews(message)
 
     assert len(previews) == 1
     assert previews[0].name == "msprof-mcp__msprof_analyze_advisor"
@@ -519,7 +519,7 @@ def test_extract_tool_call_previews_merges_progressively_longer_string_args(
     }
 
 
-def test_extract_tool_call_previews_keeps_distinct_same_name_calls_with_conflicting_args(
+def testextract_tool_call_previews_keeps_distinct_same_name_calls_with_conflicting_args(
     tmp_path: Path,
 ) -> None:
     session = _build_session(tmp_path)
@@ -533,7 +533,7 @@ def test_extract_tool_call_previews_keeps_distinct_same_name_calls_with_conflict
         ],
     )
 
-    assert dispatcher._extract_tool_call_previews(message) == [
+    assert dispatcher.extract_tool_call_previews(message) == [
         message_module.ToolActivityCall(
             name="run_command",
             args={"command": "ls"},

@@ -16,6 +16,7 @@
 
 """Rich styles and formatting utilities with theme support."""
 
+import io
 import os
 from typing import Literal
 
@@ -66,6 +67,10 @@ class ThemedConsole:
     def capture(self):
         """Capture console output for measuring rendered lines."""
         return self.console.capture()
+
+    def reconfigure_quiet(self) -> None:
+        """Discard all console output to keep stdout clean (ACP mode)."""
+        self.console = Console(file=io.StringIO(), force_terminal=False, no_color=True)
 
     @property
     def width(self):
